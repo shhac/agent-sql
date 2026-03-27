@@ -129,12 +129,15 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       ${filter}
       ORDER BY table_name
     `);
-    return (normalizeRows(rows as Record<string, unknown>[]) as { table_name: string; table_type: string }[]).map(
-      (r) => ({
-        name: r.table_name,
-        type: r.table_type === "VIEW" ? ("view" as const) : ("table" as const),
-      }),
-    );
+    return (
+      normalizeRows(rows as Record<string, unknown>[]) as {
+        table_name: string;
+        table_type: string;
+      }[]
+    ).map((r) => ({
+      name: r.table_name,
+      type: r.table_type === "VIEW" ? ("view" as const) : ("table" as const),
+    }));
   };
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
@@ -268,7 +271,9 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       [likePattern],
     );
 
-    const tables = (normalizeRows(tableRows as Record<string, unknown>[]) as { table_name: string }[]).map((r) => ({
+    const tables = (
+      normalizeRows(tableRows as Record<string, unknown>[]) as { table_name: string }[]
+    ).map((r) => ({
       name: r.table_name,
     }));
 
@@ -284,7 +289,10 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
     );
 
     const columns = (
-      normalizeRows(colRows as Record<string, unknown>[]) as { table_name: string; column_name: string }[]
+      normalizeRows(colRows as Record<string, unknown>[]) as {
+        table_name: string;
+        column_name: string;
+      }[]
     ).map((r) => ({
       table: r.table_name,
       column: r.column_name,
