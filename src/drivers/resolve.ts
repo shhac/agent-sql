@@ -190,9 +190,7 @@ const resolveAdHocConnection = async (
     if (driver === "sqlite") {
       rejectAdHocUrlWrite(write);
       const filePath = connectionStr.replace(/^sqlite:\/\//, "");
-      return trackDriver(
-        await connectSqlite({ path: resolve(filePath), readonly: true }),
-      );
+      return trackDriver(await connectSqlite({ path: resolve(filePath), readonly: true }));
     }
 
     rejectAdHocUrlWrite(write);
@@ -216,9 +214,7 @@ const resolveAdHocConnection = async (
 
   // File path check — SQLite file, write allowed via --write
   if (isFilePath(connectionStr)) {
-    return trackDriver(
-      await connectSqlite({ path: resolve(connectionStr), readonly: !write }),
-    );
+    return trackDriver(await connectSqlite({ path: resolve(connectionStr), readonly: !write }));
   }
 
   return undefined;
