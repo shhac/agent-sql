@@ -37,6 +37,8 @@ COMMANDS:
 
 CREDENTIALS: Use "credential add" to store reusable auth. Reference via --credential.
 
+AD-HOC: -c also accepts file paths (./data.db) and URLs (postgres://..., mysql://...) without prior setup.
+
 RESOLUTION ORDER: -c flag > AGENT_SQL_CONNECTION env > config default > error
 
 CONFIG: ~/.config/agent-sql/config.json (respects XDG_CONFIG_HOME)

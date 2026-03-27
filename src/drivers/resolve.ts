@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Driver } from "./types";
 import type { DriverConnection } from "./types";
 import type { Connection } from "../lib/config";
@@ -56,7 +58,8 @@ const resolveAlias = (explicit?: string): string => {
   const listing = available.length > 0 ? available.join(", ") : "(none configured)";
   throw Object.assign(
     new Error(
-      `No connection specified and no default configured. Available connections: ${listing}`,
+      `No connection specified and no default configured. Available connections: ${listing}. ` +
+        "Tip: -c also accepts file paths (e.g. ./data.db) and connection URLs (e.g. postgres://user:pass@host/db).",
     ),
     { fixableBy: "agent" as const },
   );
@@ -134,22 +137,119 @@ const trackDriver = (connection: DriverConnection): DriverConnection => {
   };
 };
 
+export const isConnectionUrl = (value: string): boolean =>
+  DRIVER_URL_PATTERNS.some(([pattern]) => pattern.test(value));
+
+export const isFilePath = (value: string): boolean => {
+  const lower = value.toLowerCase();
+  if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+    return true;
+  }
+  if (value.startsWith("/") || value.startsWith("./") || value.startsWith("../")) {
+    return existsSync(resolve(value));
+  }
+  return false;
+};
+
+const parseConnectionUrl = (
+  url: string,
+): { host: string; port: number; database: string; username: string; password: string } => {
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname || "localhost",
+    port: parsed.port ? Number(parsed.port) : 0,
+    database: parsed.pathname.replace(/^\//, "") || "",
+    username: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+  };
+};
+
+const rejectAdHocUrlWrite = (write: boolean): void => {
+  if (!write) {
+    return;
+  }
+  throw Object.assign(
+    new Error(
+      "Write mode is not available for ad-hoc connections. Set up a named connection with a write-enabled credential to use --write.",
+    ),
+    { fixableBy: "human" as const },
+  );
+};
+
+const resolveAdHocConnection = async (
+  connectionStr: string,
+  write: boolean,
+): Promise<DriverConnection | undefined> => {
+  // URL check first — more recognizable shape than file paths
+  if (isConnectionUrl(connectionStr)) {
+    const driver = detectDriverFromUrl(connectionStr);
+    if (!driver) {
+      return undefined;
+    }
+
+    if (driver === "sqlite") {
+      rejectAdHocUrlWrite(write);
+      const filePath = connectionStr.replace(/^sqlite:\/\//, "");
+      return trackDriver(
+        await connectSqlite({ path: resolve(filePath), readonly: true }),
+      );
+    }
+
+    rejectAdHocUrlWrite(write);
+    const urlParts = parseConnectionUrl(connectionStr);
+    const defaultPort = driver === "pg" ? 5432 : 3306;
+    const defaultDb = driver === "pg" ? "postgres" : "mysql";
+    const connectOpts = {
+      host: urlParts.host,
+      port: urlParts.port || defaultPort,
+      database: urlParts.database || defaultDb,
+      username: urlParts.username,
+      password: urlParts.password,
+      readonly: true,
+    };
+
+    if (driver === "pg") {
+      return trackDriver(await connectPg(connectOpts));
+    }
+    return trackDriver(await connectMysql(connectOpts));
+  }
+
+  // File path check — SQLite file, write allowed via --write
+  if (isFilePath(connectionStr)) {
+    return trackDriver(
+      await connectSqlite({ path: resolve(connectionStr), readonly: !write }),
+    );
+  }
+
+  return undefined;
+};
+
 export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnection> => {
   const alias = resolveAlias(opts?.connection);
+  const write = opts?.write ?? false;
+
+  // Try ad-hoc connection (URL or file path) before config lookup
+  const adHoc = await resolveAdHocConnection(alias, write);
+  if (adHoc) {
+    return adHoc;
+  }
+
   const conn = getConnection(alias);
 
   if (!conn) {
     const available = Object.keys(getConnections());
     const listing = available.length > 0 ? available.join(", ") : "(none configured)";
     throw Object.assign(
-      new Error(`Unknown connection '${alias}'. Available connections: ${listing}`),
+      new Error(
+        `Unknown connection '${alias}'. Available connections: ${listing}. ` +
+          "Tip: -c also accepts file paths (e.g. ./data.db) and connection URLs (e.g. postgres://user:pass@host/db).",
+      ),
       { fixableBy: "agent" as const },
     );
   }
 
   const driver = resolveDriverType(conn);
   const credential = conn.credential ? getCredential(conn.credential) : null;
-  const write = opts?.write ?? false;
 
   // checkWritePermission throws if write is requested but not allowed
   checkWritePermission({ driver, credential, write, alias });

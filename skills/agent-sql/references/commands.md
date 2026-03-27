@@ -45,7 +45,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 
 | Flag                       | Description                                  |
 | -------------------------- | -------------------------------------------- |
-| `-c, --connection <alias>` | Connection alias (overrides env/default)      |
+| `-c, --connection <alias>` | Connection alias, file path, or URL (overrides env/default). File paths (e.g. `./data.db`) and URLs (e.g. `postgres://...`, `mysql://...`) work without prior setup. |
 | `--format json\|yaml\|csv` | Output format (default: json or config)       |
 | `--expand <field,...>`     | Expand specific truncated fields              |
 | `--full`                   | Expand all truncated fields                   |

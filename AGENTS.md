@@ -73,8 +73,18 @@ src/
 
 - **Command registration**: Each `cli/*/index.ts` exports `registerXyzCommand({ program })` called from `index.ts`
 - **Output**: Query results through `printJson()` / `printPaginated()` / `printCompact()`. Errors through `printError()` with `fixable_by` classification. Admin output prunes nulls; query output preserves them.
-- **Connection resolution**: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections
+- **Connection resolution**: `-c` accepts aliases, file paths (SQLite), or connection URLs (postgres://, mysql://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections
 - **Driver abstraction**: Shared `DriverConnection` interface, each driver implements schema discovery with its own native queries, returns shared types
 - **Error messages**: Always include valid alternatives for LLM self-correction and `fixable_by` (`"agent"` / `"human"` / `"retry"`)
 - **Truncation**: Strings over `truncation.maxLength` truncated with `...`, per-row `@truncated: { "column": originalLength }` metadata. Compact mode uses top-level parallel arrays.
 - **PG namespaces**: Dot notation everywhere (`schema.table`), system schemas excluded by default (`--include-system` to show)
+
+## After making changes
+
+When changing CLI behavior, flags, output shape, or commands, also update the applicable docs:
+- `src/cli/usage/index.ts` — top-level LLM reference card
+- `src/cli/*/usage.ts` — per-command usage text
+- `skills/agent-sql/SKILL.md` — Claude Code skill definition
+- `skills/agent-sql/references/commands.md` — full command reference
+- `skills/agent-sql/references/output.md` — output format reference
+- `README.md` — user-facing documentation

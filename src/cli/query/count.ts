@@ -23,10 +23,10 @@ export function registerCount(parent: Command): void {
     .command("count")
     .description("Count rows in a table")
     .argument("<table>", "Table name (supports schema.table for PG)")
-    .option("-c, --connection <alias>", "Connection to use")
     .option("--where <condition>", "WHERE clause filter")
     .action(async (table: string, opts: CountOptions) => {
-      const connectionAlias = opts.connection;
+      const connectionAlias =
+        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
       try {
         const driver = await resolveDriver({ connection: connectionAlias });
         const sql = buildCountSql(driver, { table, where: opts.where });

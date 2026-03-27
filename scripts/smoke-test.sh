@@ -177,6 +177,33 @@ else
   fail "write allowed with --write exits 0"
 fi
 
+# --- Test: ad-hoc SQLite connection ---
+echo "=== Test: ad-hoc SQLite connection ==="
+ADHOC_DB_PATH="$TMPDIR_ROOT/adhoc.db"
+sqlite3 "$ADHOC_DB_PATH" "CREATE TABLE adhoc_test (id INTEGER PRIMARY KEY, val TEXT); INSERT INTO adhoc_test VALUES (1, 'hello');"
+ADHOC_OUTPUT=$(run_cmd run -c "$ADHOC_DB_PATH" "SELECT * FROM adhoc_test" 2>&1 || true)
+if echo "$ADHOC_OUTPUT" | grep -q "hello"; then
+  pass "ad-hoc SQLite connection returns rows"
+else
+  fail "ad-hoc SQLite connection returns rows"
+fi
+
+# --- Test: ad-hoc SQLite write blocked ---
+echo "=== Test: ad-hoc SQLite write blocked ==="
+if run_cmd run -c "$ADHOC_DB_PATH" "INSERT INTO adhoc_test VALUES (2, 'world')" >/dev/null 2>&1; then
+  fail "ad-hoc SQLite write blocked (should have exited non-zero)"
+else
+  pass "ad-hoc SQLite write blocked exits non-zero"
+fi
+
+# --- Test: ad-hoc SQLite write allowed ---
+echo "=== Test: ad-hoc SQLite write allowed ==="
+if run_cmd run -c "$ADHOC_DB_PATH" "INSERT INTO adhoc_test VALUES (2, 'world')" --write >/dev/null 2>&1; then
+  pass "ad-hoc SQLite write allowed with --write"
+else
+  fail "ad-hoc SQLite write allowed with --write"
+fi
+
 # --- MySQL tests (env var gated) ---
 if [ -n "${AGENT_SQL_MYSQL_TEST_URL:-}" ]; then
   echo ""

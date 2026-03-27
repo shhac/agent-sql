@@ -36,7 +36,20 @@ This installs the `agent-sql` skill so Claude Code (and other AI agents) can dis
 
 ## Quick start
 
-### 1. Add a connection
+### Ad-hoc usage (zero setup)
+
+The `-c` flag accepts connection aliases, file paths, or connection strings -- no configuration needed for SQLite:
+
+```bash
+agent-sql run -c ./mydb.sqlite 'SELECT 1'
+agent-sql schema tables -c ./data.db
+agent-sql run -c postgres://user:pass@localhost/myapp 'SELECT * FROM users'
+agent-sql run -c mysql://user:pass@localhost/myapp 'SELECT * FROM orders'
+```
+
+### Named connections (PG / MySQL / SQLite)
+
+For databases you use repeatedly, save a named connection:
 
 ```bash
 # PostgreSQL
@@ -52,7 +65,7 @@ agent-sql connection add mydb --driver mysql --host localhost --port 3306 --data
 agent-sql connection add local --driver sqlite --path ./data.db
 ```
 
-### 2. Explore schema
+### Explore schema
 
 ```bash
 agent-sql schema tables
@@ -61,7 +74,7 @@ agent-sql schema indexes users
 agent-sql schema constraints users
 ```
 
-### 3. Query data
+### Query data
 
 ```bash
 agent-sql run "SELECT * FROM users WHERE active = true" --limit 10
@@ -174,7 +187,7 @@ agent-sql connection test            # pings default connection
 agent-sql connection test -c local   # pings specific connection
 ```
 
-Connection resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default.
+Connection resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag also accepts file paths (e.g. `./data.db`) and connection URLs (e.g. `postgres://user:pass@host/db`) for ad-hoc use without prior setup.
 
 ## Environment variables
 

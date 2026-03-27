@@ -35,13 +35,14 @@ export function registerSample(parent: Command): void {
     .command("sample")
     .description("Return sample rows from a table")
     .argument("<table>", "Table name (supports schema.table for PG)")
-    .option("-c, --connection <alias>", "Connection to use")
     .option("--limit <n>", "Number of sample rows (default 5)")
     .option("--where <condition>", "WHERE clause filter")
     .option("--compact", "Use compact array-of-arrays output format")
     .option("--expand <fields>", "Comma-separated fields to show untruncated")
     .option("--full", "Show all fields untruncated")
     .action(async (table: string, opts: SampleOptions) => {
+      const connectionAlias =
+        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
       try {
         configureTruncation({
           expand: opts.expand,
@@ -50,7 +51,7 @@ export function registerSample(parent: Command): void {
         });
 
         const limit = opts.limit !== undefined ? Number(opts.limit) : DEFAULT_SAMPLE_SIZE;
-        const driver = await resolveDriver({ connection: opts.connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         const sql = buildSampleSql(driver, { table, limit, where: opts.where });
 
         try {
@@ -86,7 +87,7 @@ export function registerSample(parent: Command): void {
         }
       } catch (err) {
         const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias: opts.connection,
+          connectionAlias,
         });
         printError({
           message: enhanced.message,

@@ -17,7 +17,16 @@ Supports PostgreSQL, MySQL, and SQLite.
 
 ## Quick start
 
-Connections are pre-configured by the user. Start by discovering what's available:
+Use `-c` with a file path, URL, or saved alias -- no setup needed for ad-hoc queries:
+
+```bash
+agent-sql run -c ./data.db 'SELECT * FROM users'                   # SQLite file (zero setup)
+agent-sql run -c postgres://user:pass@host/db 'SELECT * FROM users' # PG URL (zero setup)
+agent-sql run -c mysql://user:pass@host/db 'SELECT * FROM users'   # MySQL URL (zero setup)
+agent-sql run -c myalias 'SELECT * FROM users'                     # saved connection alias
+```
+
+For named connections, discover what's available:
 
 ```bash
 agent-sql usage                          # full reference card
@@ -108,7 +117,7 @@ agent-sql connection test                            # test default connection
 agent-sql connection test -c prod                    # test specific connection
 ```
 
-Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections.
+Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (e.g. `./data.db`), or URLs (e.g. `postgres://...`, `mysql://...`).
 
 ## Safety
 

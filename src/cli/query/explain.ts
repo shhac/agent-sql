@@ -22,9 +22,10 @@ export function registerExplain(parent: Command): void {
     .command("explain")
     .description("Show the execution plan for a SQL query")
     .argument("<sql>", "SQL query to explain")
-    .option("-c, --connection <alias>", "Connection to use")
     .option("--analyze", "Run EXPLAIN ANALYZE (executes the query; read-only queries only)")
     .action(async (sql: string, opts: ExplainOptions) => {
+      const connectionAlias =
+        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
       try {
         if (opts.analyze) {
           const safety = validateAnalyzeSafety(sql);
@@ -37,7 +38,7 @@ export function registerExplain(parent: Command): void {
         const prefix = opts.analyze ? "EXPLAIN ANALYZE" : "EXPLAIN";
         const explainSql = `${prefix} ${sql}`;
 
-        const driver = await resolveDriver({ connection: opts.connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
 
         try {
           const result = await driver.query(explainSql);
@@ -49,7 +50,7 @@ export function registerExplain(parent: Command): void {
         }
       } catch (err) {
         const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias: opts.connection,
+          connectionAlias,
         });
         printError({
           message: enhanced.message,

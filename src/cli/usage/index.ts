@@ -2,7 +2,15 @@ import type { Command } from "commander";
 
 const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSON output)
 
-SETUP (human-only):
+Supports PostgreSQL, MySQL, and SQLite. Output formats: JSON (default), YAML, CSV.
+
+AD-HOC USAGE (zero setup):
+  agent-sql run -c ./data.db "SELECT * FROM users"                     # SQLite file path
+  agent-sql run -c postgres://user:pass@host/db "SELECT 1"            # PostgreSQL URL
+  agent-sql run -c mysql://user:pass@host/db "SELECT 1"               # MySQL URL
+  agent-sql schema tables -c ./mydb.sqlite                             # schema from file
+
+NAMED CONNECTIONS (human-only setup):
   connection add <alias> --driver pg|mysql|sqlite [--host --port --database --path --url --credential]
   credential add <alias> --username <u> --password <p> [--write]
   connection test [alias]
@@ -25,10 +33,11 @@ COMMANDS:
   schema search <pattern>                              Search table/column names
   schema dump [--tables] [--include-system]            Full schema dump
 
-GLOBAL FLAGS: -c <alias> (connection), --format json|yaml|csv, --expand <fields>, --full, --timeout <ms>
+GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format json|yaml|csv, --expand <fields>, --full, --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
-  PG and MySQL require a stored credential. SQLite uses file path (credential optional).
+  -c accepts connection aliases, file paths (./data.db), or URLs (postgres://..., mysql://...).
+  PG and MySQL require a stored credential for named connections. SQLite uses file path (credential optional).
 
 SAFETY: Read-only by default. Use --write to opt in to writes.
   --write requires a credential with writePermission (or credential-less SQLite).

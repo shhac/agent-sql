@@ -25,7 +25,7 @@ Count rows:
   agent-sql query count users --where "created_at > '2024-01-01'"
 
 OPTIONS
-  -c, --connection <alias>    Connection to use (default: configured default)
+  -c, --connection <alias>    Connection alias, file path, or URL (default: configured default)
   --format json|yaml|csv      Output format (default: json, or config defaults.format)
   --limit <n>                 Max rows (run: from config, sample: 5)
   --write                     Enable write mode (requires write-enabled credential)

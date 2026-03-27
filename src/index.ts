@@ -21,7 +21,7 @@ program
   .description("Read-only-by-default SQL CLI for AI agents")
   .version(getVersion());
 
-program.option("-c, --connection <alias>", "Connection alias to use");
+program.option("-c, --connection <alias>", "Connection alias, file path, or URL to use");
 program.option("--expand <fields>", "Expand truncated fields (comma-separated field names)");
 program.option("--full", "Show full content for all truncated fields");
 program.option("--timeout <ms>", "Query timeout in milliseconds (overrides config)");
