@@ -12,15 +12,17 @@ import {
 type SqliteOpts = {
   path: string;
   readonly?: boolean;
+  create?: boolean;
 };
 
 const WRITE_COMMANDS: ReadonlySet<string> = new Set(["INSERT", "UPDATE", "DELETE", "REPLACE"]);
 
 export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
   const readonly = opts.readonly ?? true;
+  const create = opts.create ?? false;
   const db = readonly
     ? new Database(opts.path, { readonly: true })
-    : new Database(opts.path, { readwrite: true, create: false });
+    : new Database(opts.path, { readwrite: true, create });
 
   const query = async (sql: string, queryOpts?: { write?: boolean }): Promise<QueryResult> => {
     const command = detectCommand(sql, WRITE_COMMANDS);
