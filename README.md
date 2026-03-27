@@ -6,7 +6,7 @@ Read-only-by-default SQL CLI for AI agents.
 - **LLM-optimized** -- `agent-sql usage` prints concise docs for agent consumption
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
-- **PostgreSQL + SQLite** -- MySQL planned for post-v1
+- **PostgreSQL, MySQL, and SQLite** -- three drivers, one interface
 - **Zero runtime deps** -- single compiled binary via `bun build --compile`
 
 ## Installation
@@ -44,6 +44,10 @@ agent-sql credential add mydb --username app --password secret
 agent-sql connection add mydb --driver pg --host localhost --port 5432 --database myapp --credential mydb
 agent-sql connection test
 
+# MySQL
+agent-sql credential add mydb --username app --password secret
+agent-sql connection add mydb --driver mysql --host localhost --port 3306 --database myapp --credential mydb
+
 # SQLite
 agent-sql connection add local --driver sqlite --path ./data.db
 ```
@@ -69,9 +73,9 @@ agent-sql query explain "SELECT * FROM orders JOIN users ON orders.user_id = use
 ## Command map
 
 ```text
-agent-sql [-c <alias>] [--full] [--expand <fields>] [--timeout <ms>]
+agent-sql [-c <alias>] [--format json|yaml|csv] [--full] [--expand <fields>] [--timeout <ms>]
 ├── connection
-│   ├── add <alias> --driver pg|sqlite [--host --port --database --path --url --credential]
+│   ├── add <alias> --driver pg|mysql|sqlite [--host --port --database --path --url --credential]
 │   ├── update <alias> [--credential <name>] [--no-credential] [--database <db>]
 │   ├── remove <alias>
 │   ├── list
@@ -113,20 +117,21 @@ Each command group has a `usage` subcommand for detailed, LLM-friendly documenta
 
 agent-sql is read-only by default with defense in depth:
 
-| Layer | PostgreSQL | SQLite |
-| --- | --- | --- |
-| **Credential** | `--write` flag on `credential add` grants write permission | Credential-less connections are read-only by default |
-| **Query flag** | `--write` required on each write query | Same |
-| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement |
-| **Result cap** | `query.maxRows` (default 100) | Same |
-| **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same |
+| Layer | PostgreSQL | MySQL | SQLite |
+| --- | --- | --- | --- |
+| **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default |
+| **Query flag** | `--write` required on each write query | Same | Same |
+| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement |
+| **Result cap** | `query.maxRows` (default 100) | Same | Same |
+| **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same | Same |
 
 Write operations require both a credential with `writePermission` and the `--write` flag on the query itself. This two-gate design prevents accidental writes even when credentials allow them.
 
 ## Output
 
-- All output is JSON to stdout
-- Errors go to stderr as `{ "error": "...", "fixable_by": "agent"|"human" }` with non-zero exit code
+- Default output is JSON to stdout. Use `--format yaml` or `--format csv` for alternate formats.
+- CSV applies to tabular results only (`query run`, `query sample`); non-tabular commands fall back to JSON
+- Errors always go to stderr as JSON `{ "error": "...", "fixable_by": "agent"|"human" }` with non-zero exit code
 - NULLs preserved in query results, empty fields pruned in admin output
 - Long strings truncated with per-row `@truncated` metadata showing original lengths
 - `--compact` mode uses parallel arrays (column names + row arrays) for reduced token count
@@ -134,6 +139,9 @@ Write operations require both a credential with `writePermission` and the `--wri
 ```bash
 agent-sql --full run "SELECT * FROM users"                 # expand all fields
 agent-sql --expand name,bio run "SELECT * FROM users"      # expand specific fields
+agent-sql --format yaml run "SELECT * FROM users"          # YAML output
+agent-sql --format csv run "SELECT * FROM users"           # CSV output
+agent-sql config set defaults.format yaml                  # persistent format default
 ```
 
 ## Configuration
@@ -158,6 +166,7 @@ agent-sql config reset               # reset all to defaults
 
 ```bash
 agent-sql connection add staging --driver pg --url "postgres://host/db" --credential acme
+agent-sql connection add mydb --driver mysql --url "mysql://host/db" --credential acme
 agent-sql connection set-default staging
 agent-sql connection list
 agent-sql connection test            # pings default connection

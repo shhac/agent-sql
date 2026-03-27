@@ -1,11 +1,10 @@
 export type KeyDefinition = {
   key: string;
-  type: "number";
-  defaultValue: number;
   description: string;
-  min: number;
-  max: number;
-};
+} & (
+  | { type: "number"; defaultValue: number; min?: number; max?: number }
+  | { type: "string"; defaultValue: string; allowedValues: string[] }
+);
 
 export const VALID_KEYS: KeyDefinition[] = [
   {
@@ -15,6 +14,13 @@ export const VALID_KEYS: KeyDefinition[] = [
     description: "Default row limit for queries",
     min: 1,
     max: 1000,
+  },
+  {
+    key: "defaults.format",
+    type: "string",
+    defaultValue: "json",
+    description: "Default output format",
+    allowedValues: ["json", "yaml", "csv"],
   },
   {
     key: "query.timeout",
@@ -42,21 +48,30 @@ export const VALID_KEYS: KeyDefinition[] = [
   },
 ];
 
-export const parseConfigValue = (key: string, rawValue: string): number => {
+export const parseConfigValue = (key: string, rawValue: string): number | string => {
   const def = VALID_KEYS.find((k) => k.key === key);
   if (!def) {
     const validKeys = VALID_KEYS.map((k) => k.key).join(", ");
     throw new Error(`Unknown config key: "${key}". Valid keys: ${validKeys}`);
   }
 
+  if (def.type === "string") {
+    if (!def.allowedValues.includes(rawValue)) {
+      throw new Error(
+        `"${key}" must be one of: ${def.allowedValues.join(", ")}. Got: "${rawValue}"`,
+      );
+    }
+    return rawValue;
+  }
+
   const num = Number(rawValue);
   if (!Number.isFinite(num) || !Number.isInteger(num)) {
     throw new Error(`"${key}" must be an integer. Got: "${rawValue}"`);
   }
-  if (num < def.min) {
+  if (def.min !== undefined && num < def.min) {
     throw new Error(`"${key}" minimum is ${def.min}. Got: ${num}`);
   }
-  if (num > def.max) {
+  if (def.max !== undefined && num > def.max) {
     throw new Error(`"${key}" maximum is ${def.max}. Got: ${num}`);
   }
 

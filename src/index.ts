@@ -2,7 +2,8 @@ import { Command } from "commander";
 import { getVersion } from "./lib/version.ts";
 import { configureTruncation } from "./lib/truncation.ts";
 import { configureTimeout } from "./lib/timeout.ts";
-import { getSettings } from "./lib/config.ts";
+import { configureFormat } from "./lib/format.ts";
+import { getSettings, getSetting } from "./lib/config.ts";
 import { registerConfigCommand } from "./cli/config/index.ts";
 import { registerConnectionCommand } from "./cli/connection/index.ts";
 import { registerCredentialCommand } from "./cli/credential/index.ts";
@@ -21,6 +22,7 @@ program.option("-c, --connection <alias>", "Connection alias to use");
 program.option("--expand <fields>", "Expand truncated fields (comma-separated field names)");
 program.option("--full", "Show full content for all truncated fields");
 program.option("--timeout <ms>", "Query timeout in milliseconds (overrides config)");
+program.option("--format <format>", "Output format: json, yaml, or csv (overrides config)");
 
 program.hook("preAction", (thisCommand) => {
   const opts = thisCommand.opts();
@@ -39,6 +41,14 @@ program.hook("preAction", (thisCommand) => {
     }
     configureTimeout(ms);
   }
+  const allowedFormats = ["json", "yaml", "csv"];
+  const format = opts.format ?? (getSetting("defaults.format") as string | undefined) ?? "json";
+  if (!allowedFormats.includes(format)) {
+    throw new Error(
+      `Invalid --format: "${format}". Must be one of: ${allowedFormats.join(", ")}`,
+    );
+  }
+  configureFormat(format);
 });
 
 registerConfigCommand({ program });

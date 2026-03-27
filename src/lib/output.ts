@@ -1,3 +1,7 @@
+import { getFormat } from "./format.js";
+import { formatYaml } from "./format-yaml.js";
+import { formatCsv } from "./format-csv.js";
+
 const DEFAULT_PAGE_SIZE = 20;
 
 type PrintJsonOptions = {
@@ -63,6 +67,11 @@ function writeStderr(json: string): void {
 
 export function printJson(data: unknown, options?: PrintJsonOptions): void {
   const output = options?.prune ? (pruneEmpty(data) ?? {}) : data;
+  const format = getFormat();
+  if (format === "yaml") {
+    writeStdout(formatYaml(output).trimEnd());
+    return;
+  }
   writeStdout(JSON.stringify(output, null, 2));
 }
 
@@ -89,6 +98,15 @@ export function printPaginated(payload: PaginatedPayload): void {
       rowCount: payload.rowCount,
     };
   }
+  const format = getFormat();
+  if (format === "csv") {
+    writeStdout(formatCsv({ columns: payload.columns, rows: payload.items }).trimEnd());
+    return;
+  }
+  if (format === "yaml") {
+    writeStdout(formatYaml(result).trimEnd());
+    return;
+  }
   writeStdout(JSON.stringify(result, null, 2));
 }
 
@@ -105,6 +123,22 @@ export function printCompact(payload: CompactPayload): void {
       hasMore: true,
       rowCount: payload.rowCount,
     };
+  }
+  const format = getFormat();
+  if (format === "csv") {
+    const namedRows = payload.rows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      payload.columns.forEach((col, i) => {
+        obj[col] = row[i];
+      });
+      return obj;
+    });
+    writeStdout(formatCsv({ columns: payload.columns, rows: namedRows }).trimEnd());
+    return;
+  }
+  if (format === "yaml") {
+    writeStdout(formatYaml(result).trimEnd());
+    return;
   }
   writeStdout(JSON.stringify(result, null, 2));
 }

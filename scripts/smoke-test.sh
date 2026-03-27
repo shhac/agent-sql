@@ -76,10 +76,10 @@ fi
 echo "=== Test: config list-keys ==="
 LIST_KEYS_OUTPUT=$(run_cmd config list-keys 2>/dev/null || true)
 KEY_COUNT=$(echo "$LIST_KEYS_OUTPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('keys',d) if isinstance(d,dict) else d))" 2>/dev/null || echo "0")
-if [ "$KEY_COUNT" = "4" ]; then
-  pass "config list-keys returns valid JSON with 4 keys"
+if [ "$KEY_COUNT" = "5" ]; then
+  pass "config list-keys returns valid JSON with 5 keys"
 else
-  fail "config list-keys returns valid JSON with 4 keys (got $KEY_COUNT)"
+  fail "config list-keys returns valid JSON with 5 keys (got $KEY_COUNT)"
 fi
 
 # --- Set up temp SQLite DB ---
@@ -175,6 +175,59 @@ if run_cmd run "INSERT INTO smoke_test VALUES (2, 'Bob', 'hi')" --write >/dev/nu
   pass "write allowed with --write exits 0"
 else
   fail "write allowed with --write exits 0"
+fi
+
+# --- MySQL tests (env var gated) ---
+if [ -n "${AGENT_SQL_MYSQL_TEST_URL:-}" ]; then
+  echo ""
+  echo "=== MySQL tests ==="
+
+  # --- MySQL Test: Add connection ---
+  echo "=== Test: mysql connection add ==="
+  if run_cmd connection add mysql_smoke --driver mysql --url "$AGENT_SQL_MYSQL_TEST_URL" --default >/dev/null 2>&1; then
+    pass "mysql connection add succeeds"
+  else
+    fail "mysql connection add succeeds"
+  fi
+
+  # --- MySQL Test: connection test ---
+  echo "=== Test: mysql connection test ==="
+  if run_cmd connection test 2>&1 | grep -qi "success\|ok"; then
+    pass "mysql connection test succeeds"
+  else
+    fail "mysql connection test succeeds"
+  fi
+
+  # --- MySQL Test: run SELECT ---
+  echo "=== Test: mysql run SELECT ==="
+  MYSQL_RUN_OUTPUT=$(run_cmd run "SELECT 1 AS ping" 2>&1 || true)
+  if echo "$MYSQL_RUN_OUTPUT" | grep -q "ping"; then
+    pass "mysql run SELECT returns rows"
+  else
+    fail "mysql run SELECT returns rows"
+  fi
+
+  # --- MySQL Test: schema tables ---
+  echo "=== Test: mysql schema tables ==="
+  MYSQL_TABLES_OUTPUT=$(run_cmd schema tables 2>&1 || true)
+  if echo "$MYSQL_TABLES_OUTPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if 'tables' in d else 1)" 2>/dev/null; then
+    pass "mysql schema tables returns valid JSON"
+  else
+    fail "mysql schema tables returns valid JSON"
+  fi
+
+  # --- MySQL Test: write blocked ---
+  echo "=== Test: mysql write blocked ==="
+  if run_cmd run "CREATE TABLE _smoke_tmp (id INT)" >/dev/null 2>&1; then
+    # Clean up if it somehow succeeded
+    run_cmd run "DROP TABLE _smoke_tmp" --write >/dev/null 2>&1 || true
+    fail "mysql write blocked (should have exited non-zero)"
+  else
+    pass "mysql write blocked exits non-zero"
+  fi
+else
+  echo ""
+  echo "=== Skipping MySQL tests (AGENT_SQL_MYSQL_TEST_URL not set) ==="
 fi
 
 # --- Summary ---

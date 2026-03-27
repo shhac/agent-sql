@@ -26,6 +26,7 @@ Count rows:
 
 OPTIONS
   -c, --connection <alias>    Connection to use (default: configured default)
+  --format json|yaml|csv      Output format (default: json, or config defaults.format)
   --limit <n>                 Max rows (run: from config, sample: 5)
   --write                     Enable write mode (requires write-enabled credential)
   --compact                   Array-of-arrays format for large results
@@ -42,6 +43,12 @@ OUTPUT FORMAT (--compact)
 
 WRITE OUTPUT
   { "result": "ok", "rowsAffected": 5, "command": "UPDATE" }
+
+FORMAT EXAMPLES
+  agent-sql run "SELECT * FROM users" --format yaml    YAML output
+  agent-sql run "SELECT * FROM users" --format csv     CSV output (tabular only)
+  CSV only applies to tabular results (run, sample). Non-tabular falls back to JSON.
+  Errors are always JSON regardless of --format.
 
 SAFETY
   Queries are read-only by default. --write requires a credential with writePermission.

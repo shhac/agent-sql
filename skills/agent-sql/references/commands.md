@@ -7,13 +7,13 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 
 - `agent-sql run "<sql>" [--limit <n>] [--write] [--compact] [-c <alias>]` — top-level alias for `query run`
 - `agent-sql query run "<sql>" [--limit <n>] [--write] [--compact] [-c <alias>]` — execute a SQL query. Default row limit from config. `--write` opts in to write mode (requires credential with writePermission). `--compact` returns array-of-arrays format.
-- `agent-sql query sample <table> [--limit <n>] [--where "<condition>"] [--compact] [-c <alias>]` — sample rows from a table (default 5). Dot notation for PG namespaces (`schema.table`).
+- `agent-sql query sample <table> [--limit <n>] [--where "<condition>"] [--compact] [-c <alias>]` — sample rows from a table (default 5). Dot notation for PG namespaces (`schema.table`). MySQL scopes to the connected database.
 - `agent-sql query explain "<sql>" [--analyze] [-c <alias>]` — run EXPLAIN on a query. `--analyze` for EXPLAIN ANALYZE (read-only queries only).
 - `agent-sql query count <table> [--where "<condition>"] [-c <alias>]` — count rows. `--where` to filter. Dot notation supported.
 
 ## Schema
 
-- `agent-sql schema tables [--include-system] [-c <alias>]` — list all tables with namespace (PG: `public.users`). `--include-system` for `pg_catalog`/`information_schema`.
+- `agent-sql schema tables [--include-system] [-c <alias>]` — list all tables with namespace (PG: `public.users`). `--include-system` for `pg_catalog`/`information_schema`. MySQL scopes to the connected database.
 - `agent-sql schema describe <table> [--full] [-c <alias>]` — show columns, types, nullability, defaults. Dot notation: `schema describe analytics.events`. `--full` adds constraints, indexes, comments.
 - `agent-sql schema indexes [table] [-c <alias>]` — show indexes. All tables if no table specified. Dot notation supported.
 - `agent-sql schema constraints [table] [--type pk|fk|unique|check] [-c <alias>]` — show constraints (PKs, FKs, unique, check). `--type` to filter. All tables if no table specified. Dot notation supported.
@@ -46,6 +46,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 | Flag                       | Description                                  |
 | -------------------------- | -------------------------------------------- |
 | `-c, --connection <alias>` | Connection alias (overrides env/default)      |
+| `--format json\|yaml\|csv` | Output format (default: json or config)       |
 | `--expand <field,...>`     | Expand specific truncated fields              |
 | `--full`                   | Expand all truncated fields                   |
 | `--timeout <ms>`           | Query timeout override                        |

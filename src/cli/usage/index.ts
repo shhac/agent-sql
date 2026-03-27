@@ -3,7 +3,7 @@ import type { Command } from "commander";
 const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSON output)
 
 SETUP (human-only):
-  connection add <alias> --driver pg|sqlite [--host --port --database --path --url --credential]
+  connection add <alias> --driver pg|mysql|sqlite [--host --port --database --path --url --credential]
   credential add <alias> --username <u> --password <p> [--write]
   connection test [alias]
 
@@ -25,16 +25,18 @@ COMMANDS:
   schema search <pattern>                              Search table/column names
   schema dump [--tables] [--include-system]            Full schema dump
 
-GLOBAL FLAGS: -c <alias> (connection), --expand <fields>, --full, --timeout <ms>
+GLOBAL FLAGS: -c <alias> (connection), --format json|yaml|csv, --expand <fields>, --full, --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
-  PG requires a stored credential. SQLite uses file path (credential optional).
+  PG and MySQL require a stored credential. SQLite uses file path (credential optional).
 
 SAFETY: Read-only by default. Use --write to opt in to writes.
   --write requires a credential with writePermission (or credential-less SQLite).
   Results capped at query.maxRows (default 100). Timeout: query.timeout (default 30s).
 
-OUTPUT: JSON to stdout. Errors: { "error": "...", "fixable_by": "agent"|"human" } to stderr.
+OUTPUT: JSON to stdout (default). Use --format yaml or --format csv for alternate formats.
+  CSV only applies to tabular results (query run, sample); non-tabular falls back to JSON.
+  Errors always JSON to stderr: { "error": "...", "fixable_by": "agent"|"human" }.
   Long strings truncated with @truncated metadata. Use --full or --expand <field> to expand.
 
 DETAIL: Run "<command> usage" for per-command docs.

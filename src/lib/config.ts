@@ -16,6 +16,7 @@ export type Connection = {
 
 export type DefaultsSettings = {
   limit?: number;
+  format?: string;
 };
 
 export type QuerySettings = {

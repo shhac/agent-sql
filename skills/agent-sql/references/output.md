@@ -2,7 +2,14 @@
 
 ## General
 
-All commands print JSON to stdout. Errors print JSON to stderr with non-zero exit.
+All commands default to JSON output on stdout. Use `--format yaml` or `--format csv` for alternate formats.
+
+- **JSON** (default): structured output for all commands
+- **YAML**: structured output for all commands (`--format yaml`)
+- **CSV**: tabular data only — applies to `query run` and `query sample` (`--format csv`). Non-tabular commands (schema, explain, count, config) fall back to JSON.
+- **Errors**: always JSON to stderr regardless of `--format`
+
+Set a persistent default with `agent-sql config set defaults.format yaml`. The `--format` flag overrides the config.
 
 NULL values are preserved in query results (`"bio": null` is meaningful). Empty/null fields are pruned in admin/config output only.
 
@@ -83,6 +90,35 @@ Column names appear once; rows are arrays. Saves tokens for large results.
 ```
 
 In compact mode, `truncated` is a top-level object mapping column names to arrays of original lengths (parallel to `rows`). `null` means no truncation for that row.
+
+## Query results -- YAML format (`--format yaml`)
+
+```yaml
+columns:
+  - id
+  - name
+  - email
+rows:
+  - id: 1
+    name: Alice
+    email: alice@example.com
+  - id: 2
+    name: Bob
+    email: bob@example.com
+pagination:
+  hasMore: true
+  rowCount: 20
+```
+
+## Query results -- CSV format (`--format csv`)
+
+```csv
+id,name,email
+1,Alice,alice@example.com
+2,Bob,bob@example.com
+```
+
+CSV only applies to tabular results (`query run`, `query sample`). Fields containing commas, newlines, or quotes are RFC 4180 quoted. NULL values render as empty fields.
 
 ## Query count (`query count`)
 

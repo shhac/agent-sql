@@ -30,9 +30,13 @@ See design docs (if present) for full rationale on each.
 
 ## Dev tools
 
-- **Linting**: oxlint (same rules as agent-mongo — `type` over `interface`, kebab-case filenames, max 350 lines/file, max 2 params/function)
-- **Formatting**: oxfmt
+**Use `bun` for everything — not node, npm, or npx.** This is a Bun project. Use `bun run`, `bun test`, `bun add`, `bunx`.
+
+- **Linting**: `bun run lint` / `bun run lint:fix` (oxlint — `type` over `interface`, kebab-case filenames, max 350 lines/file, max 2 params/function)
+- **Formatting**: `bun run format` (oxfmt)
 - **Testing**: `bun test`
+- **Typecheck**: `bun run typecheck`
+- **Dev runner**: `bun run dev -- <args>`
 - **Git hooks**: simple-git-hooks (pre-commit: lint fix + format)
 
 ## Architecture
@@ -61,7 +65,7 @@ src/
     types.ts                  # DriverConnection interface, QueryResult, schema types
     pg.ts                     # PostgreSQL (Bun.SQL)
     sqlite.ts                 # SQLite (bun:sqlite)
-    mysql.ts                  # MySQL stub (post-v1)
+    mysql.ts                  # MySQL (Bun.SQL with mysql adapter)
     resolve.ts                # Driver resolution from connection config
 ```
 
