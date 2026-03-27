@@ -32,8 +32,9 @@ SQLITE NOTE:
 
 SNOWFLAKE NOTE:
   Snowflake authenticates via PAT (Personal Access Token) stored as the password.
-    agent-sql credential add sf-cred --username my_user --password <PAT>
-    agent-sql connection add warehouse --driver snowflake --account orgname-accountname --database MYDB --schema PUBLIC --warehouse COMPUTE_WH --credential sf-cred
+  No --username needed — Snowflake identifies the user from the token.
+    agent-sql credential add sf-cred --password <PAT>
+    agent-sql connection add sf-prod --driver snowflake --account myorg-myaccount --database MYDB --credential sf-cred
 
 KEYCHAIN (macOS):
   On macOS, credentials are stored in the system keychain automatically.

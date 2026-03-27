@@ -12,13 +12,13 @@ AD-HOC USAGE (zero setup):
   agent-sql schema tables -c ./mydb.sqlite                             # schema from file
 
 NAMED CONNECTIONS (human-only setup):
-  connection add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
   credential add <alias> --username <u> --password <p> [--write]
+  connection add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
   connection test [alias]
 
 COMMANDS:
+  credential add|remove|list                           Manage stored credentials (set up first)
   connection add|remove|update|list|test|set-default   Manage SQL connections
-  credential add|remove|list                           Manage stored credentials
   config get|set|reset|list-keys                       Persistent settings
 
   run "<sql>" [--limit] [--write] [--compact]          Execute SQL (top-level alias)

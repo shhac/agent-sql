@@ -40,7 +40,7 @@ COMMANDS:
   connection usage
     Print this reference.
 
-CREDENTIALS: Use "credential add" to store reusable auth. Reference via --credential.
+SETUP ORDER: Create a credential first ("credential add"), then reference it in "connection add --credential <name>".
 
 AD-HOC: -c also accepts file paths (./data.db) and URLs (postgres://..., mysql://..., snowflake://...) without prior setup.
   Snowflake ad-hoc: snowflake://account/database/schema?warehouse=WH&role=ROLE (requires AGENT_SQL_SNOWFLAKE_TOKEN env var).

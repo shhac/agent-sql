@@ -36,39 +36,38 @@ This installs the `agent-sql` skill so Claude Code (and other AI agents) can dis
 
 ## Quick start
 
-### Ad-hoc usage (zero setup)
+### 1. Connect
 
-The `-c` flag accepts connection aliases, file paths, or connection strings -- no configuration needed for SQLite:
+The `-c` flag accepts file paths, connection URLs, or saved aliases:
 
 ```bash
-agent-sql run -c ./mydb.sqlite 'SELECT 1'
-agent-sql schema tables -c ./data.db
+# SQLite — just point at a file, no setup needed
+agent-sql run -c ./data.db 'SELECT * FROM users'
+
+# PostgreSQL / MySQL — inline URL
 agent-sql run -c postgres://user:pass@localhost/myapp 'SELECT * FROM users'
 agent-sql run -c mysql://user:pass@localhost/myapp 'SELECT * FROM orders'
 
-# Snowflake ad-hoc (token via env var)
+# Snowflake — inline URL + token via env var
 AGENT_SQL_SNOWFLAKE_TOKEN=<pat> agent-sql run \
   -c 'snowflake://myorg-myaccount/MY_DB/PUBLIC?warehouse=COMPUTE_WH' 'SELECT 1'
 ```
 
-### Named connections
-
 For databases you use repeatedly, save a named connection:
 
 ```bash
-# PostgreSQL
+# PostgreSQL — credential first, then connection
 agent-sql credential add pg-cred --username app --password secret
-agent-sql connection add mydb --driver pg --host localhost --port 5432 --database myapp --credential pg-cred
-agent-sql connection test
+agent-sql connection add mydb --driver pg --host localhost --database myapp --credential pg-cred
 
 # MySQL
 agent-sql credential add mysql-cred --username app --password secret
-agent-sql connection add mydb --driver mysql --host localhost --port 3306 --database myapp --credential mysql-cred
+agent-sql connection add mydb --driver mysql --host localhost --database myapp --credential mysql-cred
 
-# SQLite (no credential needed)
+# SQLite — no credential needed
 agent-sql connection add local --driver sqlite --path ./data.db
 
-# Snowflake (PAT as password, account can be orgname-accountname or account.region)
+# Snowflake — PAT as password, account can look like orgname-accountname or account.region
 agent-sql credential add sf-cred --password <pat_secret>
 agent-sql connection add sf-prod \
   --driver snowflake \
@@ -78,23 +77,27 @@ agent-sql connection add sf-prod \
   --warehouse COMPUTE_WH \
   --role MY_ROLE \
   --credential sf-cred
+
+# Verify
+agent-sql connection test
 ```
 
-### Explore schema
+### 2. Explore schema
 
 ```bash
 agent-sql schema tables
 agent-sql schema describe users
 agent-sql schema indexes users
 agent-sql schema constraints users
+agent-sql schema search email
 ```
 
-### Query data
+### 3. Query data
 
 ```bash
 agent-sql run "SELECT * FROM users WHERE active = true" --limit 10
-agent-sql query count users --where "age >= 21"
 agent-sql query sample users --limit 5
+agent-sql query count users --where "age >= 21"
 agent-sql query explain "SELECT * FROM orders JOIN users ON orders.user_id = users.id"
 ```
 
@@ -102,7 +105,12 @@ agent-sql query explain "SELECT * FROM orders JOIN users ON orders.user_id = use
 
 ```text
 agent-sql [-c <alias>] [--format json|yaml|csv] [--full] [--expand <fields>] [--timeout <ms>]
-├── connection
+├── credential                                         # set up credentials first
+│   ├── add <alias> --username <u> --password <p> [--write]
+│   ├── remove <alias> [--force]
+│   ├── list
+│   └── usage
+├── connection                                         # then create connections that reference them
 │   ├── add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
 │   │                                                  [--account --warehouse --role --schema]  # snowflake
 │   ├── update <alias> [--credential <name>] [--no-credential] [--database <db>]
@@ -110,11 +118,6 @@ agent-sql [-c <alias>] [--format json|yaml|csv] [--full] [--expand <fields>] [--
 │   ├── list
 │   ├── test [alias]
 │   ├── set-default <alias>
-│   └── usage
-├── credential
-│   ├── add <alias> --username <u> --password <p> [--write]
-│   ├── remove <alias> [--force]
-│   ├── list
 │   └── usage
 ├── config
 │   ├── get <key>
@@ -192,18 +195,9 @@ agent-sql config list-keys           # all keys with defaults and ranges
 agent-sql config reset               # reset all to defaults
 ```
 
-## Connection management
+## Connection resolution
 
-```bash
-agent-sql connection add staging --driver pg --url "postgres://host/db" --credential acme
-agent-sql connection add mydb --driver mysql --url "mysql://host/db" --credential acme
-agent-sql connection set-default staging
-agent-sql connection list
-agent-sql connection test            # pings default connection
-agent-sql connection test -c local   # pings specific connection
-```
-
-Connection resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag also accepts file paths (e.g. `./data.db`) and connection URLs (e.g. `postgres://user:pass@host/db`) for ad-hoc use without prior setup.
+Resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag accepts saved aliases, file paths (e.g. `./data.db`), and connection URLs (e.g. `postgres://user:pass@host/db`).
 
 ## Environment variables
 
