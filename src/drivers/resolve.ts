@@ -217,15 +217,14 @@ const resolveAdHocConnection = async (
     const absPath = resolve(connectionStr);
     const fileExists = await Bun.file(absPath).exists();
     if (!fileExists && !write) {
-      throw Object.assign(
-        new Error(`SQLite database not found: ${connectionStr}`),
-        {
-          hint: "Check the file path, or use --write to create a new database.",
-          fixableBy: "agent" as const,
-        },
-      );
+      throw Object.assign(new Error(`SQLite database not found: ${connectionStr}`), {
+        hint: "Check the file path, or use --write to create a new database.",
+        fixableBy: "agent" as const,
+      });
     }
-    return trackDriver(await connectSqlite({ path: absPath, readonly: !write, create: !fileExists }));
+    return trackDriver(
+      await connectSqlite({ path: absPath, readonly: !write, create: !fileExists }),
+    );
   }
 
   return undefined;
