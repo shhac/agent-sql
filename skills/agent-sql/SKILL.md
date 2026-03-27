@@ -96,7 +96,7 @@ agent-sql config get query.timeout
 agent-sql config reset                               # restore defaults
 ```
 
-Key settings: `defaults.limit` (20), `query.timeout` (30000ms), `query.maxRows` (100), `truncation.maxLength` (200).
+Key settings: `defaults.format` (json), `defaults.limit` (20), `query.timeout` (30000ms), `query.maxRows` (100), `truncation.maxLength` (200).
 
 ## Connection management
 

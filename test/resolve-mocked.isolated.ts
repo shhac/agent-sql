@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import type { DriverConnection } from "../src/drivers/types";
 
 const fakeDriver: DriverConnection = {
+  quoteIdent: (name: string) => `"${name}"`,
   query: async () => ({ columns: [], rows: [] }),
   getTables: async () => [],
   describeTable: async () => [],

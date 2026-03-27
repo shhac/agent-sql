@@ -11,6 +11,7 @@ import {
   type IndexInfo,
   type ConstraintInfo,
 } from "./types";
+import { quoteIdentMysql } from "../lib/quote-ident";
 import { getTimeout } from "../lib/timeout";
 
 type MysqlOpts = {
@@ -103,18 +104,21 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
     return { columns, rows: rows as Record<string, unknown>[] };
   };
 
+  const quoteIdent = quoteIdentMysql;
+
   const getTables = async (tableOpts?: { includeSystem?: boolean }): Promise<TableInfo[]> => {
     const filter = tableOpts?.includeSystem
       ? "WHERE table_schema = DATABASE()"
-      : "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'";
+      : "WHERE table_schema = DATABASE() AND table_type IN ('BASE TABLE', 'VIEW')";
     const rows = await db.unsafe(`
-      SELECT table_name
+      SELECT table_name, table_type
       FROM information_schema.tables
       ${filter}
       ORDER BY table_name
     `);
-    return (rows as { table_name: string }[]).map((r) => ({
+    return (rows as { table_name: string; table_type: string }[]).map((r) => ({
       name: r.table_name,
+      type: r.table_type === "VIEW" ? ("view" as const) : ("table" as const),
     }));
   };
 
@@ -277,6 +281,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
   };
 
   return {
+    quoteIdent,
     query,
     getTables,
     describeTable,

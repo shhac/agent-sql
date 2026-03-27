@@ -1,17 +1,17 @@
 import type { Command } from "commander";
+import type { DriverConnection } from "../../drivers/types.ts";
 import { resolveDriver } from "../../drivers/resolve.ts";
 import { enhanceError } from "../../lib/errors.ts";
 import { printError, printJson } from "../../lib/output.ts";
-import { quoteIdentPg } from "../../lib/quote-ident.ts";
 
 type CountOptions = {
   connection?: string;
   where?: string;
 };
 
-const buildCountSql = (table: string, where?: string): string => {
-  const quoted = quoteIdentPg(table);
-  const whereClause = where ? ` WHERE ${where}` : "";
+const buildCountSql = (driver: DriverConnection, opts: { table: string; where?: string }): string => {
+  const quoted = driver.quoteIdent(opts.table);
+  const whereClause = opts.where ? ` WHERE ${opts.where}` : "";
   return `SELECT COUNT(*) AS count FROM ${quoted}${whereClause}`;
 };
 
@@ -25,8 +25,8 @@ export function registerCount(parent: Command): void {
     .action(async (table: string, opts: CountOptions) => {
       const connectionAlias = opts.connection;
       try {
-        const sql = buildCountSql(table, opts.where);
         const driver = await resolveDriver({ connection: connectionAlias });
+        const sql = buildCountSql(driver, { table, where: opts.where });
 
         try {
           const result = await driver.query(sql);

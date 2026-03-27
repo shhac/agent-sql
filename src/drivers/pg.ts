@@ -9,6 +9,7 @@ import {
   type ConstraintInfo,
 } from "./types";
 import { loadPgParser, validateReadOnlyQuery } from "../lib/pg-session-guard";
+import { quoteIdentPg } from "../lib/quote-ident";
 import { getTimeout } from "../lib/timeout";
 
 type PgOpts = {
@@ -106,20 +107,25 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
     return { columns, rows: rows as Record<string, unknown>[] };
   };
 
+  const quoteIdent = quoteIdentPg;
+
   const getTables = async (tableOpts?: { includeSystem?: boolean }): Promise<TableInfo[]> => {
     const filter = tableOpts?.includeSystem
       ? ""
       : "WHERE table_schema NOT IN ('pg_catalog', 'information_schema')";
     const rows = await db.unsafe(`
-      SELECT table_schema, table_name
+      SELECT table_schema, table_name, table_type
       FROM information_schema.tables
       ${filter}
       ORDER BY table_schema, table_name
     `);
-    return (rows as { table_schema: string; table_name: string }[]).map((r) => ({
-      name: `${r.table_schema}.${r.table_name}`,
-      schema: r.table_schema,
-    }));
+    return (rows as { table_schema: string; table_name: string; table_type: string }[]).map(
+      (r) => ({
+        name: `${r.table_schema}.${r.table_name}`,
+        schema: r.table_schema,
+        type: r.table_type === "VIEW" ? ("view" as const) : ("table" as const),
+      }),
+    );
   };
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
@@ -323,6 +329,7 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   };
 
   return {
+    quoteIdent,
     query,
     getTables,
     describeTable,

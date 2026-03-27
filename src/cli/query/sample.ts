@@ -1,9 +1,9 @@
 import type { Command } from "commander";
+import type { DriverConnection } from "../../drivers/types.ts";
 import { resolveDriver } from "../../drivers/resolve.ts";
 import { getSetting } from "../../lib/config.ts";
 import { enhanceError } from "../../lib/errors.ts";
 import { printCompact, printError, printPaginated } from "../../lib/output.ts";
-import { quoteIdentPg } from "../../lib/quote-ident.ts";
 import {
   applyTruncation,
   applyTruncationCompact,
@@ -21,8 +21,11 @@ type SampleOptions = {
 
 const DEFAULT_SAMPLE_SIZE = 5;
 
-const buildSampleSql = (table: string, opts: { limit: number; where?: string }): string => {
-  const quoted = quoteIdentPg(table);
+const buildSampleSql = (
+  driver: DriverConnection,
+  opts: { table: string; limit: number; where?: string },
+): string => {
+  const quoted = driver.quoteIdent(opts.table);
   const whereClause = opts.where ? ` WHERE ${opts.where}` : "";
   return `SELECT * FROM ${quoted}${whereClause} LIMIT ${opts.limit}`;
 };
@@ -47,9 +50,8 @@ export function registerSample(parent: Command): void {
         });
 
         const limit = opts.limit !== undefined ? Number(opts.limit) : DEFAULT_SAMPLE_SIZE;
-        const sql = buildSampleSql(table, { limit, where: opts.where });
-
         const driver = await resolveDriver({ connection: opts.connection });
+        const sql = buildSampleSql(driver, { table, limit, where: opts.where });
 
         try {
           const result = await driver.query(sql);

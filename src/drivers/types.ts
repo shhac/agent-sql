@@ -10,6 +10,7 @@ export type QueryResult = {
 export type TableInfo = {
   name: string;
   schema?: string;
+  type?: "table" | "view";
   rowCount?: number;
 };
 
@@ -51,6 +52,7 @@ export const detectCommand = (sql: string, commands: ReadonlySet<string>): strin
 };
 
 export type DriverConnection = {
+  quoteIdent(name: string): string;
   query(sql: string, opts?: { write?: boolean }): Promise<QueryResult>;
   getTables(opts?: { includeSystem?: boolean }): Promise<TableInfo[]>;
   describeTable(table: string): Promise<ColumnInfo[]>;

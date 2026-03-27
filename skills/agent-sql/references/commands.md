@@ -55,6 +55,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 
 | Key                  | Default | Range       | Description                         |
 | -------------------- | ------- | ----------- | ----------------------------------- |
+| `defaults.format`    | json    | json/yaml/csv | Default output format               |
 | `defaults.limit`     | 20      | 1-1000      | Default row limit for queries       |
 | `query.timeout`      | 30000   | 1000-300000 | Query timeout in ms                 |
 | `query.maxRows`      | 100     | 1-10000     | Max rows per query                  |

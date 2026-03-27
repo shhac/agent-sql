@@ -44,13 +44,21 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
 
   const getTables = async (tableOpts?: { includeSystem?: boolean }): Promise<TableInfo[]> => {
     const rows = db
-      .query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-      .all() as { name: string }[];
+      .query("SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') ORDER BY name")
+      .all() as { name: string; type: string }[];
 
     if (tableOpts?.includeSystem) {
-      return rows.map((r) => ({ name: r.name }));
+      return rows.map((r) => ({
+        name: r.name,
+        type: r.type === "view" ? ("view" as const) : ("table" as const),
+      }));
     }
-    return rows.filter((r) => !r.name.startsWith("sqlite_")).map((r) => ({ name: r.name }));
+    return rows
+      .filter((r) => !r.name.startsWith("sqlite_"))
+      .map((r) => ({
+        name: r.name,
+        type: r.type === "view" ? ("view" as const) : ("table" as const),
+      }));
   };
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
@@ -147,7 +155,7 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
 
     const tableRows = db
       .query(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name LIKE ? COLLATE NOCASE",
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name LIKE ? COLLATE NOCASE",
       )
       .all(likePattern) as { name: string }[];
 
@@ -174,13 +182,13 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
   const getUserTableNames = async (): Promise<string[]> => {
     const rows = db
       .query(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name",
       )
       .all() as { name: string }[];
     return rows.map((r) => r.name);
   };
 
-  return { query, getTables, describeTable, getIndexes, getConstraints, searchSchema, close };
+  return { quoteIdent, query, getTables, describeTable, getIndexes, getConstraints, searchSchema, close };
 };
 
 const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;

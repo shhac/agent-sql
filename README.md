@@ -150,6 +150,7 @@ Persistent settings stored in `~/.config/agent-sql/config.json`:
 
 | Key | Default | Description |
 | --- | --- | --- |
+| `defaults.format` | json | Default output format (json/yaml/csv) |
 | `defaults.limit` | 20 | Default row limit for queries |
 | `query.timeout` | 30000 | Query timeout in milliseconds |
 | `query.maxRows` | 100 | Maximum rows per query |
