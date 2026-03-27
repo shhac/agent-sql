@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getConfigDir, ensureConfigDir } from "./paths";
 
-export type Driver = "pg" | "sqlite" | "mysql";
+export type Driver = "pg" | "sqlite" | "mysql" | "snowflake";
 
 export type Connection = {
   driver: Driver;
@@ -12,6 +12,10 @@ export type Connection = {
   path?: string;
   url?: string;
   credential?: string;
+  account?: string;
+  warehouse?: string;
+  role?: string;
+  schema?: string;
 };
 
 export type DefaultsSettings = {

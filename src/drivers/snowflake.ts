@@ -1,0 +1,321 @@
+// Snowflake driver: REST API v2 with PAT authentication
+// Read-only by default via client-side keyword allowlist (no BEGIN TRANSACTION READ ONLY support)
+
+import {
+  detectCommand,
+  type DriverConnection,
+  type QueryResult,
+  type TableInfo,
+  type ColumnInfo,
+  type IndexInfo,
+  type ConstraintInfo,
+} from "./types";
+import type { SnowflakeOpts, SnowflakeQueryResponse } from "./snowflake/types";
+import { buildPatHeaders, buildBaseUrl } from "./snowflake/auth";
+import { SnowflakeClient } from "./snowflake/client";
+import { parseRows, extractColumns } from "./snowflake/parse-results";
+import { validateReadOnly } from "./snowflake/read-only-guard";
+import { quoteIdentPg } from "../lib/quote-ident";
+import { getTimeout } from "../lib/timeout";
+
+const WRITE_COMMANDS: ReadonlySet<string> = new Set([
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "CREATE",
+  "ALTER",
+  "DROP",
+  "TRUNCATE",
+  "MERGE",
+  "COPY",
+  "PUT",
+  "GET",
+]);
+
+const responseToResult = (resp: SnowflakeQueryResponse): QueryResult => {
+  const { rowType } = resp.resultSetMetaData;
+  return {
+    columns: extractColumns(rowType),
+    rows: parseRows(resp.data, rowType),
+  };
+};
+
+const parseTableRef = (table: string, defaultSchema: string): { schema: string; table: string } => {
+  const parts = table.split(".");
+  if (parts.length >= 2) {
+    return { schema: parts[0]!, table: parts[1]! };
+  }
+  return { schema: defaultSchema, table: parts[0]! };
+};
+
+export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConnection> => {
+  const readonly = opts.readonly ?? true;
+  const defaultSchema = opts.schema ?? "PUBLIC";
+  const timeoutSeconds = Math.ceil(getTimeout() / 1000);
+
+  const client = new SnowflakeClient({
+    baseUrl: buildBaseUrl(opts.account),
+    authHeaders: buildPatHeaders(opts.token),
+    timeoutMs: getTimeout(),
+  });
+
+  const execSql = async (sql: string): Promise<SnowflakeQueryResponse> =>
+    client.executeStatement({
+      statement: sql,
+      timeout: timeoutSeconds,
+      database: opts.database,
+      schema: opts.schema,
+      warehouse: opts.warehouse,
+      role: opts.role,
+    });
+
+  // Verify connectivity
+  await execSql("SELECT 1");
+
+  const query = async (userSql: string, queryOpts?: { write?: boolean }): Promise<QueryResult> => {
+    if (readonly) {
+      validateReadOnly(userSql);
+    }
+
+    const command = detectCommand(userSql, WRITE_COMMANDS);
+    if (command && queryOpts?.write) {
+      const resp = await execSql(userSql);
+      return {
+        columns: [],
+        rows: [],
+        rowsAffected: resp.resultSetMetaData.numRows,
+        command,
+      };
+    }
+
+    const resp = await execSql(userSql);
+    return responseToResult(resp);
+  };
+
+  const getTables = async (tableOpts?: { includeSystem?: boolean }): Promise<TableInfo[]> => {
+    const systemFilter = tableOpts?.includeSystem
+      ? ""
+      : "AND TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA')";
+    const resp = await execSql(`
+			SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE
+			FROM INFORMATION_SCHEMA.TABLES
+			WHERE TABLE_CATALOG = CURRENT_DATABASE()
+				${systemFilter}
+			ORDER BY TABLE_SCHEMA, TABLE_NAME
+		`);
+    const result = responseToResult(resp);
+    return result.rows.map((r) => ({
+      name: `${r.TABLE_SCHEMA as string}.${r.TABLE_NAME as string}`,
+      schema: r.TABLE_SCHEMA as string,
+      type: (r.TABLE_TYPE as string) === "VIEW" ? ("view" as const) : ("table" as const),
+    }));
+  };
+
+  const describeTable = async (table: string): Promise<ColumnInfo[]> => {
+    const ref = parseTableRef(table, defaultSchema);
+    const resp = await execSql(`
+			SELECT
+				COLUMN_NAME,
+				DATA_TYPE,
+				IS_NULLABLE,
+				COLUMN_DEFAULT,
+				ORDINAL_POSITION
+			FROM INFORMATION_SCHEMA.COLUMNS
+			WHERE TABLE_CATALOG = CURRENT_DATABASE()
+				AND TABLE_SCHEMA = '${ref.schema.replace(/'/g, "''")}'
+				AND TABLE_NAME = '${ref.table.replace(/'/g, "''")}'
+			ORDER BY ORDINAL_POSITION
+		`);
+    const result = responseToResult(resp);
+
+    // Fetch primary key columns to mark them
+    const pkCols = await getPrimaryKeyCols(ref.schema, ref.table);
+
+    return result.rows.map((r) => ({
+      name: r.COLUMN_NAME as string,
+      type: r.DATA_TYPE as string,
+      nullable: (r.IS_NULLABLE as string) === "YES",
+      defaultValue: r.COLUMN_DEFAULT != null ? String(r.COLUMN_DEFAULT) : undefined,
+      primaryKey: pkCols.has(r.COLUMN_NAME as string),
+    }));
+  };
+
+  const getPrimaryKeyCols = async (schema: string, table: string): Promise<Set<string>> => {
+    try {
+      const resp = await execSql(`SHOW PRIMARY KEYS IN ${quoteIdentPg(`${schema}.${table}`)}`);
+      const result = responseToResult(resp);
+      return new Set(result.rows.map((r) => (r.column_name ?? r.COLUMN_NAME) as string));
+    } catch {
+      return new Set();
+    }
+  };
+
+  const getIndexes = async (_table?: string): Promise<IndexInfo[]> => [];
+
+  const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
+    const constraints: ConstraintInfo[] = [];
+
+    const ref = table ? parseTableRef(table, defaultSchema) : undefined;
+    const inClause = ref
+      ? ` IN ${quoteIdentPg(`${ref.schema}.${ref.table}`)}`
+      : ` IN SCHEMA ${quoteIdentPg(defaultSchema)}`;
+
+    // Primary keys
+    try {
+      const pkResp = await execSql(`SHOW PRIMARY KEYS${inClause}`);
+      const pkResult = responseToResult(pkResp);
+      const pkGroups = groupByConstraint(pkResult.rows);
+      for (const [, rows] of pkGroups) {
+        const first = rows[0]!;
+        constraints.push({
+          name: getField(first, "constraint_name"),
+          table: getField(first, "table_name"),
+          schema: getField(first, "schema_name"),
+          type: "primary_key",
+          columns: rows
+            .sort(
+              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
+            )
+            .map((r) => getField(r, "column_name")),
+        });
+      }
+    } catch {
+      // SHOW commands may fail if permissions are insufficient
+    }
+
+    // Foreign keys
+    try {
+      const fkResp = await execSql(`SHOW IMPORTED KEYS${inClause}`);
+      const fkResult = responseToResult(fkResp);
+      const fkGroups = groupByField(fkResult.rows, "fk_constraint_name");
+      for (const [, rows] of fkGroups) {
+        const first = rows[0]!;
+        constraints.push({
+          name: getField(first, "fk_constraint_name"),
+          table: getField(first, "fk_table_name"),
+          schema: getField(first, "fk_schema_name"),
+          type: "foreign_key",
+          columns: rows
+            .sort(
+              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
+            )
+            .map((r) => getField(r, "fk_column_name")),
+          referencedTable: getField(first, "pk_table_name"),
+          referencedColumns: rows
+            .sort(
+              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
+            )
+            .map((r) => getField(r, "pk_column_name")),
+        });
+      }
+    } catch {
+      // Permissions may be insufficient
+    }
+
+    // Unique keys
+    try {
+      const ukResp = await execSql(`SHOW UNIQUE KEYS${inClause}`);
+      const ukResult = responseToResult(ukResp);
+      const ukGroups = groupByConstraint(ukResult.rows);
+      for (const [, rows] of ukGroups) {
+        const first = rows[0]!;
+        constraints.push({
+          name: getField(first, "constraint_name"),
+          table: getField(first, "table_name"),
+          schema: getField(first, "schema_name"),
+          type: "unique",
+          columns: rows
+            .sort(
+              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
+            )
+            .map((r) => getField(r, "column_name")),
+        });
+      }
+    } catch {
+      // Permissions may be insufficient
+    }
+
+    return constraints;
+  };
+
+  const searchSchema = async (
+    pattern: string,
+  ): Promise<{
+    tables: TableInfo[];
+    columns: { table: string; column: string }[];
+  }> => {
+    const ilike = `%${pattern}%`;
+
+    const tableResp = await execSql(`
+			SELECT TABLE_SCHEMA, TABLE_NAME
+			FROM INFORMATION_SCHEMA.TABLES
+			WHERE TABLE_CATALOG = CURRENT_DATABASE()
+				AND TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA')
+				AND TABLE_NAME ILIKE '${ilike.replace(/'/g, "''")}'
+			ORDER BY TABLE_SCHEMA, TABLE_NAME
+		`);
+    const tableResult = responseToResult(tableResp);
+    const tables = tableResult.rows.map((r) => ({
+      name: `${r.TABLE_SCHEMA as string}.${r.TABLE_NAME as string}`,
+      schema: r.TABLE_SCHEMA as string,
+    }));
+
+    const colResp = await execSql(`
+			SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+			FROM INFORMATION_SCHEMA.COLUMNS
+			WHERE TABLE_CATALOG = CURRENT_DATABASE()
+				AND TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA')
+				AND COLUMN_NAME ILIKE '${ilike.replace(/'/g, "''")}'
+			ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+		`);
+    const colResult = responseToResult(colResp);
+    const columns = colResult.rows.map((r) => ({
+      table: `${r.TABLE_SCHEMA as string}.${r.TABLE_NAME as string}`,
+      column: r.COLUMN_NAME as string,
+    }));
+
+    return { tables, columns };
+  };
+
+  const close = async (): Promise<void> => {
+    // REST API is stateless — no connection to close
+  };
+
+  return {
+    quoteIdent: quoteIdentPg,
+    query,
+    getTables,
+    describeTable,
+    getIndexes,
+    getConstraints,
+    searchSchema,
+    close,
+  };
+};
+
+// Snowflake SHOW command results may return column names in varying case
+const getField = (row: Record<string, unknown>, name: string): string => {
+  const val = row[name] ?? row[name.toUpperCase()] ?? row[name.toLowerCase()];
+  return String(val ?? "");
+};
+
+const groupByConstraint = (
+  rows: Record<string, unknown>[],
+): Map<string, Record<string, unknown>[]> => groupByField(rows, "constraint_name");
+
+const groupByField = (
+  rows: Record<string, unknown>[],
+  field: string,
+): Map<string, Record<string, unknown>[]> => {
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const key = getField(row, field);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(row);
+    } else {
+      groups.set(key, [row]);
+    }
+  }
+  return groups;
+};

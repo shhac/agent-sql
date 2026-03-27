@@ -33,7 +33,7 @@ export const VALID_KEYS: KeyDefinition[] = [
   {
     key: "query.maxRows",
     type: "number",
-    defaultValue: 100,
+    defaultValue: 10000,
     description: "Maximum rows per query",
     min: 1,
     max: 10000,

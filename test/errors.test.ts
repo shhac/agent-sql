@@ -274,6 +274,8 @@ describe("MySQL error mapping", () => {
   });
 });
 
+// Snowflake error tests are in test/errors-snowflake.test.ts (extracted for max-lines)
+
 describe("connection not found", () => {
   test("lists available connections when provided", () => {
     const err = new Error('Connection "staging" not found');

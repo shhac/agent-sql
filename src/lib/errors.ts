@@ -224,6 +224,71 @@ const handleMysqlError = (
   return { message, fixableBy: "agent" };
 };
 
+const isSnowflakeError = (err: Error & { code?: string; sqlState?: string }): boolean => {
+  const { code } = err;
+  if (typeof code !== "string") {
+    return false;
+  }
+  return /^\d{6}$/.test(code);
+};
+
+const handleSnowflakeError = (
+  err: Error & { code?: string; sqlState?: string },
+  context?: ErrorContext,
+): EnhancedError | undefined => {
+  if (!isSnowflakeError(err)) {
+    return undefined;
+  }
+
+  const message = context?.connectionAlias
+    ? sanitizeHostname(err.message, context.connectionAlias)
+    : err.message;
+
+  const { code } = err;
+
+  if (code === "002003") {
+    return {
+      message,
+      hint: "Table or object not found. Use 'schema tables' to see available tables.",
+      fixableBy: "agent",
+    };
+  }
+
+  if (code === "000904") {
+    return {
+      message,
+      hint: "Column not found. Use 'schema describe <table>' to see available columns.",
+      fixableBy: "agent",
+    };
+  }
+
+  if (code === "390100" || code === "390144") {
+    return {
+      message,
+      hint: "Authentication failed. Check the credential PAT with 'credential list' and verify it hasn't expired.",
+      fixableBy: "human",
+    };
+  }
+
+  if (code === "000625") {
+    return {
+      message,
+      hint: "Query timed out. Increase with --timeout <ms> or 'config set query.timeout <ms>'.",
+      fixableBy: "retry",
+    };
+  }
+
+  if (code === "003001") {
+    return {
+      message,
+      hint: "Insufficient privileges. The connected role may not have access. Check Snowflake role grants.",
+      fixableBy: "human",
+    };
+  }
+
+  return { message, fixableBy: "agent" };
+};
+
 const handleConnectionNotFound = (
   err: Error,
   context?: ErrorContext,
@@ -256,6 +321,15 @@ export const enhanceError = (err: Error, context?: ErrorContext): EnhancedError 
   );
   if (mysqlResult) {
     return mysqlResult;
+  }
+
+  // Try Snowflake error detection (6-digit string code)
+  const snowflakeResult = handleSnowflakeError(
+    err as Error & { code?: string; sqlState?: string },
+    context,
+  );
+  if (snowflakeResult) {
+    return snowflakeResult;
   }
 
   // Try SQLite error detection (numeric code)

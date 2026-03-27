@@ -46,6 +46,10 @@ describe("detectDriverFromUrl", () => {
     expect(detectDriverFromUrl("/data/app.db3")).toBe("sqlite");
   });
 
+  test("detects snowflake:// URLs", () => {
+    expect(detectDriverFromUrl("snowflake://myorg-myaccount/DB/SCHEMA")).toBe("snowflake");
+  });
+
   test("returns undefined for unrecognized URLs", () => {
     expect(detectDriverFromUrl("http://example.com")).toBeUndefined();
   });
@@ -74,6 +78,10 @@ describe("isConnectionUrl", () => {
 
   test("recognizes sqlite:// URLs", () => {
     expect(isConnectionUrl("sqlite:///path/to/db")).toBe(true);
+  });
+
+  test("recognizes snowflake:// URLs", () => {
+    expect(isConnectionUrl("snowflake://myorg-myaccount/DB/SCHEMA")).toBe(true);
   });
 
   test("rejects plain strings", () => {

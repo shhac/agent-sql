@@ -14,6 +14,10 @@ type AddOpts = {
   path?: string;
   url?: string;
   credential?: string;
+  account?: string;
+  warehouse?: string;
+  role?: string;
+  schema?: string;
   default?: boolean;
 };
 
@@ -31,7 +35,7 @@ const resolveDriver = (opts: AddOpts): Driver => {
     return "sqlite";
   }
   throw new Error(
-    "Cannot determine driver. Use --driver pg|sqlite|mysql, --url with a recognizable scheme, or --path for SQLite.",
+    "Cannot determine driver. Use --driver pg|sqlite|mysql|snowflake, --url with a recognizable scheme, or --path for SQLite.",
   );
 };
 
@@ -57,6 +61,18 @@ const buildConnection = (opts: AddOpts): Connection => {
   if (opts.path) {
     conn.path = resolve(opts.path);
   }
+  if (opts.account) {
+    conn.account = opts.account;
+  }
+  if (opts.warehouse) {
+    conn.warehouse = opts.warehouse;
+  }
+  if (opts.role) {
+    conn.role = opts.role;
+  }
+  if (opts.schema) {
+    conn.schema = opts.schema;
+  }
 
   return conn;
 };
@@ -66,12 +82,16 @@ export function registerAdd(connection: Command): void {
     .command("add")
     .description("Add a SQL connection")
     .argument("<alias>", "Short name for this connection (e.g. local, staging, prod)")
-    .option("--driver <driver>", "Database driver: pg, sqlite, or mysql")
+    .option("--driver <driver>", "Database driver: pg, sqlite, mysql, or snowflake")
     .option("--host <host>", "Database host")
     .option("--port <port>", "Database port")
     .option("--database <db>", "Database name")
     .option("--path <path>", "Path to SQLite database file (resolved to absolute)")
     .option("--url <url>", "Connection URL (auto-detects driver from scheme)")
+    .option("--account <account>", "Snowflake account identifier (orgname-accountname)")
+    .option("--warehouse <warehouse>", "Snowflake warehouse")
+    .option("--role <role>", "Snowflake role")
+    .option("--schema <schema>", "Default schema")
     .option("--credential <name>", "Credential alias for authentication")
     .option("--default", "Set as default connection")
     .action((alias: string, opts: AddOpts) => {
@@ -105,6 +125,10 @@ export function registerAdd(connection: Command): void {
             path: conn.path,
             url: conn.url,
             credential: conn.credential,
+            account: conn.account,
+            warehouse: conn.warehouse,
+            role: conn.role,
+            schema: conn.schema,
             isDefault: opts.default ?? false,
             hint: "Test with: agent-sql connection test",
           },

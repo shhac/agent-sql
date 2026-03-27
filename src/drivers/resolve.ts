@@ -9,6 +9,7 @@ import { setActiveDriver, clearActiveDriver } from "../lib/cleanup";
 import { connectPg } from "./pg";
 import { connectSqlite } from "./sqlite";
 import { connectMysql } from "./mysql";
+import { connectSnowflake } from "./snowflake";
 
 type ResolveOpts = {
   connection?: string;
@@ -20,6 +21,7 @@ const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
   [/^mysql:\/\//, "mysql"],
   [/^mariadb:\/\//, "mysql"],
   [/^sqlite:\/\//, "sqlite"],
+  [/^snowflake:\/\//, "snowflake"],
 ];
 
 const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
@@ -104,8 +106,12 @@ const checkWritePermission = (opts: {
     );
   }
 
-  if ((opts.driver === "pg" || opts.driver === "mysql") && !opts.credential) {
-    const driverName = opts.driver === "pg" ? "PostgreSQL" : "MySQL";
+  if (
+    (opts.driver === "pg" || opts.driver === "mysql" || opts.driver === "snowflake") &&
+    !opts.credential
+  ) {
+    const driverName =
+      opts.driver === "pg" ? "PostgreSQL" : opts.driver === "mysql" ? "MySQL" : "Snowflake";
     throw Object.assign(
       new Error(
         `Write mode requested but ${driverName} connection '${opts.alias}' has no credential. ${driverName} requires a credential with writePermission to enable writes.`,
@@ -191,6 +197,32 @@ const resolveAdHocConnection = async (
       rejectAdHocUrlWrite(write);
       const filePath = connectionStr.replace(/^sqlite:\/\//, "");
       return trackDriver(await connectSqlite({ path: resolve(filePath), readonly: true }));
+    }
+
+    if (driver === "snowflake") {
+      rejectAdHocUrlWrite(write);
+      const token = process.env.AGENT_SQL_SNOWFLAKE_TOKEN;
+      if (!token) {
+        throw Object.assign(
+          new Error(
+            "Ad-hoc Snowflake connections require AGENT_SQL_SNOWFLAKE_TOKEN environment variable.",
+          ),
+          { fixableBy: "human" as const },
+        );
+      }
+      const parsed = new URL(connectionStr);
+      const pathParts = parsed.pathname.replace(/^\//, "").split("/");
+      return trackDriver(
+        await connectSnowflake({
+          account: parsed.hostname,
+          database: pathParts[0] || undefined,
+          schema: pathParts[1] || undefined,
+          warehouse: parsed.searchParams.get("warehouse") ?? undefined,
+          role: parsed.searchParams.get("role") ?? undefined,
+          token,
+          readonly: true,
+        }),
+      );
     }
 
     rejectAdHocUrlWrite(write);
@@ -321,5 +353,31 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
     );
   }
 
-  throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql.`);
+  if (driver === "snowflake") {
+    if (!credential?.password) {
+      throw Object.assign(
+        new Error(
+          `Snowflake connection '${alias}' requires a credential with a PAT (personal access token) as the password.`,
+        ),
+        {
+          hint: "Add a credential with: agent-sql credential add <name> --password <pat_secret>",
+          fixableBy: "human" as const,
+        },
+      );
+    }
+
+    return trackDriver(
+      await connectSnowflake({
+        account: conn.account ?? "",
+        database: conn.database,
+        schema: conn.schema,
+        warehouse: conn.warehouse,
+        role: conn.role,
+        token: credential.password,
+        readonly,
+      }),
+    );
+  }
+
+  throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql, snowflake.`);
 };

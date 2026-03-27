@@ -1,4 +1,4 @@
-export type Driver = "pg" | "sqlite" | "mysql";
+export type Driver = "pg" | "sqlite" | "mysql" | "snowflake";
 
 export type QueryResult = {
   columns: string[];
