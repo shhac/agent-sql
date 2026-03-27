@@ -9,7 +9,10 @@ type CountOptions = {
   where?: string;
 };
 
-const buildCountSql = (driver: DriverConnection, opts: { table: string; where?: string }): string => {
+const buildCountSql = (
+  driver: DriverConnection,
+  opts: { table: string; where?: string },
+): string => {
   const quoted = driver.quoteIdent(opts.table);
   const whereClause = opts.where ? ` WHERE ${opts.where}` : "";
   return `SELECT COUNT(*) AS count FROM ${quoted}${whereClause}`;

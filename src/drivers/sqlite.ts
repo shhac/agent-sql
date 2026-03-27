@@ -188,7 +188,16 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
     return rows.map((r) => r.name);
   };
 
-  return { quoteIdent, query, getTables, describeTable, getIndexes, getConstraints, searchSchema, close };
+  return {
+    quoteIdent,
+    query,
+    getTables,
+    describeTable,
+    getIndexes,
+    getConstraints,
+    searchSchema,
+    close,
+  };
 };
 
 const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
