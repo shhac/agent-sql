@@ -142,6 +142,138 @@ describe("SQLite error mapping", () => {
   });
 });
 
+describe("MySQL error mapping", () => {
+  const makeMysqlError = (opts: {
+    errno: number;
+    message: string;
+    sqlState?: string;
+    extra?: Record<string, unknown>;
+  }) => {
+    const err = new Error(opts.message) as Error & {
+      errno?: number;
+      sqlState?: string;
+    };
+    err.errno = opts.errno;
+    if (opts.sqlState) {
+      err.sqlState = opts.sqlState;
+    }
+    if (opts.extra) {
+      Object.assign(err, opts.extra);
+    }
+    return err;
+  };
+
+  test("1792 read-only violation → fixableBy human, mentions writePermission", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1792,
+        message: "Cannot execute statement in a READ ONLY transaction",
+        sqlState: "25006",
+      }),
+    );
+    expect(result.fixableBy).toBe("human");
+    expect(result.hint).toContain("writePermission");
+  });
+
+  test("1146 table doesn't exist → fixableBy agent", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1146,
+        message: "Table 'mydb.orders' doesn't exist",
+        sqlState: "42S02",
+      }),
+    );
+    expect(result.fixableBy).toBe("agent");
+    expect(result.hint).toContain("schema tables");
+  });
+
+  test("1054 unknown column → fixableBy agent", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1054,
+        message: "Unknown column 'emal' in 'field list'",
+        sqlState: "42S22",
+      }),
+    );
+    expect(result.fixableBy).toBe("agent");
+    expect(result.hint).toContain("schema describe");
+  });
+
+  test("2002 connection refused → fixableBy human, sanitizes hostname", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 2002,
+        message: "Can't connect to MySQL server on 'db.internal.corp' (111)",
+      }),
+      { connectionAlias: "prod" },
+    );
+    expect(result.fixableBy).toBe("human");
+    expect(result.message).not.toContain("db.internal.corp");
+    expect(result.message).toContain("prod");
+  });
+
+  test("2003 connection failed → fixableBy human, sanitizes hostname", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 2003,
+        message: "Can't connect to MySQL server on 'db.secret.example.com' (111)",
+      }),
+      { connectionAlias: "staging" },
+    );
+    expect(result.fixableBy).toBe("human");
+    expect(result.message).not.toContain("db.secret.example.com");
+    expect(result.message).toContain("staging");
+  });
+
+  test("1045 access denied → fixableBy human, mentions credential", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1045,
+        message: "Access denied for user 'reader'@'localhost' (using password: YES)",
+        sqlState: "28000",
+      }),
+    );
+    expect(result.fixableBy).toBe("human");
+    expect(result.hint).toContain("credential");
+  });
+
+  test("1568 transaction characteristics can't be changed → fixableBy human", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1568,
+        message: "Transaction characteristics can't be changed while a transaction is in progress",
+        sqlState: "25001",
+      }),
+    );
+    expect(result.fixableBy).toBe("human");
+  });
+
+  test("generic MySQL error → fixableBy agent", () => {
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1064,
+        message: "You have an error in your SQL syntax near 'SELEC'",
+        sqlState: "42000",
+      }),
+    );
+    expect(result.fixableBy).toBe("agent");
+  });
+
+  test("MySQL errors are not confused with SQLite errors", () => {
+    // SQLite uses small codes (1, 5, 8); MySQL uses 1000+
+    // A MySQL error with errno 1146 should NOT be handled by SQLite handler
+    const result = enhanceError(
+      makeMysqlError({
+        errno: 1146,
+        message: "Table 'mydb.orders' doesn't exist",
+        sqlState: "42S02",
+      }),
+    );
+    expect(result.fixableBy).toBe("agent");
+    expect(result.hint).toContain("schema tables");
+  });
+});
+
 describe("connection not found", () => {
   test("lists available connections when provided", () => {
     const err = new Error('Connection "staging" not found');

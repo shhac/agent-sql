@@ -2,18 +2,18 @@
 name: agent-sql
 description: |
   Read-only-by-default SQL CLI for AI agents. Use when:
-  - Exploring SQL databases (PostgreSQL, SQLite) -- tables, columns, indexes, constraints
+  - Exploring SQL databases (PostgreSQL, MySQL, SQLite) -- tables, columns, indexes, constraints
   - Querying data (SELECT, sample rows, count, explain plans)
   - Writing data when explicitly permitted (INSERT, UPDATE, DELETE with --write)
   - Checking database connections or adjusting CLI settings
-  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "sqlite", "sql connection", "query database", "sql select", "sql insert", "sql explain"
+  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "mysql", "sqlite", "sql connection", "query database", "sql select", "sql insert", "sql explain"
 ---
 
 # SQL database exploration with `agent-sql`
 
 `agent-sql` is a read-only-by-default SQL CLI binary on `$PATH`. All output is JSON to stdout. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
 
-Supports PostgreSQL and SQLite. MySQL coming soon.
+Supports PostgreSQL, MySQL, and SQLite.
 
 ## Quick start
 
@@ -113,7 +113,7 @@ Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default >
 ## Safety
 
 - **Read-only by default**: writes require `--write` flag AND a credential with write permission
-- **Defense in depth**: PG uses database-level read-only transactions + session guard (libpg-query); SQLite uses OS-level SQLITE_OPEN_READONLY
+- **Defense in depth**: PG uses database-level read-only transactions + session guard (libpg-query); MySQL uses `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement; SQLite uses OS-level SQLITE_OPEN_READONLY
 - **Result cap**: `query.maxRows` (default 100)
 - **Timeout**: `query.timeout` (default 30s), override per-command with `--timeout <ms>`
 

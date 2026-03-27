@@ -12,7 +12,10 @@ type DumpOpts = {
 
 function parseTableFilter(raw: string): Set<string> {
   return new Set(
-    raw.split(",").map((t) => t.trim()).filter(Boolean),
+    raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean),
   );
 }
 
@@ -29,7 +32,10 @@ export function registerDump(parent: Command): void {
   parent
     .command("dump")
     .description("Dump full schema (tables, columns, indexes, constraints)")
-    .option("--tables <tables>", "Comma-separated table filter (supports dot notation: schema.table)")
+    .option(
+      "--tables <tables>",
+      "Comma-separated table filter (supports dot notation: schema.table)",
+    )
     .option("--include-system", "Include system tables")
     .action(async (opts: DumpOpts) => {
       const connection = parent.parent?.getOptionValue("connection") as string | undefined;
@@ -39,9 +45,7 @@ export function registerDump(parent: Command): void {
         try {
           const allTables = await driver.getTables({ includeSystem: opts.includeSystem });
           const filter = opts.tables ? parseTableFilter(opts.tables) : undefined;
-          const filtered = filter
-            ? allTables.filter((t) => matchesFilter(t, filter))
-            : allTables;
+          const filtered = filter ? allTables.filter((t) => matchesFilter(t, filter)) : allTables;
 
           const tables = await Promise.all(
             filtered.map(async (t) => {

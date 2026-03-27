@@ -65,9 +65,9 @@ describePg("PostgreSQL driver", () => {
     });
 
     test("SET default_transaction_read_only = off is blocked", async () => {
-      await expect(
-        conn.query("SET default_transaction_read_only = off"),
-      ).rejects.toThrow(/not allowed in read-only mode/);
+      await expect(conn.query("SET default_transaction_read_only = off")).rejects.toThrow(
+        /not allowed in read-only mode/,
+      );
     });
 
     test("DROP TABLE is blocked", async () => {
@@ -75,9 +75,7 @@ describePg("PostgreSQL driver", () => {
     });
 
     test("multi-statement is blocked", async () => {
-      await expect(
-        conn.query("SELECT 1; SELECT 2"),
-      ).rejects.toThrow(/multiple statements/);
+      await expect(conn.query("SELECT 1; SELECT 2")).rejects.toThrow(/multiple statements/);
     });
   });
 
@@ -120,10 +118,9 @@ describePg("PostgreSQL driver", () => {
     });
 
     test("DELETE works", async () => {
-      const result = await conn.query(
-        "DELETE FROM users WHERE email = 'write-test@test.com'",
-        { write: true },
-      );
+      const result = await conn.query("DELETE FROM users WHERE email = 'write-test@test.com'", {
+        write: true,
+      });
       expect(result.rowsAffected).toBe(1);
       expect(result.command).toBe("DELETE");
     });

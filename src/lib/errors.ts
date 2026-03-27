@@ -143,6 +143,87 @@ const handleSqliteError = (
   return undefined;
 };
 
+const isMysqlError = (err: Error & { errno?: number; sqlState?: string }): boolean => {
+  const { errno, sqlState } = err;
+  if (typeof errno !== "number") {
+    return false;
+  }
+  // MySQL errno values are 1000+; SQLite uses small codes (1, 5, 8, etc.)
+  if (errno >= 1000) {
+    return true;
+  }
+  // Connection-level MySQL errors (2000-range) caught above
+  // Also detect via sqlState presence (MySQL drivers typically set this)
+  if (typeof sqlState === "string") {
+    return true;
+  }
+  return false;
+};
+
+const handleMysqlError = (
+  err: Error & { errno?: number; sqlState?: string },
+  context?: ErrorContext,
+): EnhancedError | undefined => {
+  if (!isMysqlError(err)) {
+    return undefined;
+  }
+
+  const { errno } = err;
+  const message = context?.connectionAlias
+    ? sanitizeHostname(err.message, context.connectionAlias)
+    : err.message;
+
+  if (errno === 1792) {
+    return {
+      message,
+      hint: "This connection is read-only. To enable writes, use a credential with writePermission: true and pass --write.",
+      fixableBy: "human",
+    };
+  }
+
+  if (errno === 1146) {
+    return {
+      message,
+      hint: "Table not found. Use 'schema tables' to see available tables.",
+      fixableBy: "agent",
+    };
+  }
+
+  if (errno === 1054) {
+    return {
+      message,
+      hint: "Column not found. Use 'schema describe <table>' to see available columns.",
+      fixableBy: "agent",
+    };
+  }
+
+  if (errno === 2002 || errno === 2003) {
+    return {
+      message,
+      hint: "Could not connect to the database. Verify the host, port, and that the server is running.",
+      fixableBy: "human",
+    };
+  }
+
+  if (errno === 1045) {
+    return {
+      message,
+      hint: "Authentication failed. Check the credential with 'credential list' and verify the username/password.",
+      fixableBy: "human",
+    };
+  }
+
+  if (errno === 1568) {
+    return {
+      message,
+      hint: "Transaction characteristics can't be changed while a transaction is in progress. Check the connection configuration.",
+      fixableBy: "human",
+    };
+  }
+
+  return { message, fixableBy: "agent" };
+};
+
 const handleConnectionNotFound = (
   err: Error,
   context?: ErrorContext,
@@ -166,6 +247,15 @@ export const enhanceError = (err: Error, context?: ErrorContext): EnhancedError 
   const pgResult = handlePgError(err as Error & { code?: string }, context);
   if (pgResult) {
     return pgResult;
+  }
+
+  // Try MySQL error detection (numeric errno >= 1000 or sqlState present)
+  const mysqlResult = handleMysqlError(
+    err as Error & { errno?: number; sqlState?: string },
+    context,
+  );
+  if (mysqlResult) {
+    return mysqlResult;
   }
 
   // Try SQLite error detection (numeric code)

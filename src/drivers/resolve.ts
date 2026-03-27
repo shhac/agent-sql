@@ -100,10 +100,11 @@ const checkWritePermission = (opts: {
     );
   }
 
-  if (opts.driver === "pg" && !opts.credential) {
+  if ((opts.driver === "pg" || opts.driver === "mysql") && !opts.credential) {
+    const driverName = opts.driver === "pg" ? "PostgreSQL" : "MySQL";
     throw Object.assign(
       new Error(
-        `Write mode requested but PostgreSQL connection '${opts.alias}' has no credential. PG requires a credential with writePermission to enable writes.`,
+        `Write mode requested but ${driverName} connection '${opts.alias}' has no credential. ${driverName} requires a credential with writePermission to enable writes.`,
       ),
       {
         hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass> --write",
@@ -177,7 +178,24 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
   }
 
   if (driver === "mysql") {
-    return connectMysql();
+    if (!credential?.username || !credential?.password) {
+      throw Object.assign(
+        new Error(`MySQL connection '${alias}' requires a credential with username and password.`),
+        {
+          hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
+          fixableBy: "human" as const,
+        },
+      );
+    }
+
+    return connectMysql({
+      host: conn.host ?? "localhost",
+      port: conn.port ?? 3306,
+      database: conn.database ?? "mysql",
+      username: credential.username,
+      password: credential.password,
+      readonly,
+    });
   }
 
   throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql.`);
