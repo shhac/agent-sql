@@ -240,7 +240,7 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
         AND kcu.table_schema = tc.table_schema
       LEFT JOIN information_schema.constraint_column_usage ccu
         ON ccu.constraint_name = tc.constraint_name
-        AND ccu.table_schema = tc.table_schema
+        AND ccu.constraint_schema = tc.constraint_schema
       ${whereClause}
       GROUP BY tc.constraint_name, tc.table_schema, tc.table_name,
                tc.constraint_type, ccu.table_schema, ccu.table_name

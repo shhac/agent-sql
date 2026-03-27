@@ -41,6 +41,19 @@ const CONSTRAINT_TYPE_MAP: Record<string, ConstraintInfo["type"]> = {
   CHECK: "check",
 };
 
+// Bun's MySQL adapter returns information_schema column names as UPPERCASE.
+// Normalize to lowercase so our field access is consistent.
+const lowercaseKeys = (row: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    result[key.toLowerCase()] = value;
+  }
+  return result;
+};
+
+const normalizeRows = (rows: Record<string, unknown>[]): Record<string, unknown>[] =>
+  rows.map(lowercaseKeys);
+
 const CONNECT_TIMEOUT_MS = 10_000;
 
 const withConnectTimeout = <T>(promise: Promise<T>): Promise<T> => {
@@ -90,11 +103,11 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
     const command = detectCommand(userSql, WRITE_COMMANDS);
     if (command && queryOpts?.write) {
       const rows = await db.unsafe(userSql);
-      const result = rows as unknown as { count?: number };
+      const result = rows as unknown as { count?: number; affectedRows?: number };
       return {
         columns: [],
         rows: [],
-        rowsAffected: result.count ?? 0,
+        rowsAffected: result.affectedRows ?? result.count ?? 0,
         command,
       };
     }
@@ -116,10 +129,12 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       ${filter}
       ORDER BY table_name
     `);
-    return (rows as { table_name: string; table_type: string }[]).map((r) => ({
-      name: r.table_name,
-      type: r.table_type === "VIEW" ? ("view" as const) : ("table" as const),
-    }));
+    return (normalizeRows(rows as Record<string, unknown>[]) as { table_name: string; table_type: string }[]).map(
+      (r) => ({
+        name: r.table_name,
+        type: r.table_type === "VIEW" ? ("view" as const) : ("table" as const),
+      }),
+    );
   };
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
@@ -139,7 +154,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       [table],
     );
     return (
-      rows as {
+      normalizeRows(rows as Record<string, unknown>[]) as {
         column_name: string;
         column_type: string;
         is_nullable: string;
@@ -174,7 +189,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       params,
     );
     return (
-      rows as {
+      normalizeRows(rows as Record<string, unknown>[]) as {
         index_name: string;
         table_name: string;
         columns: string;
@@ -184,7 +199,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       name: r.index_name,
       table: r.table_name,
       columns: r.columns.split(","),
-      unique: r.is_unique === 1,
+      unique: Number(r.is_unique) === 1,
     }));
   };
 
@@ -215,7 +230,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
     );
 
     return (
-      rows as {
+      normalizeRows(rows as Record<string, unknown>[]) as {
         constraint_name: string;
         table_name: string;
         constraint_type: string;
@@ -253,7 +268,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       [likePattern],
     );
 
-    const tables = (tableRows as { table_name: string }[]).map((r) => ({
+    const tables = (normalizeRows(tableRows as Record<string, unknown>[]) as { table_name: string }[]).map((r) => ({
       name: r.table_name,
     }));
 
@@ -268,7 +283,9 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       [likePattern],
     );
 
-    const columns = (colRows as { table_name: string; column_name: string }[]).map((r) => ({
+    const columns = (
+      normalizeRows(colRows as Record<string, unknown>[]) as { table_name: string; column_name: string }[]
+    ).map((r) => ({
       table: r.table_name,
       column: r.column_name,
     }));
