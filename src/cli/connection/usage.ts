@@ -47,6 +47,6 @@ export function registerUsage(connection: Command): void {
     .command("usage")
     .description("Print connection command documentation (LLM-optimized)")
     .action(() => {
-      console.log(USAGE_TEXT.trim());
+      process.stdout.write(USAGE_TEXT);
     });
 }

@@ -38,10 +38,10 @@ export function registerDump(parent: Command): void {
     )
     .option("--include-system", "Include system tables")
     .action(async (opts: DumpOpts) => {
-      const connection = parent.parent?.getOptionValue("connection") as string | undefined;
+      const connectionAlias = opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
 
       try {
-        const driver = await resolveDriver({ connection: opts.connection ?? connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         try {
           const allTables = await driver.getTables({ includeSystem: opts.includeSystem });
           const filter = opts.tables ? parseTableFilter(opts.tables) : undefined;
@@ -70,7 +70,9 @@ export function registerDump(parent: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

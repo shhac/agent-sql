@@ -13,10 +13,10 @@ export function registerIndexes(schema: Command): void {
     .description("Show indexes for a table or all tables")
     .argument("[table]", "Table name (supports dot notation: schema.table)")
     .action(async (table: string | undefined, opts: IndexesOpts) => {
-      const connection = schema.parent?.getOptionValue("connection") as string | undefined;
+      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
-        const driver = await resolveDriver({ connection: opts.connection ?? connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         try {
           const indexes = await driver.getIndexes(table);
           printJson({ indexes });
@@ -24,7 +24,9 @@ export function registerIndexes(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

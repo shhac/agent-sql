@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { removeCredential } from "../../lib/credentials.ts";
+import { removeCredential, removeAllCredentials } from "../../lib/credentials.ts";
 import { getConnections, updateConnection } from "../../lib/config.ts";
 import { printJson, printError } from "../../lib/output.ts";
 
@@ -8,14 +8,51 @@ const getConnectionsUsingCredential = (credentialName: string): string[] =>
     .filter(([, conn]) => conn.credential === credentialName)
     .map(([alias]) => alias);
 
+const clearAllCredentialRefs = (): string[] => {
+  const cleared: string[] = [];
+  for (const [alias, conn] of Object.entries(getConnections())) {
+    if (conn.credential) {
+      updateConnection(alias, { credential: undefined });
+      cleared.push(alias);
+    }
+  }
+  return cleared;
+};
+
 export function registerRemove(credential: Command): void {
   credential
     .command("remove")
     .description("Remove a stored credential")
-    .argument("<name>", "Credential name to remove")
+    .argument("[name]", "Credential name to remove")
+    .option("--all", "Remove all stored credentials")
     .option("--force", "Remove even if referenced by connections (clears their credential refs)")
-    .action((name: string, opts: { force?: boolean }) => {
+    .action((name: string | undefined, opts: { all?: boolean; force?: boolean }) => {
       try {
+        if (opts.all) {
+          const clearedFrom = opts.force ? clearAllCredentialRefs() : [];
+          const removed = removeAllCredentials();
+
+          if (removed.length === 0) {
+            printJson({ ok: true, removed: [], message: "No credentials to remove" });
+            return;
+          }
+
+          printJson({
+            ok: true,
+            removed,
+            clearedFrom: clearedFrom.length > 0 ? clearedFrom : undefined,
+          });
+          return;
+        }
+
+        if (!name) {
+          printError({
+            message: "Credential name is required (or use --all to remove all credentials)",
+            fixableBy: "agent",
+          });
+          return;
+        }
+
         const usedBy = getConnectionsUsingCredential(name);
 
         if (usedBy.length > 0 && !opts.force) {

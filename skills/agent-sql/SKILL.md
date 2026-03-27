@@ -6,7 +6,7 @@ description: |
   - Querying data (SELECT, sample rows, count, explain plans)
   - Writing data when explicitly permitted (INSERT, UPDATE, DELETE with --write)
   - Checking database connections or adjusting CLI settings
-  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "mysql", "sqlite", "sql connection", "query database", "sql select", "sql insert", "sql explain"
+  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "mysql", "sqlite", "sql connection", "query database", "sql select", "sql insert", "sql explain", "sql count", "sql sample", "database schema", "describe table", "sql columns", "sql indexes", "mariadb"
 ---
 
 # SQL database exploration with `agent-sql`
@@ -31,7 +31,7 @@ agent-sql connection test                # verify default connection works
 agent-sql schema tables                              # list all tables
 agent-sql schema tables --include-system              # include system tables (PG)
 agent-sql schema describe users                       # columns, types, nullability, defaults
-agent-sql schema describe users --full                # add constraints, indexes, comments
+agent-sql schema describe users --detailed             # add constraints, indexes, comments
 agent-sql schema describe analytics.events            # PG namespace dot notation
 agent-sql schema indexes                              # all indexes across all tables
 agent-sql schema indexes users                        # indexes for a specific table

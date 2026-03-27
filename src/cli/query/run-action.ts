@@ -54,10 +54,12 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
       maxLength: getSetting("truncation.maxLength") as number | undefined,
     });
 
+    const maxRows = getSetting("query.maxRows") as number | undefined;
     const pageSize = resolvePageSize({
       limit: opts.limit !== undefined ? Number(opts.limit) : undefined,
       configLimit: getSetting("defaults.limit") as number | undefined,
     });
+    const effectiveLimit = maxRows ? Math.min(pageSize, maxRows) : pageSize;
 
     const driver = await resolveDriver({
       connection: opts.connection,
@@ -65,7 +67,7 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
     });
 
     try {
-      const effectiveSql = opts.write ? sql : appendLimit(sql, pageSize + 1);
+      const effectiveSql = opts.write ? sql : appendLimit(sql, effectiveLimit + 1);
       const result = await driver.query(effectiveSql, { write: opts.write });
 
       if (opts.write && isWriteResult(result)) {
@@ -77,8 +79,8 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
         return;
       }
 
-      const hasMore = !opts.write && result.rows.length > pageSize;
-      const displayRows = hasMore ? result.rows.slice(0, pageSize) : result.rows;
+      const hasMore = !opts.write && result.rows.length > effectiveLimit;
+      const displayRows = hasMore ? result.rows.slice(0, effectiveLimit) : result.rows;
 
       if (opts.compact) {
         const arrayRows = displayRows.map((row) => result.columns.map((col) => row[col] ?? null));
@@ -107,7 +109,9 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
       await driver.close();
     }
   } catch (err) {
-    const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+    const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+      connectionAlias: opts.connection,
+    });
     printError({
       message: enhanced.message,
       hint: enhanced.hint,

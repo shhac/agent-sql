@@ -40,6 +40,19 @@ export type ConstraintInfo = {
   definition?: string;
 };
 
+export const detectCommand = (
+  sql: string,
+  commands: ReadonlySet<string>,
+): string | undefined => {
+  const trimmed = sql.trimStart().toUpperCase();
+  for (const cmd of commands) {
+    if (trimmed.startsWith(cmd)) {
+      return cmd;
+    }
+  }
+  return undefined;
+};
+
 export type DriverConnection = {
   query(sql: string, opts?: { write?: boolean }): Promise<QueryResult>;
   getTables(opts?: { includeSystem?: boolean }): Promise<TableInfo[]>;

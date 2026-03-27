@@ -33,10 +33,10 @@ export function registerConstraints(schema: Command): void {
         return;
       }
 
-      const connection = schema.parent?.getOptionValue("connection") as string | undefined;
+      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
-        const driver = await resolveDriver({ connection: opts.connection ?? connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         try {
           const allConstraints = await driver.getConstraints(table);
           const constraints = opts.type
@@ -47,7 +47,9 @@ export function registerConstraints(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

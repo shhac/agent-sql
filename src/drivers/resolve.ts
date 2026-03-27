@@ -3,6 +3,7 @@ import type { DriverConnection } from "./types";
 import type { Connection } from "../lib/config";
 import { getConnection, getConnections, getDefaultConnectionAlias } from "../lib/config";
 import { getCredential, type Credential } from "../lib/credentials";
+import { setActiveDriver, clearActiveDriver } from "../lib/cleanup";
 import { connectPg } from "./pg";
 import { connectSqlite } from "./sqlite";
 import { connectMysql } from "./mysql";
@@ -21,7 +22,7 @@ const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
 
 const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
 
-const detectDriverFromUrl = (url: string): Driver | undefined => {
+export const detectDriverFromUrl = (url: string): Driver | undefined => {
   for (const [pattern, driver] of DRIVER_URL_PATTERNS) {
     if (pattern.test(url)) {
       return driver;
@@ -121,6 +122,18 @@ const checkWritePermission = (opts: {
   return false;
 };
 
+const trackDriver = (connection: DriverConnection): DriverConnection => {
+  setActiveDriver(connection);
+  const originalClose = connection.close.bind(connection);
+  return {
+    ...connection,
+    close: async () => {
+      clearActiveDriver();
+      return originalClose();
+    },
+  };
+};
+
 export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnection> => {
   const alias = resolveAlias(opts?.connection);
   const conn = getConnection(alias);
@@ -156,14 +169,16 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
       );
     }
 
-    return connectPg({
-      host: conn.host ?? "localhost",
-      port: conn.port ?? 5432,
-      database: conn.database ?? "postgres",
-      username: credential.username,
-      password: credential.password,
-      readonly,
-    });
+    return trackDriver(
+      await connectPg({
+        host: conn.host ?? "localhost",
+        port: conn.port ?? 5432,
+        database: conn.database ?? "postgres",
+        username: credential.username,
+        password: credential.password,
+        readonly,
+      }),
+    );
   }
 
   if (driver === "sqlite") {
@@ -174,7 +189,7 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
       );
     }
 
-    return connectSqlite({ path, readonly });
+    return trackDriver(await connectSqlite({ path, readonly }));
   }
 
   if (driver === "mysql") {
@@ -188,14 +203,16 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
       );
     }
 
-    return connectMysql({
-      host: conn.host ?? "localhost",
-      port: conn.port ?? 3306,
-      database: conn.database ?? "mysql",
-      username: credential.username,
-      password: credential.password,
-      readonly,
-    });
+    return trackDriver(
+      await connectMysql({
+        host: conn.host ?? "localhost",
+        port: conn.port ?? 3306,
+        database: conn.database ?? "mysql",
+        username: credential.username,
+        password: credential.password,
+        readonly,
+      }),
+    );
   }
 
   throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql.`);

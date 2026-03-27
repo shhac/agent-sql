@@ -25,6 +25,6 @@ export function registerUsage(config: Command): void {
     .command("usage")
     .description("Print config command documentation (LLM-optimized)")
     .action(() => {
-      console.log(USAGE_TEXT.trim());
+      process.stdout.write(USAGE_TEXT);
     });
 }

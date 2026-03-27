@@ -14,10 +14,10 @@ export function registerTables(schema: Command): void {
     .description("List all tables")
     .option("--include-system", "Include system tables (pg_catalog, information_schema)")
     .action(async (opts: TablesOpts) => {
-      const connection = schema.parent?.getOptionValue("connection") as string | undefined;
+      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
-        const driver = await resolveDriver({ connection: opts.connection ?? connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         try {
           const tables = await driver.getTables({ includeSystem: opts.includeSystem });
           printJson({ tables });
@@ -25,7 +25,9 @@ export function registerTables(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

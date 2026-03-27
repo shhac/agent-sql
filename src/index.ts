@@ -4,6 +4,7 @@ import { configureTruncation } from "./lib/truncation.ts";
 import { configureTimeout } from "./lib/timeout.ts";
 import { configureFormat } from "./lib/format.ts";
 import { getSettings, getSetting } from "./lib/config.ts";
+import { installSignalHandler } from "./lib/cleanup.ts";
 import { registerConfigCommand } from "./cli/config/index.ts";
 import { registerConnectionCommand } from "./cli/connection/index.ts";
 import { registerCredentialCommand } from "./cli/credential/index.ts";
@@ -11,6 +12,8 @@ import { registerQueryCommand } from "./cli/query/index.ts";
 import { registerRunAlias } from "./cli/query/run-alias.ts";
 import { registerSchemaCommand } from "./cli/schema/index.ts";
 import { registerUsageCommand } from "./cli/usage/index.ts";
+
+installSignalHandler();
 
 const program = new Command();
 program

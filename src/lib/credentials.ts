@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { keychainGet, keychainSet, keychainDelete } from "./keychain.ts";
+import { keychainGet, keychainSet, keychainDelete, keychainDeleteAll } from "./keychain.ts";
+import { getConfigDir, ensureConfigDir } from "./paths.ts";
 
 export type Credential = {
   username?: string;
@@ -27,22 +27,6 @@ type CredentialStore = Record<string, StoredCredential>;
 
 const KEYCHAIN_PLACEHOLDER = "__KEYCHAIN__";
 
-const getConfigDir = (): string => {
-  const xdg = process.env.XDG_CONFIG_HOME?.trim();
-  if (xdg) {
-    return join(xdg, "agent-sql");
-  }
-  return join(homedir(), ".config", "agent-sql");
-};
-
-const ensureConfigDir = (): string => {
-  const dir = getConfigDir();
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-};
-
 const credentialsFilePath = (): string => join(getConfigDir(), "credentials.json");
 
 const readCredentialFile = (): CredentialStore => {
@@ -59,7 +43,10 @@ const readCredentialFile = (): CredentialStore => {
 
 const writeCredentialFile = (store: CredentialStore): void => {
   const dir = ensureConfigDir();
-  writeFileSync(join(dir, "credentials.json"), `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  writeFileSync(join(dir, "credentials.json"), `${JSON.stringify(store, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 };
 
 export const storeCredential = (
@@ -170,3 +157,11 @@ export const listCredentials = (): CredentialListEntry[] => {
 };
 
 export const getCredentialNames = (): string[] => Object.keys(readCredentialFile());
+
+export const removeAllCredentials = (): string[] => {
+  const fileStore = readCredentialFile();
+  const names = Object.keys(fileStore);
+  keychainDeleteAll();
+  writeCredentialFile({});
+  return names;
+};

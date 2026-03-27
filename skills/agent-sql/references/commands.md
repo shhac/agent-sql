@@ -14,7 +14,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 ## Schema
 
 - `agent-sql schema tables [--include-system] [-c <alias>]` — list all tables with namespace (PG: `public.users`). `--include-system` for `pg_catalog`/`information_schema`. MySQL scopes to the connected database.
-- `agent-sql schema describe <table> [--full] [-c <alias>]` — show columns, types, nullability, defaults. Dot notation: `schema describe analytics.events`. `--full` adds constraints, indexes, comments.
+- `agent-sql schema describe <table> [--detailed] [-c <alias>]` — show columns, types, nullability, defaults. Dot notation: `schema describe analytics.events`. `--detailed` adds constraints, indexes, comments.
 - `agent-sql schema indexes [table] [-c <alias>]` — show indexes. All tables if no table specified. Dot notation supported.
 - `agent-sql schema constraints [table] [--type pk|fk|unique|check] [-c <alias>]` — show constraints (PKs, FKs, unique, check). `--type` to filter. All tables if no table specified. Dot notation supported.
 - `agent-sql schema search <pattern> [-c <alias>]` — search table and column names by pattern.

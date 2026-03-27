@@ -1,11 +1,12 @@
 import { Database } from "bun:sqlite";
-import type {
-  DriverConnection,
-  QueryResult,
-  TableInfo,
-  ColumnInfo,
-  IndexInfo,
-  ConstraintInfo,
+import {
+  detectCommand,
+  type DriverConnection,
+  type QueryResult,
+  type TableInfo,
+  type ColumnInfo,
+  type IndexInfo,
+  type ConstraintInfo,
 } from "./types";
 
 type SqliteOpts = {
@@ -13,17 +14,7 @@ type SqliteOpts = {
   readonly?: boolean;
 };
 
-const WRITE_COMMANDS = new Set(["INSERT", "UPDATE", "DELETE", "REPLACE"]);
-
-const detectCommand = (sql: string): string | undefined => {
-  const trimmed = sql.trimStart().toUpperCase();
-  for (const cmd of WRITE_COMMANDS) {
-    if (trimmed.startsWith(cmd)) {
-      return cmd;
-    }
-  }
-  return undefined;
-};
+const WRITE_COMMANDS: ReadonlySet<string> = new Set(["INSERT", "UPDATE", "DELETE", "REPLACE"]);
 
 export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
   const readonly = opts.readonly ?? true;
@@ -32,7 +23,7 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
     : new Database(opts.path, { readwrite: true, create: false });
 
   const query = async (sql: string, queryOpts?: { write?: boolean }): Promise<QueryResult> => {
-    const command = detectCommand(sql);
+    const command = detectCommand(sql, WRITE_COMMANDS);
 
     if (command && queryOpts?.write) {
       const stmt = db.query(sql);

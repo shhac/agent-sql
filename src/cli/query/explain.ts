@@ -48,7 +48,9 @@ export function registerExplain(parent: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias: opts.connection,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

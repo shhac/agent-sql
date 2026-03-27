@@ -2,13 +2,14 @@
 // + protocol-level single-statement enforcement (COM_QUERY). No parser needed.
 
 import { SQL } from "bun";
-import type {
-  DriverConnection,
-  QueryResult,
-  TableInfo,
-  ColumnInfo,
-  IndexInfo,
-  ConstraintInfo,
+import {
+  detectCommand,
+  type DriverConnection,
+  type QueryResult,
+  type TableInfo,
+  type ColumnInfo,
+  type IndexInfo,
+  type ConstraintInfo,
 } from "./types";
 import { getTimeout } from "../lib/timeout";
 
@@ -21,7 +22,7 @@ type MysqlOpts = {
   readonly?: boolean;
 };
 
-const WRITE_COMMANDS = new Set([
+const WRITE_COMMANDS: ReadonlySet<string> = new Set([
   "INSERT",
   "UPDATE",
   "DELETE",
@@ -32,21 +33,20 @@ const WRITE_COMMANDS = new Set([
   "TRUNCATE",
 ]);
 
-const detectCommand = (sql: string): string | undefined => {
-  const trimmed = sql.trimStart().toUpperCase();
-  for (const cmd of WRITE_COMMANDS) {
-    if (trimmed.startsWith(cmd)) {
-      return cmd;
-    }
-  }
-  return undefined;
-};
-
 const CONSTRAINT_TYPE_MAP: Record<string, ConstraintInfo["type"]> = {
   "PRIMARY KEY": "primary_key",
   "FOREIGN KEY": "foreign_key",
   UNIQUE: "unique",
   CHECK: "check",
+};
+
+const CONNECT_TIMEOUT_MS = 10_000;
+
+const withConnectTimeout = <T>(promise: Promise<T>): Promise<T> => {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Connection timed out")), CONNECT_TIMEOUT_MS),
+  );
+  return Promise.race([promise, timeout]);
 };
 
 export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> => {
@@ -62,9 +62,14 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
     max: 1,
   });
 
-  if (readonly) {
-    await db.unsafe(`SET SESSION TRANSACTION READ ONLY`);
-    await db.unsafe(`SET SESSION MAX_EXECUTION_TIME = ${getTimeout()}`);
+  try {
+    if (readonly) {
+      await withConnectTimeout(db.unsafe(`SET SESSION TRANSACTION READ ONLY`));
+      await db.unsafe(`SET SESSION MAX_EXECUTION_TIME = ${getTimeout()}`);
+    }
+  } catch (err) {
+    await db.close().catch(() => {});
+    throw err;
   }
 
   const query = async (userSql: string, queryOpts?: { write?: boolean }): Promise<QueryResult> => {
@@ -81,7 +86,7 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       }
     }
 
-    const command = detectCommand(userSql);
+    const command = detectCommand(userSql, WRITE_COMMANDS);
     if (command && queryOpts?.write) {
       const rows = await db.unsafe(userSql);
       const result = rows as unknown as { count?: number };
@@ -114,7 +119,8 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
   };
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
-    const rows = await db.unsafe(`
+    const rows = await db.unsafe(
+      `
       SELECT
         c.column_name,
         c.column_type,
@@ -123,9 +129,11 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
         c.column_key
       FROM information_schema.columns c
       WHERE c.table_schema = DATABASE()
-        AND c.table_name = '${table}'
+        AND c.table_name = ?
       ORDER BY c.ordinal_position
-    `);
+    `,
+      [table],
+    );
     return (
       rows as {
         column_name: string;
@@ -144,8 +152,10 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
   };
 
   const getIndexes = async (table?: string): Promise<IndexInfo[]> => {
-    const tableFilter = table ? `AND table_name = '${table}'` : "";
-    const rows = await db.unsafe(`
+    const tableFilter = table ? "AND table_name = ?" : "";
+    const params = table ? [table] : [];
+    const rows = await db.unsafe(
+      `
       SELECT
         index_name,
         table_name,
@@ -156,7 +166,9 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
         ${tableFilter}
       GROUP BY table_name, index_name, non_unique
       ORDER BY table_name, index_name
-    `);
+    `,
+      params,
+    );
     return (
       rows as {
         index_name: string;
@@ -173,8 +185,10 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
   };
 
   const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
-    const tableFilter = table ? `AND tc.table_name = '${table}'` : "";
-    const rows = await db.unsafe(`
+    const tableFilter = table ? "AND tc.table_name = ?" : "";
+    const params = table ? [table] : [];
+    const rows = await db.unsafe(
+      `
       SELECT
         tc.constraint_name,
         tc.table_name,
@@ -192,7 +206,9 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
       GROUP BY tc.constraint_name, tc.table_name, tc.constraint_type,
                kcu.referenced_table_name
       ORDER BY tc.table_name, tc.constraint_name
-    `);
+    `,
+      params,
+    );
 
     return (
       rows as {
@@ -222,25 +238,31 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
   ): Promise<{ tables: TableInfo[]; columns: { table: string; column: string }[] }> => {
     const likePattern = `%${pattern}%`;
 
-    const tableRows = await db.unsafe(`
+    const tableRows = await db.unsafe(
+      `
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = DATABASE()
-        AND table_name LIKE '${likePattern}'
+        AND table_name LIKE ?
       ORDER BY table_name
-    `);
+    `,
+      [likePattern],
+    );
 
     const tables = (tableRows as { table_name: string }[]).map((r) => ({
       name: r.table_name,
     }));
 
-    const colRows = await db.unsafe(`
+    const colRows = await db.unsafe(
+      `
       SELECT table_name, column_name
       FROM information_schema.columns
       WHERE table_schema = DATABASE()
-        AND column_name LIKE '${likePattern}'
+        AND column_name LIKE ?
       ORDER BY table_name, column_name
-    `);
+    `,
+      [likePattern],
+    );
 
     const columns = (colRows as { table_name: string; column_name: string }[]).map((r) => ({
       table: r.table_name,

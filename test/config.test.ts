@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { clearConfigCache } from "../src/lib/config.ts";
 
 const createTempDir = (): string => mkdtempSync(join(tmpdir(), "agent-sql-config-test-"));
 
@@ -9,6 +10,7 @@ let tempDir: string;
 let originalXdg: string | undefined;
 
 beforeEach(() => {
+  clearConfigCache();
   tempDir = createTempDir();
   originalXdg = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = tempDir;

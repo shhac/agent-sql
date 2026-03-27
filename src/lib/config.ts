@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { getConfigDir, ensureConfigDir } from "./paths";
 
 export type Driver = "pg" | "sqlite" | "mysql";
 
@@ -40,42 +40,38 @@ export type Config = {
   settings: Settings;
 };
 
-const getConfigDir = (): string => {
-  const xdg = process.env.XDG_CONFIG_HOME?.trim();
-  if (xdg) {
-    return join(xdg, "agent-sql");
-  }
-  return join(homedir(), ".config", "agent-sql");
-};
-
-const ensureConfigDir = (): string => {
-  const dir = getConfigDir();
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-};
-
 const configPath = (): string => join(getConfigDir(), "config.json");
 
+let cachedConfig: Config | null = null;
+
+export const clearConfigCache = (): void => {
+  cachedConfig = null;
+};
+
 export const readConfig = (): Config => {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
   const path = configPath();
   if (!existsSync(path)) {
     return { connections: {}, settings: {} };
   }
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Config>;
-    return {
+    cachedConfig = {
       default_connection: raw.default_connection,
       connections: raw.connections ?? {},
       settings: raw.settings ?? {},
     };
+    return cachedConfig;
   } catch {
     return { connections: {}, settings: {} };
   }
 };
 
 export const writeConfig = (config: Config): void => {
+  cachedConfig = null;
   const dir = ensureConfigDir();
   writeFileSync(join(dir, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 };

@@ -13,10 +13,10 @@ export function registerSearch(schema: Command): void {
     .description("Search table and column names by pattern")
     .argument("<pattern>", "Search pattern (e.g. 'user', 'email')")
     .action(async (pattern: string, opts: SearchOpts) => {
-      const connection = schema.parent?.getOptionValue("connection") as string | undefined;
+      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
-        const driver = await resolveDriver({ connection: opts.connection ?? connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         try {
           const results = await driver.searchSchema(pattern);
           printJson(results);
@@ -24,7 +24,9 @@ export function registerSearch(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

@@ -15,10 +15,10 @@ export function registerDescribe(schema: Command): void {
     .argument("<table>", "Table name (supports dot notation: schema.table)")
     .option("--detailed", "Include constraints, indexes, and comments")
     .action(async (table: string, opts: DescribeOpts) => {
-      const connection = schema.parent?.getOptionValue("connection") as string | undefined;
+      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
-        const driver = await resolveDriver({ connection: opts.connection ?? connection });
+        const driver = await resolveDriver({ connection: connectionAlias });
         try {
           const columns = await driver.describeTable(table);
           const result: Record<string, unknown> = { table, columns };
@@ -37,7 +37,9 @@ export function registerDescribe(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

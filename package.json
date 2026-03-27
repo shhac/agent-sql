@@ -12,6 +12,7 @@
     "prepare": "simple-git-hooks",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "test:mocked": "bun test test/resolve-mocked.isolated.ts",
     "lint": "oxlint src/ test/",
     "lint:fix": "oxlint --fix src/ test/",
     "format": "oxfmt --write src/ test/",

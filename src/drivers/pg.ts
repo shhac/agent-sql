@@ -1,11 +1,12 @@
 import { SQL } from "bun";
-import type {
-  DriverConnection,
-  QueryResult,
-  TableInfo,
-  ColumnInfo,
-  IndexInfo,
-  ConstraintInfo,
+import {
+  detectCommand,
+  type DriverConnection,
+  type QueryResult,
+  type TableInfo,
+  type ColumnInfo,
+  type IndexInfo,
+  type ConstraintInfo,
 } from "./types";
 import { loadPgParser, validateReadOnlyQuery } from "../lib/pg-session-guard";
 import { getTimeout } from "../lib/timeout";
@@ -19,17 +20,7 @@ type PgOpts = {
   readonly?: boolean;
 };
 
-const WRITE_COMMANDS = new Set(["INSERT", "UPDATE", "DELETE", "MERGE", "COPY"]);
-
-const detectCommand = (sql: string): string | undefined => {
-  const trimmed = sql.trimStart().toUpperCase();
-  for (const cmd of WRITE_COMMANDS) {
-    if (trimmed.startsWith(cmd)) {
-      return cmd;
-    }
-  }
-  return undefined;
-};
+const WRITE_COMMANDS: ReadonlySet<string> = new Set(["INSERT", "UPDATE", "DELETE", "MERGE", "COPY"]);
 
 const parseTableRef = (table: string): { schema: string; table: string } => {
   const parts = table.split(".");
@@ -37,6 +28,15 @@ const parseTableRef = (table: string): { schema: string; table: string } => {
     return { schema: parts[0]!, table: parts[1]! };
   }
   return { schema: "public", table: parts[0]! };
+};
+
+const CONNECT_TIMEOUT_MS = 10_000;
+
+const withConnectTimeout = <T>(promise: Promise<T>): Promise<T> => {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Connection timed out")), CONNECT_TIMEOUT_MS),
+  );
+  return Promise.race([promise, timeout]);
 };
 
 export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
@@ -51,12 +51,17 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
     max: 1,
   });
 
-  const timeoutMs = getTimeout();
-  await db.unsafe(`SET statement_timeout = ${timeoutMs}`);
+  try {
+    const timeoutMs = getTimeout();
+    await withConnectTimeout(db.unsafe(`SET statement_timeout = ${timeoutMs}`));
 
-  if (readonly) {
-    await loadPgParser();
-    await db.unsafe("SET default_transaction_read_only = on");
+    if (readonly) {
+      await loadPgParser();
+      await db.unsafe("SET default_transaction_read_only = on");
+    }
+  } catch (err) {
+    await db.close().catch(() => {});
+    throw err;
   }
 
   const query = async (userSql: string, queryOpts?: { write?: boolean }): Promise<QueryResult> => {
@@ -78,7 +83,7 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
       }
     }
 
-    const command = detectCommand(userSql);
+    const command = detectCommand(userSql, WRITE_COMMANDS);
     if (command && queryOpts?.write) {
       const rows = await db.unsafe(userSql);
       const result = rows as unknown as { count?: number };
@@ -113,7 +118,8 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
     const ref = parseTableRef(table);
-    const rows = await db.unsafe(`
+    const rows = await db.unsafe(
+      `
       SELECT
         c.column_name,
         c.data_type,
@@ -129,10 +135,12 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
         ON tc.constraint_name = kcu.constraint_name
         AND tc.table_schema = kcu.table_schema
         AND tc.constraint_type = 'PRIMARY KEY'
-      WHERE c.table_schema = '${ref.schema}'
-        AND c.table_name = '${ref.table}'
+      WHERE c.table_schema = $1
+        AND c.table_name = $2
       ORDER BY c.ordinal_position
-    `);
+    `,
+      [ref.schema, ref.table],
+    );
     return (
       rows as {
         column_name: string;
@@ -151,14 +159,14 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   };
 
   const getIndexes = async (table?: string): Promise<IndexInfo[]> => {
-    const whereClause = table
-      ? (() => {
-          const ref = parseTableRef(table);
-          return `WHERE i.schemaname = '${ref.schema}' AND i.tablename = '${ref.table}'`;
-        })()
+    const ref = table ? parseTableRef(table) : undefined;
+    const whereClause = ref
+      ? "WHERE i.schemaname = $1 AND i.tablename = $2"
       : "WHERE i.schemaname NOT IN ('pg_catalog', 'information_schema')";
+    const params = ref ? [ref.schema, ref.table] : [];
 
-    const rows = await db.unsafe(`
+    const rows = await db.unsafe(
+      `
       SELECT
         i.schemaname,
         i.tablename,
@@ -175,7 +183,9 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
       ${whereClause}
       GROUP BY i.schemaname, i.tablename, i.indexname, ix.indisunique
       ORDER BY i.schemaname, i.tablename, i.indexname
-    `);
+    `,
+      params,
+    );
     return (
       rows as {
         schemaname: string;
@@ -194,14 +204,14 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   };
 
   const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
-    const whereClause = table
-      ? (() => {
-          const ref = parseTableRef(table);
-          return `WHERE tc.table_schema = '${ref.schema}' AND tc.table_name = '${ref.table}'`;
-        })()
+    const ref = table ? parseTableRef(table) : undefined;
+    const whereClause = ref
+      ? "WHERE tc.table_schema = $1 AND tc.table_name = $2"
       : "WHERE tc.table_schema NOT IN ('pg_catalog', 'information_schema')";
+    const params = ref ? [ref.schema, ref.table] : [];
 
-    const rows = await db.unsafe(`
+    const rows = await db.unsafe(
+      `
       SELECT
         tc.constraint_name,
         tc.table_schema,
@@ -223,7 +233,9 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
       GROUP BY tc.constraint_name, tc.table_schema, tc.table_name,
                tc.constraint_type, ccu.table_schema, ccu.table_name
       ORDER BY tc.table_schema, tc.table_name, tc.constraint_name
-    `);
+    `,
+      params,
+    );
 
     const typeMap: Record<string, ConstraintInfo["type"]> = {
       "PRIMARY KEY": "primary_key",
@@ -263,26 +275,32 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   ): Promise<{ tables: TableInfo[]; columns: { table: string; column: string }[] }> => {
     const likePattern = `%${pattern}%`;
 
-    const tableRows = await db.unsafe(`
+    const tableRows = await db.unsafe(
+      `
       SELECT table_schema, table_name
       FROM information_schema.tables
       WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-        AND table_name ILIKE '${likePattern}'
+        AND table_name ILIKE $1
       ORDER BY table_schema, table_name
-    `);
+    `,
+      [likePattern],
+    );
 
     const tables = (tableRows as { table_schema: string; table_name: string }[]).map((r) => ({
       name: `${r.table_schema}.${r.table_name}`,
       schema: r.table_schema,
     }));
 
-    const colRows = await db.unsafe(`
+    const colRows = await db.unsafe(
+      `
       SELECT table_schema, table_name, column_name
       FROM information_schema.columns
       WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-        AND column_name ILIKE '${likePattern}'
+        AND column_name ILIKE $1
       ORDER BY table_schema, table_name, column_name
-    `);
+    `,
+      [likePattern],
+    );
 
     const columns = (
       colRows as { table_schema: string; table_name: string; column_name: string }[]

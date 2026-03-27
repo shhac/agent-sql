@@ -3,6 +3,7 @@ import { resolveDriver } from "../../drivers/resolve.ts";
 import { getSetting } from "../../lib/config.ts";
 import { enhanceError } from "../../lib/errors.ts";
 import { printCompact, printError, printPaginated } from "../../lib/output.ts";
+import { quoteIdentPg } from "../../lib/quote-ident.ts";
 import {
   applyTruncation,
   applyTruncationCompact,
@@ -21,8 +22,9 @@ type SampleOptions = {
 const DEFAULT_SAMPLE_SIZE = 5;
 
 const buildSampleSql = (table: string, opts: { limit: number; where?: string }): string => {
+  const quoted = quoteIdentPg(table);
   const whereClause = opts.where ? ` WHERE ${opts.where}` : "";
-  return `SELECT * FROM ${table}${whereClause} LIMIT ${opts.limit}`;
+  return `SELECT * FROM ${quoted}${whereClause} LIMIT ${opts.limit}`;
 };
 
 export function registerSample(parent: Command): void {
@@ -81,7 +83,9 @@ export function registerSample(parent: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)));
+        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
+          connectionAlias: opts.connection,
+        });
         printError({
           message: enhanced.message,
           hint: enhanced.hint,

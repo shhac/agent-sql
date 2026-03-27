@@ -47,6 +47,6 @@ export function registerUsageCommand({ program }: { program: Command }): void {
     .command("usage")
     .description("Print concise documentation (LLM-optimized)")
     .action(() => {
-      console.log(USAGE_TEXT.trim());
+      process.stdout.write(USAGE_TEXT);
     });
 }

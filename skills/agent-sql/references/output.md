@@ -175,7 +175,7 @@ SQLite omits the `schema` field.
 }
 ```
 
-With `--full`, adds `constraints`, `indexes`, and `comments` fields.
+With `--detailed`, adds `constraints`, `indexes`, and `comments` fields.
 
 ## Schema indexes (`schema indexes`)
 

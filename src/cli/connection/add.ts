@@ -4,6 +4,7 @@ import type { Driver, Connection } from "../../lib/config.ts";
 import { storeConnection, setDefaultConnection } from "../../lib/config.ts";
 import { getCredential, getCredentialNames } from "../../lib/credentials.ts";
 import { printJson, printError } from "../../lib/output.ts";
+import { detectDriverFromUrl } from "../../drivers/resolve.ts";
 
 type AddOpts = {
   driver?: Driver;
@@ -14,28 +15,6 @@ type AddOpts = {
   url?: string;
   credential?: string;
   default?: boolean;
-};
-
-const DRIVER_FROM_SCHEME: [RegExp, Driver][] = [
-  [/^postgres(ql)?:\/\//, "pg"],
-  [/^mysql:\/\//, "mysql"],
-  [/^mariadb:\/\//, "mysql"],
-  [/^sqlite:\/\//, "sqlite"],
-];
-
-const SQLITE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
-
-const detectDriverFromUrl = (url: string): Driver | undefined => {
-  for (const [pattern, driver] of DRIVER_FROM_SCHEME) {
-    if (pattern.test(url)) {
-      return driver;
-    }
-  }
-  const lower = url.toLowerCase();
-  if (SQLITE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-    return "sqlite";
-  }
-  return undefined;
 };
 
 const resolveDriver = (opts: AddOpts): Driver => {
