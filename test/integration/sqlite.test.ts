@@ -129,9 +129,9 @@ describe("query run", () => {
     ]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as { columns: string[]; rows: unknown[][] };
-    expect(parsed.columns).toEqual(["id", "name"]);
-    expect(parsed.rows[0]).toEqual([1, "Alice"]);
-    expect(parsed.rows[1]).toEqual([2, "Bob"]);
+    expect(parsed.columns).toEqual(["id", "name", "@truncated"]);
+    expect(parsed.rows[0]).toEqual([1, "Alice", null]);
+    expect(parsed.rows[1]).toEqual([2, "Bob", null]);
   });
 });
 

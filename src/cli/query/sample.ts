@@ -68,7 +68,6 @@ export function registerSample(parent: Command): void {
             printCompact({
               columns: compactResult.columns,
               rows: compactResult.rows,
-              truncated: compactResult.truncated,
               hasMore: false,
               rowCount: result.rows.length,
             });

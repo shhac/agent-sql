@@ -157,8 +157,8 @@ describe("--format csv", () => {
     ]);
     expect(result.exitCode).toBe(0);
     const lines = result.stdout.trimEnd().split("\n");
-    expect(lines[0]).toBe("id,name");
-    expect(lines[1]).toBe("1,Alice");
-    expect(lines[2]).toBe("2,Bob");
+    expect(lines[0]).toBe("id,name,@truncated");
+    expect(lines[1]).toBe("1,Alice,");
+    expect(lines[2]).toBe("2,Bob,");
   });
 });

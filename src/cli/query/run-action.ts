@@ -91,7 +91,6 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
         printCompact({
           columns: compactResult.columns,
           rows: compactResult.rows,
-          truncated: compactResult.truncated,
           hasMore,
           rowCount: displayRows.length,
         });

@@ -25,17 +25,17 @@ describe("applyTruncation", () => {
     expect(result[0]!["@truncated"]).toEqual({ bio: 250 });
   });
 
-  it("does not add @truncated when nothing is truncated", () => {
+  it("@truncated is always present as null when no truncation occurs", () => {
     const rows = [{ id: 1, name: "Alice" }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 
   it("does not truncate strings exactly at threshold", () => {
     const rows = [{ id: 1, bio: long(200) }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.bio).toBe(long(200));
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 
   it("truncates strings one char over threshold", () => {
@@ -50,21 +50,21 @@ describe("applyTruncation", () => {
     const rows = [{ id: 1, bio: "" }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.bio).toBe("");
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 
   it("passes through null values without truncation", () => {
     const rows = [{ id: 1, bio: null }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.bio).toBeNull();
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 
   it("passes through numeric values without truncation", () => {
     const rows = [{ id: 1, score: 99999 }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.score).toBe(99999);
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 
   it("truncates multiple columns in the same row", () => {
@@ -83,7 +83,7 @@ describe("applyTruncation", () => {
     ];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!["@truncated"]).toEqual({ bio: 300 });
-    expect(result[1]!["@truncated"]).toBeUndefined();
+    expect(result[1]!["@truncated"]).toBeNull();
     expect(result[2]!["@truncated"]).toEqual({ bio: 500 });
   });
 });
@@ -94,7 +94,7 @@ describe("configureTruncation with --full", () => {
     const rows = [{ id: 1, bio: long(500) }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.bio).toBe(long(500));
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 });
 
@@ -114,7 +114,7 @@ describe("configureTruncation with --expand", () => {
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.bio).toBe(long(500));
     expect(result[0]!.notes).toBe(long(500));
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 
   it("expand is case-insensitive", () => {
@@ -122,7 +122,7 @@ describe("configureTruncation with --expand", () => {
     const rows = [{ id: 1, bio: long(500) }];
     const result = applyTruncation(rows) as Record<string, unknown>[];
     expect(result[0]!.bio).toBe(long(500));
-    expect(result[0]!["@truncated"]).toBeUndefined();
+    expect(result[0]!["@truncated"]).toBeNull();
   });
 });
 
@@ -137,24 +137,32 @@ describe("configureTruncation with custom maxLength", () => {
 });
 
 describe("applyTruncationCompact", () => {
-  it("truncates values and returns parallel truncated arrays", () => {
+  it("truncates values and adds @truncated as last column", () => {
     const columns = ["id", "bio"];
     const rows = [
       [1, long(300)],
       [2, "short"],
     ] as unknown[][];
     const result = applyTruncationCompact({ columns, rows });
-    expect(result.columns).toEqual(["id", "bio"]);
+    expect(result.columns).toEqual(["id", "bio", "@truncated"]);
     expect((result.rows[0]![1] as string).endsWith("\u2026")).toBe(true);
+    expect(result.rows[0]![2]).toEqual({ bio: 300 });
     expect(result.rows[1]![1]).toBe("short");
-    expect(result.truncated).toEqual({ bio: [300, null] });
+    expect(result.rows[1]![2]).toBeNull();
   });
 
-  it("omits truncated key when nothing is truncated", () => {
+  it("@truncated column is always last in columns array", () => {
     const columns = ["id", "name"];
     const rows = [[1, "Alice"]] as unknown[][];
     const result = applyTruncationCompact({ columns, rows });
-    expect(result.truncated).toBeUndefined();
+    expect(result.columns.at(-1)).toBe("@truncated");
+  });
+
+  it("@truncated value is null for rows with no truncation", () => {
+    const columns = ["id", "name"];
+    const rows = [[1, "Alice"]] as unknown[][];
+    const result = applyTruncationCompact({ columns, rows });
+    expect(result.rows[0]![2]).toBeNull();
   });
 
   it("handles multiple truncated columns", () => {
@@ -164,10 +172,9 @@ describe("applyTruncationCompact", () => {
       [2, "short", long(500)],
     ] as unknown[][];
     const result = applyTruncationCompact({ columns, rows });
-    expect(result.truncated).toEqual({
-      bio: [300, null],
-      notes: [400, 500],
-    });
+    expect(result.columns).toEqual(["id", "bio", "notes", "@truncated"]);
+    expect(result.rows[0]![3]).toEqual({ bio: 300, notes: 400 });
+    expect(result.rows[1]![3]).toEqual({ notes: 500 });
   });
 
   it("respects --full bypass in compact mode", () => {
@@ -176,7 +183,8 @@ describe("applyTruncationCompact", () => {
     const rows = [[1, long(300)]] as unknown[][];
     const result = applyTruncationCompact({ columns, rows });
     expect(result.rows[0]![1]).toBe(long(300));
-    expect(result.truncated).toBeUndefined();
+    expect(result.columns).toEqual(["id", "bio", "@truncated"]);
+    expect(result.rows[0]![2]).toBeNull();
   });
 
   it("respects --expand in compact mode", () => {
@@ -186,7 +194,8 @@ describe("applyTruncationCompact", () => {
     const result = applyTruncationCompact({ columns, rows });
     expect(result.rows[0]![1]).toBe(long(300));
     expect((result.rows[0]![2] as string).endsWith("\u2026")).toBe(true);
-    expect(result.truncated).toEqual({ notes: [400] });
+    expect(result.columns).toEqual(["id", "bio", "notes", "@truncated"]);
+    expect(result.rows[0]![3]).toEqual({ notes: 400 });
   });
 
   it("passes through null values in compact mode", () => {
@@ -194,6 +203,7 @@ describe("applyTruncationCompact", () => {
     const rows = [[1, null]] as unknown[][];
     const result = applyTruncationCompact({ columns, rows });
     expect(result.rows[0]![1]).toBeNull();
-    expect(result.truncated).toBeUndefined();
+    expect(result.columns).toEqual(["id", "bio", "@truncated"]);
+    expect(result.rows[0]![2]).toBeNull();
   });
 });

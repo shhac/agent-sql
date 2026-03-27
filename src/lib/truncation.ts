@@ -18,7 +18,6 @@ type CompactInput = {
 type CompactResult = {
   columns: string[];
   rows: unknown[][];
-  truncated?: Record<string, (number | null)[]>;
 };
 
 export function configureTruncation(opts: TruncationOpts): void {
@@ -70,9 +69,7 @@ export function applyTruncation(rows: Record<string, unknown>[]): Record<string,
       truncatedMeta[key] = t.originalLength;
     }
 
-    if (Object.keys(truncatedMeta).length > 0) {
-      result["@truncated"] = truncatedMeta;
-    }
+    result["@truncated"] = Object.keys(truncatedMeta).length > 0 ? truncatedMeta : null;
 
     return result;
   });
@@ -80,11 +77,11 @@ export function applyTruncation(rows: Record<string, unknown>[]): Record<string,
 
 export function applyTruncationCompact(input: CompactInput): CompactResult {
   const { columns, rows } = input;
-  const truncatedMap: Record<string, (number | null)[]> = {};
-  let hasTruncation = false;
+  const newColumns = [...columns, "@truncated"];
 
   const newRows = rows.map((row) => {
     const newRow = [...row];
+    const truncatedMeta: Record<string, number> = {};
 
     for (let i = 0; i < columns.length; i++) {
       const col = columns[i]!;
@@ -100,32 +97,12 @@ export function applyTruncationCompact(input: CompactInput): CompactResult {
       }
 
       newRow[i] = t.truncated;
-      hasTruncation = true;
-
-      if (!truncatedMap[col]) {
-        truncatedMap[col] = [];
-      }
+      truncatedMeta[col] = t.originalLength;
     }
 
+    newRow.push(Object.keys(truncatedMeta).length > 0 ? truncatedMeta : null);
     return newRow;
   });
 
-  if (!hasTruncation) {
-    return { columns, rows: newRows };
-  }
-
-  // Build parallel arrays: fill in lengths per row
-  for (const col of Object.keys(truncatedMap)) {
-    const colIdx = columns.indexOf(col);
-    truncatedMap[col] = rows.map((row) => {
-      const value = row[colIdx];
-      if (typeof value !== "string") {
-        return null;
-      }
-      const t = truncateValue(value, configuredMaxLength);
-      return t ? t.originalLength : null;
-    });
-  }
-
-  return { columns, rows: newRows, truncated: truncatedMap };
+  return { columns: newColumns, rows: newRows };
 }

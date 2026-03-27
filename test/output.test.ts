@@ -270,15 +270,15 @@ describe("printCompact", () => {
     expect(parsed.pagination).toEqual({ hasMore: true, rowCount: 20 });
   });
 
-  test("includes truncated metadata when provided", () => {
-    const columns = ["id", "bio"];
-    const rows = [[1, "Short…"]];
-    const truncated = { bio: [5000] as (number | null)[] };
+  test("includes @truncated metadata embedded in rows", () => {
+    const columns = ["id", "bio", "@truncated"];
+    const rows = [[1, "Short…", { bio: 5000 }]];
     const output = captureStdout(() =>
-      printCompact({ columns, rows, truncated, hasMore: false, rowCount: 1 }),
+      printCompact({ columns, rows, hasMore: false, rowCount: 1 }),
     );
     const parsed = JSON.parse(output);
-    expect(parsed.truncated).toEqual({ bio: [5000] });
+    expect(parsed.columns).toContain("@truncated");
+    expect(parsed.rows[0][2]).toEqual({ bio: 5000 });
   });
 });
 

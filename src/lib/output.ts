@@ -24,7 +24,6 @@ type PaginatedPayload = {
 type CompactPayload = {
   columns: string[];
   rows: unknown[][];
-  truncated?: Record<string, (number | null)[]>;
   hasMore: boolean;
   rowCount: number;
 };
@@ -115,9 +114,6 @@ export function printCompact(payload: CompactPayload): void {
     columns: payload.columns,
     rows: payload.rows,
   };
-  if (payload.truncated && Object.keys(payload.truncated).length > 0) {
-    result.truncated = payload.truncated;
-  }
   if (payload.hasMore) {
     result.pagination = {
       hasMore: true,
