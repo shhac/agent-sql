@@ -48,7 +48,9 @@ const installFetchMock = () => {
   globalThis.fetch = mock(async (input: unknown, init?: unknown) => {
     const url = typeof input === "string" ? input : String(input);
     const reqInit = init as RequestInit | undefined;
-    const body = reqInit?.body ? (JSON.parse(reqInit.body as string) as SnowflakeStatementBody) : null;
+    const body = reqInit?.body
+      ? (JSON.parse(reqInit.body as string) as SnowflakeStatementBody)
+      : null;
     requests.push({ url, body });
 
     const sql = body?.statement ?? "";

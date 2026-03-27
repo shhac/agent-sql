@@ -32,7 +32,9 @@ const installFetchMock = () => {
   globalThis.fetch = mock(async (_input: unknown, init?: unknown) => {
     const url = typeof _input === "string" ? _input : String(_input);
     const reqInit = init as RequestInit | undefined;
-    const body = reqInit?.body ? (JSON.parse(reqInit.body as string) as { statement: string }) : null;
+    const body = reqInit?.body
+      ? (JSON.parse(reqInit.body as string) as { statement: string })
+      : null;
     requests.push({ url, body });
     return new Response(JSON.stringify(sqlResponder(body?.statement ?? "")), {
       status: 200,

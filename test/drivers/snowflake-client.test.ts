@@ -97,13 +97,15 @@ describe("SnowflakeClient", () => {
       const finalResp = makeQueryResponse({ statementHandle: "async-handle" });
 
       let callCount = 0;
-      setFetchMock(mock(() => {
-        callCount++;
-        if (callCount === 1) {
-          return Promise.resolve(jsonResponse(asyncResp, 202));
-        }
-        return Promise.resolve(jsonResponse(finalResp));
-      }));
+      setFetchMock(
+        mock(() => {
+          callCount++;
+          if (callCount === 1) {
+            return Promise.resolve(jsonResponse(asyncResp, 202));
+          }
+          return Promise.resolve(jsonResponse(finalResp));
+        }),
+      );
 
       const client = createClient();
       const result = await client.executeStatement({ statement: "SELECT * FROM big_table" });
@@ -171,13 +173,15 @@ describe("SnowflakeClient", () => {
   describe("retry behavior", () => {
     test("retries on 429 status", async () => {
       let callCount = 0;
-      setFetchMock(mock(() => {
-        callCount++;
-        if (callCount <= 2) {
-          return Promise.resolve(new Response("Too Many Requests", { status: 429 }));
-        }
-        return Promise.resolve(jsonResponse(makeQueryResponse()));
-      }));
+      setFetchMock(
+        mock(() => {
+          callCount++;
+          if (callCount <= 2) {
+            return Promise.resolve(new Response("Too Many Requests", { status: 429 }));
+          }
+          return Promise.resolve(jsonResponse(makeQueryResponse()));
+        }),
+      );
 
       const client = createClient();
       const result = await client.executeStatement({ statement: "SELECT 1" });
@@ -188,13 +192,15 @@ describe("SnowflakeClient", () => {
 
     test("retries on 500 status", async () => {
       let callCount = 0;
-      setFetchMock(mock(() => {
-        callCount++;
-        if (callCount === 1) {
-          return Promise.resolve(new Response("Internal Server Error", { status: 500 }));
-        }
-        return Promise.resolve(jsonResponse(makeQueryResponse()));
-      }));
+      setFetchMock(
+        mock(() => {
+          callCount++;
+          if (callCount === 1) {
+            return Promise.resolve(new Response("Internal Server Error", { status: 500 }));
+          }
+          return Promise.resolve(jsonResponse(makeQueryResponse()));
+        }),
+      );
 
       const client = createClient();
       const result = await client.executeStatement({ statement: "SELECT 1" });
@@ -207,10 +213,12 @@ describe("SnowflakeClient", () => {
   describe("timeout", () => {
     test("aborts via AbortController on timeout", async () => {
       let receivedSignal: AbortSignal | undefined;
-      setFetchMock(mock((_url: unknown, init: unknown) => {
-        receivedSignal = (init as RequestInit).signal ?? undefined;
-        return Promise.resolve(jsonResponse(makeQueryResponse()));
-      }));
+      setFetchMock(
+        mock((_url: unknown, init: unknown) => {
+          receivedSignal = (init as RequestInit).signal ?? undefined;
+          return Promise.resolve(jsonResponse(makeQueryResponse()));
+        }),
+      );
 
       const client = createClient({ timeoutMs: 500 });
       await client.executeStatement({ statement: "SELECT 1" });
