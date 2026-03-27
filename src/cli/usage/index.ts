@@ -2,16 +2,17 @@ import type { Command } from "commander";
 
 const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSON output)
 
-Supports PostgreSQL, MySQL, and SQLite. Output formats: JSON (default), YAML, CSV.
+Supports PostgreSQL, MySQL, SQLite, and Snowflake. Output formats: JSON (default), YAML, CSV.
 
 AD-HOC USAGE (zero setup):
   agent-sql run -c ./data.db "SELECT * FROM users"                     # SQLite file path
   agent-sql run -c postgres://user:pass@host/db "SELECT 1"            # PostgreSQL URL
   agent-sql run -c mysql://user:pass@host/db "SELECT 1"               # MySQL URL
+  agent-sql run -c snowflake://acct/db/schema?warehouse=WH "SELECT 1" # Snowflake URL (needs AGENT_SQL_SNOWFLAKE_TOKEN)
   agent-sql schema tables -c ./mydb.sqlite                             # schema from file
 
 NAMED CONNECTIONS (human-only setup):
-  connection add <alias> --driver pg|mysql|sqlite [--host --port --database --path --url --credential]
+  connection add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
   credential add <alias> --username <u> --password <p> [--write]
   connection test [alias]
 
@@ -36,12 +37,13 @@ COMMANDS:
 GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format json|yaml|csv, --expand <fields>, --full, --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
-  -c accepts connection aliases, file paths (./data.db), or URLs (postgres://..., mysql://...).
-  PG and MySQL require a stored credential for named connections. SQLite uses file path (credential optional).
+  -c accepts connection aliases, file paths (./data.db), or URLs (postgres://..., mysql://..., snowflake://...).
+  PG, MySQL, and Snowflake require a stored credential for named connections. SQLite uses file path (credential optional).
+  Snowflake ad-hoc URLs: snowflake://account/database/schema?warehouse=WH&role=ROLE (requires AGENT_SQL_SNOWFLAKE_TOKEN env var).
 
 SAFETY: Read-only by default. Use --write to opt in to writes.
   --write requires a credential with writePermission (or credential-less SQLite).
-  Results capped at query.maxRows (default 100). Timeout: query.timeout (default 30s).
+  Results capped at query.maxRows (default 10,000). Timeout: query.timeout (default 30s).
 
 OUTPUT: JSON to stdout (default). Use --format yaml or --format csv for alternate formats.
   CSV only applies to tabular results (query run, sample); non-tabular falls back to JSON.

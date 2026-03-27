@@ -6,7 +6,7 @@ Read-only-by-default SQL CLI for AI agents.
 - **LLM-optimized** -- `agent-sql usage` prints concise docs for agent consumption
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
-- **PostgreSQL, MySQL, and SQLite** -- three drivers, one interface
+- **PostgreSQL, MySQL, SQLite, and Snowflake** -- four drivers, one interface
 - **Zero runtime deps** -- single compiled binary via `bun build --compile`
 
 ## Installation
@@ -45,24 +45,39 @@ agent-sql run -c ./mydb.sqlite 'SELECT 1'
 agent-sql schema tables -c ./data.db
 agent-sql run -c postgres://user:pass@localhost/myapp 'SELECT * FROM users'
 agent-sql run -c mysql://user:pass@localhost/myapp 'SELECT * FROM orders'
+
+# Snowflake ad-hoc (token via env var)
+AGENT_SQL_SNOWFLAKE_TOKEN=<pat> agent-sql run \
+  -c 'snowflake://myorg-myaccount/MY_DB/PUBLIC?warehouse=COMPUTE_WH' 'SELECT 1'
 ```
 
-### Named connections (PG / MySQL / SQLite)
+### Named connections
 
 For databases you use repeatedly, save a named connection:
 
 ```bash
 # PostgreSQL
-agent-sql credential add mydb --username app --password secret
-agent-sql connection add mydb --driver pg --host localhost --port 5432 --database myapp --credential mydb
+agent-sql credential add pg-cred --username app --password secret
+agent-sql connection add mydb --driver pg --host localhost --port 5432 --database myapp --credential pg-cred
 agent-sql connection test
 
 # MySQL
-agent-sql credential add mydb --username app --password secret
-agent-sql connection add mydb --driver mysql --host localhost --port 3306 --database myapp --credential mydb
+agent-sql credential add mysql-cred --username app --password secret
+agent-sql connection add mydb --driver mysql --host localhost --port 3306 --database myapp --credential mysql-cred
 
-# SQLite
+# SQLite (no credential needed)
 agent-sql connection add local --driver sqlite --path ./data.db
+
+# Snowflake (PAT as password, account can be orgname-accountname or account.region)
+agent-sql credential add sf-cred --password <pat_secret>
+agent-sql connection add sf-prod \
+  --driver snowflake \
+  --account myorg-myaccount \
+  --database MY_DB \
+  --schema PUBLIC \
+  --warehouse COMPUTE_WH \
+  --role MY_ROLE \
+  --credential sf-cred
 ```
 
 ### Explore schema
@@ -88,7 +103,8 @@ agent-sql query explain "SELECT * FROM orders JOIN users ON orders.user_id = use
 ```text
 agent-sql [-c <alias>] [--format json|yaml|csv] [--full] [--expand <fields>] [--timeout <ms>]
 ├── connection
-│   ├── add <alias> --driver pg|mysql|sqlite [--host --port --database --path --url --credential]
+│   ├── add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
+│   │                                                  [--account --warehouse --role --schema]  # snowflake
 │   ├── update <alias> [--credential <name>] [--no-credential] [--database <db>]
 │   ├── remove <alias>
 │   ├── list
@@ -130,13 +146,13 @@ Each command group has a `usage` subcommand for detailed, LLM-friendly documenta
 
 agent-sql is read-only by default with defense in depth:
 
-| Layer | PostgreSQL | MySQL | SQLite |
-| --- | --- | --- | --- |
-| **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default |
-| **Query flag** | `--write` required on each write query | Same | Same |
-| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement |
-| **Result cap** | `query.maxRows` (default 100) | Same | Same |
-| **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same | Same |
+| Layer | PostgreSQL | MySQL | SQLite | Snowflake |
+| --- | --- | --- | --- | --- |
+| **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default | Same as PG/MySQL |
+| **Query flag** | `--write` required on each write query | Same | Same | Same |
+| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement | Client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1` |
+| **Result cap** | `query.maxRows` (default 10,000) | Same | Same | Same |
+| **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same | Same | Same |
 
 Write operations require both a credential with `writePermission` and the `--write` flag on the query itself. This two-gate design prevents accidental writes even when credentials allow them.
 
@@ -166,7 +182,7 @@ Persistent settings stored in `~/.config/agent-sql/config.json`:
 | `defaults.format` | json | Default output format (json/yaml/csv) |
 | `defaults.limit` | 20 | Default row limit for queries |
 | `query.timeout` | 30000 | Query timeout in milliseconds |
-| `query.maxRows` | 100 | Maximum rows per query |
+| `query.maxRows` | 10000 | Maximum rows per query |
 | `truncation.maxLength` | 200 | String truncation threshold |
 
 ```bash
@@ -194,6 +210,7 @@ Connection resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config def
 | Variable | Description |
 | --- | --- |
 | `AGENT_SQL_CONNECTION` | Default connection alias |
+| `AGENT_SQL_SNOWFLAKE_TOKEN` | PAT for ad-hoc Snowflake connections |
 | `XDG_CONFIG_HOME` | Override config directory (default: `~/.config`) |
 
 ## Development

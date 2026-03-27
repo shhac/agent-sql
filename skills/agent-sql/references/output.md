@@ -43,15 +43,15 @@ Strings exceeding `truncation.maxLength` (default 200) are truncated with `...` 
   "columns": ["id", "name", "bio"],
   "rows": [
     { "id": 1, "name": "Alice", "bio": "Software engineer with 10 years of experience in distributed systems...", "@truncated": { "bio": 1847 } },
-    { "id": 2, "name": "Bob", "bio": null }
+    { "id": 2, "name": "Bob", "bio": null, "@truncated": null }
   ],
   "pagination": { "hasMore": false, "rowCount": 2 }
 }
 ```
 
-**With `--full` or `--expand bio` (expanded):** full string shown, `@truncated` absent.
+**With `--full` or `--expand bio` (expanded):** full string shown, `@truncated` null.
 
-Rows with no truncated fields have no `@truncated` key.
+`@truncated` is always present on every row: an object with original lengths when truncation occurred, `null` otherwise.
 
 Global flags: `--expand <field,...>` or `--full`.
 
@@ -62,7 +62,7 @@ Global flags: `--expand <field,...>` or `--full`.
   "columns": ["id", "name", "email", "bio"],
   "rows": [
     { "id": 1, "name": "Alice", "email": "alice@example.com", "bio": "Software eng...", "@truncated": { "bio": 12345 } },
-    { "id": 2, "name": "Bob", "email": "bob@example.com", "bio": null }
+    { "id": 2, "name": "Bob", "email": "bob@example.com", "bio": null, "@truncated": null }
   ],
   "pagination": {
     "hasMore": true,
@@ -75,21 +75,20 @@ Global flags: `--expand <field,...>` or `--full`.
 
 ## Query results -- compact format (`--compact`)
 
-Column names appear once; rows are arrays. Saves tokens for large results.
+Column names appear once; rows are arrays. `@truncated` is an additional column (always last). Saves tokens for large results.
 
 ```json
 {
-  "columns": ["id", "name", "email", "bio"],
+  "columns": ["id", "name", "email", "bio", "@truncated"],
   "rows": [
-    [1, "Alice", "alice@example.com", "Software eng..."],
-    [2, "Bob", "bob@example.com", null]
+    [1, "Alice", "alice@example.com", "Software eng...", { "bio": 12345 }],
+    [2, "Bob", "bob@example.com", null, null]
   ],
-  "truncated": { "bio": [12345, null] },
   "pagination": { "hasMore": true, "rowCount": 20 }
 }
 ```
 
-In compact mode, `truncated` is a top-level object mapping column names to arrays of original lengths (parallel to `rows`). `null` means no truncation for that row.
+In compact mode, `@truncated` is the last column in `columns` and the last element in each row array. It contains an object with original lengths when truncation occurred, `null` otherwise.
 
 ## Query results -- YAML format (`--format yaml`)
 
@@ -159,7 +158,7 @@ CSV only applies to tabular results (`query run`, `query sample`). Fields contai
 }
 ```
 
-SQLite omits the `schema` field.
+SQLite omits the `schema` field. Snowflake uses uppercase identifiers (e.g. `PUBLIC.USERS`).
 
 ## Schema describe (`schema describe`)
 
@@ -217,6 +216,15 @@ Combines tables, columns, indexes, and constraints in one response. Same structu
       "port": 5432,
       "database": "myapp",
       "credential": "prod-readonly"
+    },
+    {
+      "alias": "warehouse",
+      "driver": "snowflake",
+      "account": "myorg-myaccount",
+      "database": "ANALYTICS",
+      "schema": "PUBLIC",
+      "warehouse": "COMPUTE_WH",
+      "credential": "sf-readonly"
     }
   ]
 }

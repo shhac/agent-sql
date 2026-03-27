@@ -6,6 +6,7 @@ COMMANDS:
   credential add <name> [--username <user>] [--password <pass>] [--write]
     Store a named credential. Overwrites if name already exists.
     SQLite credentials may omit username/password (only writePermission matters).
+    Snowflake uses a PAT (Personal Access Token) as the password.
     --write grants permission for INSERT/UPDATE/DELETE/DDL operations.
 
   credential remove <name>
@@ -28,6 +29,11 @@ SQLITE NOTE:
   Username/password are optional since SQLite uses file-system permissions.
     agent-sql credential add local-write --write
     agent-sql connection add mydb --driver sqlite --path ./data.db --credential local-write
+
+SNOWFLAKE NOTE:
+  Snowflake authenticates via PAT (Personal Access Token) stored as the password.
+    agent-sql credential add sf-cred --username my_user --password <PAT>
+    agent-sql connection add warehouse --driver snowflake --account orgname-accountname --database MYDB --schema PUBLIC --warehouse COMPUTE_WH --credential sf-cred
 
 KEYCHAIN (macOS):
   On macOS, credentials are stored in the system keychain automatically.

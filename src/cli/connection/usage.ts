@@ -3,15 +3,20 @@ import type { Command } from "commander";
 const USAGE_TEXT = `connection — Manage SQL database connections
 
 COMMANDS:
-  connection add <alias> --driver pg|sqlite|mysql [options]
+  connection add <alias> --driver pg|sqlite|mysql|snowflake [options]
     Save a database connection. Alias is a short name (e.g. local, staging, prod).
-    --driver pg|sqlite|mysql  Database driver (auto-detected from --url if omitted).
+    --driver pg|sqlite|mysql|snowflake  Database driver (auto-detected from --url if omitted).
     --host <host>             Database host (pg, mysql).
     --port <port>             Database port (pg, mysql).
-    --database <db>           Database name (pg, mysql).
+    --database <db>           Database name (pg, mysql, snowflake).
     --path <path>             Path to SQLite file (resolved to absolute at add time).
     --url <url>               Connection URL. Driver auto-detected from scheme:
-                              postgres:// → pg, mysql:// → mysql, sqlite:// → sqlite.
+                              postgres:// → pg, mysql:// → mysql, sqlite:// → sqlite,
+                              snowflake:// → snowflake.
+    --account <id>            Snowflake account identifier (orgname-accountname or account.region).
+    --warehouse <wh>          Snowflake warehouse.
+    --role <role>             Snowflake role.
+    --schema <schema>         Snowflake schema.
     --credential <name>       Reference a stored credential for authentication.
     --default                 Set as default connection.
     First connection added automatically becomes the default.
@@ -37,7 +42,8 @@ COMMANDS:
 
 CREDENTIALS: Use "credential add" to store reusable auth. Reference via --credential.
 
-AD-HOC: -c also accepts file paths (./data.db) and URLs (postgres://..., mysql://...) without prior setup.
+AD-HOC: -c also accepts file paths (./data.db) and URLs (postgres://..., mysql://..., snowflake://...) without prior setup.
+  Snowflake ad-hoc: snowflake://account/database/schema?warehouse=WH&role=ROLE (requires AGENT_SQL_SNOWFLAKE_TOKEN env var).
 
 RESOLUTION ORDER: -c flag > AGENT_SQL_CONNECTION env > config default > error
 
