@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 
-const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSON output)
+const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSONL output)
 
-Supports PostgreSQL, MySQL, SQLite, and Snowflake. Output formats: JSON (default), YAML, CSV.
+Supports PostgreSQL, MySQL, SQLite, and Snowflake. Output formats: JSONL (default), JSON, YAML, CSV.
 
 AD-HOC USAGE (zero setup):
   agent-sql run -c ./data.db "SELECT * FROM users"                     # SQLite file path
@@ -34,7 +34,7 @@ COMMANDS:
   schema search <pattern>                              Search table/column names
   schema dump [--tables] [--include-system]            Full schema dump
 
-GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format json|yaml|csv, --expand <fields>, --full, --timeout <ms>
+GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
   -c accepts connection aliases, file paths (./data.db), or URLs (postgres://..., mysql://..., snowflake://...).
@@ -45,8 +45,10 @@ SAFETY: Read-only by default. Use --write to opt in to writes.
   --write requires a credential with writePermission (or credential-less SQLite).
   Results capped at query.maxRows (default 10,000). Timeout: query.timeout (default 30s).
 
-OUTPUT: JSON to stdout (default). Use --format yaml or --format csv for alternate formats.
-  CSV only applies to tabular results (query run, sample); non-tabular falls back to JSON.
+OUTPUT: JSONL to stdout (default) — one JSON object per line, no envelope.
+  Each row: {"col": val, ..., "@truncated": null}. Last line when more rows: {"@pagination": {...}}.
+  Non-tabular output (schema, config, explain, count, admin) uses JSON envelope regardless of format.
+  Use --format json for envelope format, --format yaml or --format csv for alternates.
   Errors always JSON to stderr: { "error": "...", "fixable_by": "agent"|"human" }.
   Long strings truncated with @truncated metadata. Use --full or --expand <field> to expand.
 

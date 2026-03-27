@@ -18,9 +18,9 @@ export const VALID_KEYS: KeyDefinition[] = [
   {
     key: "defaults.format",
     type: "string",
-    defaultValue: "json",
+    defaultValue: "jsonl",
     description: "Default output format",
-    allowedValues: ["json", "yaml", "csv"],
+    allowedValues: ["jsonl", "json", "yaml", "csv"],
   },
   {
     key: "query.timeout",

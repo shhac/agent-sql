@@ -2,14 +2,15 @@
 
 ## General
 
-All commands default to JSON output on stdout. Use `--format yaml` or `--format csv` for alternate formats.
+Query results default to JSONL on stdout (one JSON object per line, no envelope). Non-tabular output (schema, config, explain, count, connection/credential admin) uses JSON envelope regardless of format setting.
 
-- **JSON** (default): structured output for all commands
-- **YAML**: structured output for all commands (`--format yaml`)
-- **CSV**: tabular data only — applies to `query run` and `query sample` (`--format csv`). Non-tabular commands (schema, explain, count, config) fall back to JSON.
+- **JSONL** (default): one JSON object per row. Each line: `{"col": val, ..., "@truncated": null}`. When more rows exist, last line: `{"@pagination": {"hasMore": true, "rowCount": N}}`. Applies to `query run` and `query sample`.
+- **JSON** (`--format json`): structured envelope output for all commands
+- **YAML** (`--format yaml`): structured output for all commands
+- **CSV** (`--format csv`): tabular data only — applies to `query run` and `query sample`. Non-tabular commands fall back to JSON.
 - **Errors**: always JSON to stderr regardless of `--format`
 
-Set a persistent default with `agent-sql config set defaults.format yaml`. The `--format` flag overrides the config.
+Set a persistent default with `agent-sql config set defaults.format json`. The `--format` flag overrides the config.
 
 NULL values are preserved in query results (`"bio": null` is meaningful). Empty/null fields are pruned in admin/config output only.
 
@@ -36,17 +37,11 @@ The `fixable_by` field classifies errors:
 
 Strings exceeding `truncation.maxLength` (default 200) are truncated with `...` and a per-row `@truncated` metadata object showing original character counts.
 
-**Default format (truncated):**
+**Default format — JSONL (truncated):**
 
-```json
-{
-  "columns": ["id", "name", "bio"],
-  "rows": [
-    { "id": 1, "name": "Alice", "bio": "Software engineer with 10 years of experience in distributed systems...", "@truncated": { "bio": 1847 } },
-    { "id": 2, "name": "Bob", "bio": null, "@truncated": null }
-  ],
-  "pagination": { "hasMore": false, "rowCount": 2 }
-}
+```jsonl
+{"id":1,"name":"Alice","bio":"Software engineer with 10 years of experience in distributed systems...","@truncated":{"bio":1847}}
+{"id":2,"name":"Bob","bio":null,"@truncated":null}
 ```
 
 **With `--full` or `--expand bio` (expanded):** full string shown, `@truncated` null.
@@ -55,7 +50,19 @@ Strings exceeding `truncation.maxLength` (default 200) are truncated with `...` 
 
 Global flags: `--expand <field,...>` or `--full`.
 
-## Query results -- default format (`query run`, `query sample`)
+## Query results -- JSONL format (default) (`query run`, `query sample`)
+
+One JSON object per line, no envelope. Each line contains one row with all columns plus `@truncated` metadata:
+
+```jsonl
+{"id":1,"name":"Alice","email":"alice@example.com","bio":"Software eng...","@truncated":{"bio":12345}}
+{"id":2,"name":"Bob","email":"bob@example.com","bio":null,"@truncated":null}
+{"@pagination":{"hasMore":true,"rowCount":2}}
+```
+
+The `@pagination` line appears only when there are more rows beyond the limit. `rowCount` is the number of rows returned.
+
+## Query results -- JSON envelope format (`--format json`)
 
 ```json
 {

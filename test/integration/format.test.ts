@@ -70,6 +70,71 @@ const run = async (args: string[]): Promise<CliResult> => {
 };
 
 // ---------------------------------------------------------------------------
+// JSONL format (default)
+// ---------------------------------------------------------------------------
+
+describe("default format (jsonl)", () => {
+  test("query run produces one JSON object per line", async () => {
+    const result = await run(["query", "run", "SELECT id, name FROM users ORDER BY id"]);
+    expect(result.exitCode).toBe(0);
+    const lines = result.stdout.trimEnd().split("\n");
+    expect(lines).toHaveLength(2);
+    const row1 = JSON.parse(lines[0]!) as Record<string, unknown>;
+    const row2 = JSON.parse(lines[1]!) as Record<string, unknown>;
+    expect(row1.id).toBe(1);
+    expect(row1.name).toBe("Alice");
+    expect(row2.id).toBe(2);
+    expect(row2.name).toBe("Bob");
+  });
+
+  test("each JSONL line includes @truncated", async () => {
+    const result = await run(["query", "run", "SELECT id, name FROM users ORDER BY id"]);
+    const lines = result.stdout.trimEnd().split("\n");
+    for (const line of lines) {
+      const row = JSON.parse(line) as Record<string, unknown>;
+      expect("@truncated" in row).toBe(true);
+    }
+  });
+
+  test("--limit 1 appends @pagination line", async () => {
+    const result = await run([
+      "query",
+      "run",
+      "SELECT id, name FROM users ORDER BY id",
+      "--limit",
+      "1",
+    ]);
+    expect(result.exitCode).toBe(0);
+    const lines = result.stdout.trimEnd().split("\n");
+    expect(lines).toHaveLength(2);
+    const pagination = JSON.parse(lines[1]!) as Record<string, unknown>;
+    expect(pagination["@pagination"]).toEqual({ hasMore: true, rowCount: 1 });
+  });
+
+  test("compact mode still produces JSONL with named keys", async () => {
+    const result = await run([
+      "query",
+      "run",
+      "SELECT id, name FROM users ORDER BY id",
+      "--compact",
+    ]);
+    expect(result.exitCode).toBe(0);
+    const lines = result.stdout.trimEnd().split("\n");
+    expect(lines).toHaveLength(2);
+    const row1 = JSON.parse(lines[0]!) as Record<string, unknown>;
+    expect(row1.id).toBe(1);
+    expect(row1.name).toBe("Alice");
+  });
+
+  test("schema tables still uses JSON envelope (non-tabular)", async () => {
+    const result = await run(["schema", "tables"]);
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { tables: { name: string }[] };
+    expect(parsed.tables).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // YAML format
 // ---------------------------------------------------------------------------
 

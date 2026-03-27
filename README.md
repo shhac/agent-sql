@@ -2,7 +2,7 @@
 
 Read-only-by-default SQL CLI for AI agents.
 
-- **Structured JSON output** -- all output is JSON to stdout, errors to stderr
+- **Structured output** -- JSONL to stdout by default, errors to stderr as JSON
 - **LLM-optimized** -- `agent-sql usage` prints concise docs for agent consumption
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
@@ -104,7 +104,7 @@ agent-sql query explain "SELECT * FROM orders JOIN users ON orders.user_id = use
 ## Command map
 
 ```text
-agent-sql [-c <alias>] [--format json|yaml|csv] [--full] [--expand <fields>] [--timeout <ms>]
+agent-sql [-c <alias>] [--format jsonl|json|yaml|csv] [--full] [--expand <fields>] [--timeout <ms>]
 ├── credential                                         # set up credentials first
 │   ├── add <alias> --username <u> --password <p> [--write]
 │   ├── remove <alias> [--force]
@@ -161,19 +161,23 @@ Write operations require both a credential with `writePermission` and the `--wri
 
 ## Output
 
-- Default output is JSON to stdout. Use `--format yaml` or `--format csv` for alternate formats.
-- CSV applies to tabular results only (`query run`, `query sample`); non-tabular commands fall back to JSON
+- Default output is JSONL to stdout -- one JSON object per line, no envelope. Use `--format json`, `--format yaml`, or `--format csv` for alternate formats.
+- JSONL applies to tabular results (`query run`, `query sample`). Each line is `{"col": val, ..., "@truncated": null}`. When more rows exist, the last line is `{"@pagination": {"hasMore": true, "rowCount": N}}`.
+- Non-tabular output (schema, config, explain, count, connection/credential admin) uses JSON envelope regardless of format setting
+- CSV applies to tabular results only; non-tabular commands fall back to JSON
 - Errors always go to stderr as JSON `{ "error": "...", "fixable_by": "agent"|"human" }` with non-zero exit code
 - NULLs preserved in query results, empty fields pruned in admin output
 - Long strings truncated with per-row `@truncated` metadata showing original lengths
 - `--compact` mode uses parallel arrays (column names + row arrays) for reduced token count
 
 ```bash
+agent-sql run "SELECT * FROM users"                        # JSONL output (default)
+agent-sql --format json run "SELECT * FROM users"          # JSON envelope output
 agent-sql --full run "SELECT * FROM users"                 # expand all fields
 agent-sql --expand name,bio run "SELECT * FROM users"      # expand specific fields
 agent-sql --format yaml run "SELECT * FROM users"          # YAML output
 agent-sql --format csv run "SELECT * FROM users"           # CSV output
-agent-sql config set defaults.format yaml                  # persistent format default
+agent-sql config set defaults.format json                  # persistent format default
 ```
 
 ## Configuration
@@ -182,7 +186,7 @@ Persistent settings stored in `~/.config/agent-sql/config.json`:
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `defaults.format` | json | Default output format (json/yaml/csv) |
+| `defaults.format` | jsonl | Default output format (jsonl/json/yaml/csv) |
 | `defaults.limit` | 20 | Default row limit for queries |
 | `query.timeout` | 30000 | Query timeout in milliseconds |
 | `query.maxRows` | 10000 | Maximum rows per query |

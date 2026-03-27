@@ -1,6 +1,7 @@
 import { getFormat } from "./format.js";
 import { formatYaml } from "./format-yaml.js";
 import { formatCsv } from "./format-csv.js";
+import { formatJsonl } from "./format-jsonl.js";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -60,6 +61,10 @@ function writeStdout(json: string): void {
   process.stdout.write(`${json}\n`);
 }
 
+function writeStdoutRaw(text: string): void {
+  process.stdout.write(text);
+}
+
 function writeStderr(json: string): void {
   process.stderr.write(`${json}\n`);
 }
@@ -87,6 +92,19 @@ export function printError(payload: ErrorPayload): void {
 }
 
 export function printPaginated(payload: PaginatedPayload): void {
+  const format = getFormat();
+  if (format === "jsonl") {
+    const output = formatJsonl({
+      columns: payload.columns,
+      rows: payload.items,
+      hasMore: payload.hasMore,
+      rowCount: payload.rowCount,
+    });
+    if (output) {
+      writeStdoutRaw(output);
+    }
+    return;
+  }
   const result: Record<string, unknown> = {
     columns: payload.columns,
     rows: payload.items,
@@ -97,7 +115,6 @@ export function printPaginated(payload: PaginatedPayload): void {
       rowCount: payload.rowCount,
     };
   }
-  const format = getFormat();
   if (format === "csv") {
     writeStdout(formatCsv({ columns: payload.columns, rows: payload.items }).trimEnd());
     return;
@@ -110,6 +127,27 @@ export function printPaginated(payload: PaginatedPayload): void {
 }
 
 export function printCompact(payload: CompactPayload): void {
+  const format = getFormat();
+  // JSONL for compact: reconstruct named rows from columns + arrays
+  if (format === "jsonl") {
+    const namedRows = payload.rows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      payload.columns.forEach((col, i) => {
+        obj[col] = row[i];
+      });
+      return obj;
+    });
+    const output = formatJsonl({
+      columns: payload.columns,
+      rows: namedRows,
+      hasMore: payload.hasMore,
+      rowCount: payload.rowCount,
+    });
+    if (output) {
+      writeStdoutRaw(output);
+    }
+    return;
+  }
   const result: Record<string, unknown> = {
     columns: payload.columns,
     rows: payload.rows,
@@ -120,7 +158,6 @@ export function printCompact(payload: CompactPayload): void {
       rowCount: payload.rowCount,
     };
   }
-  const format = getFormat();
   if (format === "csv") {
     const namedRows = payload.rows.map((row) => {
       const obj: Record<string, unknown> = {};

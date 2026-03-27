@@ -25,7 +25,7 @@ program.option("-c, --connection <alias>", "Connection alias, file path, or URL 
 program.option("--expand <fields>", "Expand truncated fields (comma-separated field names)");
 program.option("--full", "Show full content for all truncated fields");
 program.option("--timeout <ms>", "Query timeout in milliseconds (overrides config)");
-program.option("--format <format>", "Output format: json, yaml, or csv (overrides config)");
+program.option("--format <format>", "Output format: jsonl (default), json, yaml, or csv");
 
 program.hook("preAction", (thisCommand) => {
   const opts = thisCommand.opts();
@@ -44,8 +44,8 @@ program.hook("preAction", (thisCommand) => {
     }
     configureTimeout(ms);
   }
-  const allowedFormats = ["json", "yaml", "csv"];
-  const format = opts.format ?? (getSetting("defaults.format") as string | undefined) ?? "json";
+  const allowedFormats = ["jsonl", "json", "yaml", "csv"];
+  const format = opts.format ?? (getSetting("defaults.format") as string | undefined) ?? "jsonl";
   if (!allowedFormats.includes(format)) {
     throw new Error(`Invalid --format: "${format}". Must be one of: ${allowedFormats.join(", ")}`);
   }

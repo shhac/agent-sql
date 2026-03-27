@@ -6,6 +6,7 @@ import {
   printCompact,
   resolvePageSize,
 } from "../src/lib/output.ts";
+import { configureFormat } from "../src/lib/format.ts";
 
 function captureStdout(fn: () => void): string {
   const chunks: string[] = [];
@@ -166,6 +167,9 @@ describe("printError", () => {
 });
 
 describe("printPaginated", () => {
+  beforeEach(() => configureFormat("json"));
+  afterEach(() => configureFormat("jsonl"));
+
   test("wraps items in rows key with columns", () => {
     const items = [{ id: 1 }, { id: 2 }];
     const output = captureStdout(() =>
@@ -213,6 +217,9 @@ describe("printPaginated", () => {
 });
 
 describe("printCompact", () => {
+  beforeEach(() => configureFormat("json"));
+  afterEach(() => configureFormat("jsonl"));
+
   test("produces array-of-arrays format", () => {
     const columns = ["id", "name", "email"];
     const rows = [
@@ -310,6 +317,9 @@ describe("resolvePageSize", () => {
 });
 
 describe("NULL preservation", () => {
+  beforeEach(() => configureFormat("json"));
+  afterEach(() => configureFormat("jsonl"));
+
   test("null values stay in printJson output", () => {
     const data = {
       columns: ["id", "name", "deleted_at"],

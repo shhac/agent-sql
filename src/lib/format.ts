@@ -1,6 +1,6 @@
-export type OutputFormat = "json" | "yaml" | "csv";
+export type OutputFormat = "jsonl" | "json" | "yaml" | "csv";
 
-let resolvedFormat: OutputFormat = "json";
+let resolvedFormat: OutputFormat = "jsonl";
 
 export const configureFormat = (format: string): void => {
   resolvedFormat = format as OutputFormat;

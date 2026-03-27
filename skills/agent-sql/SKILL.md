@@ -11,7 +11,7 @@ description: |
 
 # SQL database exploration with `agent-sql`
 
-`agent-sql` is a read-only-by-default SQL CLI binary on `$PATH`. All output is JSON to stdout. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
+`agent-sql` is a read-only-by-default SQL CLI binary on `$PATH`. Query output is JSONL to stdout (one JSON object per line, no envelope). Non-tabular output (schema, config, admin) uses JSON envelope. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
 
 Supports PostgreSQL, MySQL, SQLite, and Snowflake.
 
@@ -106,7 +106,7 @@ agent-sql config get query.timeout
 agent-sql config reset                               # restore defaults
 ```
 
-Key settings: `defaults.format` (json), `defaults.limit` (20), `query.timeout` (30000ms), `query.maxRows` (10000), `truncation.maxLength` (200).
+Key settings: `defaults.format` (jsonl), `defaults.limit` (20), `query.timeout` (30000ms), `query.maxRows` (10000), `truncation.maxLength` (200).
 
 ## Connection management
 

@@ -46,7 +46,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 | Flag                       | Description                                  |
 | -------------------------- | -------------------------------------------- |
 | `-c, --connection <alias>` | Connection alias, file path, or URL (overrides env/default). File paths (e.g. `./data.db`) and URLs (e.g. `postgres://...`, `mysql://...`, `snowflake://...`) work without prior setup. Snowflake ad-hoc: `snowflake://account/database/schema?warehouse=WH` with `AGENT_SQL_SNOWFLAKE_TOKEN` env var. Account format: `orgname-accountname` or `account.region`. |
-| `--format json\|yaml\|csv` | Output format (default: json or config)       |
+| `--format jsonl\|json\|yaml\|csv` | Output format (default: jsonl or config)       |
 | `--expand <field,...>`     | Expand specific truncated fields              |
 | `--full`                   | Expand all truncated fields                   |
 | `--timeout <ms>`           | Query timeout override                        |
@@ -55,7 +55,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 
 | Key                  | Default | Range       | Description                         |
 | -------------------- | ------- | ----------- | ----------------------------------- |
-| `defaults.format`    | json    | json/yaml/csv | Default output format               |
+| `defaults.format`    | jsonl   | jsonl/json/yaml/csv | Default output format               |
 | `defaults.limit`     | 20      | 1-1000      | Default row limit for queries       |
 | `query.timeout`      | 30000   | 1000-300000 | Query timeout in ms                 |
 | `query.maxRows`      | 10000   | 1-10000     | Max rows per query                  |

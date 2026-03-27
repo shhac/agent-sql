@@ -98,7 +98,13 @@ const parseStdout = (result: CliResult): unknown => JSON.parse(result.stdout);
 
 describe("query run", () => {
   test("returns correct rows with columns", async () => {
-    const result = await run(["query", "run", "SELECT * FROM users ORDER BY id"]);
+    const result = await run([
+      "query",
+      "run",
+      "SELECT * FROM users ORDER BY id",
+      "--format",
+      "json",
+    ]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as { columns: string[]; rows: Record<string, unknown>[] };
     expect(parsed.columns).toEqual(["id", "name", "email", "bio", "created_at"]);
@@ -110,7 +116,15 @@ describe("query run", () => {
   });
 
   test("--limit 1 returns 1 row with hasMore", async () => {
-    const result = await run(["query", "run", "SELECT * FROM users ORDER BY id", "--limit", "1"]);
+    const result = await run([
+      "query",
+      "run",
+      "SELECT * FROM users ORDER BY id",
+      "--limit",
+      "1",
+      "--format",
+      "json",
+    ]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as {
       rows: Record<string, unknown>[];
@@ -126,6 +140,8 @@ describe("query run", () => {
       "run",
       "SELECT id, name FROM users ORDER BY id",
       "--compact",
+      "--format",
+      "json",
     ]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as { columns: string[]; rows: unknown[][] };
@@ -137,7 +153,7 @@ describe("query run", () => {
 
 describe("run (top-level alias)", () => {
   test("works identically to query run", async () => {
-    const result = await run(["run", "SELECT id, name FROM users ORDER BY id"]);
+    const result = await run(["run", "SELECT id, name FROM users ORDER BY id", "--format", "json"]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as { columns: string[]; rows: Record<string, unknown>[] };
     expect(parsed.columns).toEqual(["id", "name"]);
@@ -147,7 +163,7 @@ describe("run (top-level alias)", () => {
 
 describe("query sample", () => {
   test("returns sample rows", async () => {
-    const result = await run(["query", "sample", "users", "--limit", "2"]);
+    const result = await run(["query", "sample", "users", "--limit", "2", "--format", "json"]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as { rows: Record<string, unknown>[] };
     expect(parsed.rows).toHaveLength(2);
@@ -185,7 +201,13 @@ describe("query explain", () => {
 
 describe("truncation", () => {
   test("bio field gets truncated and @truncated metadata present", async () => {
-    const result = await run(["query", "run", "SELECT * FROM users WHERE id = 1"]);
+    const result = await run([
+      "query",
+      "run",
+      "SELECT * FROM users WHERE id = 1",
+      "--format",
+      "json",
+    ]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as { rows: Record<string, unknown>[] };
     const alice = parsed.rows[0]!;
@@ -217,6 +239,8 @@ describe("write protection", () => {
       "run",
       "INSERT INTO users (id, name, email) VALUES (99, 'Test', 'test@example.com')",
       "--write",
+      "--format",
+      "json",
     ]);
     expect(result.exitCode).toBe(0);
     const parsed = parseStdout(result) as {

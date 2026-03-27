@@ -31,6 +31,7 @@ describe("parseConfigValue", () => {
 
   describe("string keys", () => {
     test("accepts an allowed value", () => {
+      expect(parseConfigValue("defaults.format", "jsonl")).toBe("jsonl");
       expect(parseConfigValue("defaults.format", "json")).toBe("json");
       expect(parseConfigValue("defaults.format", "yaml")).toBe("yaml");
       expect(parseConfigValue("defaults.format", "csv")).toBe("csv");
@@ -38,7 +39,7 @@ describe("parseConfigValue", () => {
 
     test("rejects a disallowed value", () => {
       expect(() => parseConfigValue("defaults.format", "xml")).toThrow(
-        /must be one of: json, yaml, csv.*Got: "xml"/,
+        /must be one of: jsonl, json, yaml, csv.*Got: "xml"/,
       );
     });
 
@@ -63,6 +64,6 @@ describe("VALID_KEYS", () => {
     const formatDef = VALID_KEYS.find((k) => k.key === "defaults.format");
     expect(formatDef).toBeDefined();
     expect(formatDef!.type).toBe("string");
-    expect(formatDef!.defaultValue).toBe("json");
+    expect(formatDef!.defaultValue).toBe("jsonl");
   });
 });
