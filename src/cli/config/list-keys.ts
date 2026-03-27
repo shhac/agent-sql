@@ -13,7 +13,9 @@ export function registerListKeys(config: Command): void {
           type: k.type,
           default: k.defaultValue,
           description: k.description,
-          ...(k.type === "number" ? { min: k.min, max: k.max } : { allowedValues: k.allowedValues }),
+          ...(k.type === "number"
+            ? { min: k.min, max: k.max }
+            : { allowedValues: k.allowedValues }),
         })),
       });
     });

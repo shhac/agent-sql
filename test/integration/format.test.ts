@@ -76,9 +76,11 @@ const run = async (args: string[]): Promise<CliResult> => {
 describe("--format yaml", () => {
   test("query run produces parseable YAML with correct data", async () => {
     const result = await run([
-      "query", "run",
+      "query",
+      "run",
       "SELECT id, name FROM users ORDER BY id",
-      "--format", "yaml",
+      "--format",
+      "yaml",
     ]);
     expect(result.exitCode).toBe(0);
     const parsed = yaml.load(result.stdout) as {
@@ -105,9 +107,11 @@ describe("--format yaml", () => {
 
   test("errors are always JSON even with --format yaml", async () => {
     const result = await run([
-      "query", "run",
+      "query",
+      "run",
       "SELECT * FROM nonexistent_table",
-      "--format", "yaml",
+      "--format",
+      "yaml",
     ]);
     expect(result.exitCode).toBe(1);
     const parsed = JSON.parse(result.stderr) as { error: string };
@@ -122,9 +126,11 @@ describe("--format yaml", () => {
 describe("--format csv", () => {
   test("query run produces CSV with header and data rows", async () => {
     const result = await run([
-      "query", "run",
+      "query",
+      "run",
       "SELECT id, name FROM users ORDER BY id",
-      "--format", "csv",
+      "--format",
+      "csv",
     ]);
     expect(result.exitCode).toBe(0);
     const lines = result.stdout.trimEnd().split("\n");
@@ -142,9 +148,12 @@ describe("--format csv", () => {
 
   test("compact mode with --format csv produces CSV", async () => {
     const result = await run([
-      "query", "run",
+      "query",
+      "run",
       "SELECT id, name FROM users ORDER BY id",
-      "--compact", "--format", "csv",
+      "--compact",
+      "--format",
+      "csv",
     ]);
     expect(result.exitCode).toBe(0);
     const lines = result.stdout.trimEnd().split("\n");

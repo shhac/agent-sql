@@ -44,9 +44,7 @@ program.hook("preAction", (thisCommand) => {
   const allowedFormats = ["json", "yaml", "csv"];
   const format = opts.format ?? (getSetting("defaults.format") as string | undefined) ?? "json";
   if (!allowedFormats.includes(format)) {
-    throw new Error(
-      `Invalid --format: "${format}". Must be one of: ${allowedFormats.join(", ")}`,
-    );
+    throw new Error(`Invalid --format: "${format}". Must be one of: ${allowedFormats.join(", ")}`);
   }
   configureFormat(format);
 });
