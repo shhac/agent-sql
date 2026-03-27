@@ -20,7 +20,13 @@ type PgOpts = {
   readonly?: boolean;
 };
 
-const WRITE_COMMANDS: ReadonlySet<string> = new Set(["INSERT", "UPDATE", "DELETE", "MERGE", "COPY"]);
+const WRITE_COMMANDS: ReadonlySet<string> = new Set([
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "MERGE",
+  "COPY",
+]);
 
 const parseTableRef = (table: string): { schema: string; table: string } => {
   const parts = table.split(".");

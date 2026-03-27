@@ -38,7 +38,8 @@ export function registerDump(parent: Command): void {
     )
     .option("--include-system", "Include system tables")
     .action(async (opts: DumpOpts) => {
-      const connectionAlias = opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias =
+        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });

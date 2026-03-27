@@ -7,5 +7,4 @@ export const quoteIdentPg = (name: string): string => {
 
 // Backtick identifier escaping for MySQL.
 // MySQL does not use schema.table (single database context), so no dot splitting.
-export const quoteIdentMysql = (name: string): string =>
-  `\`${name.replace(/`/g, "``")}\``;
+export const quoteIdentMysql = (name: string): string => `\`${name.replace(/`/g, "``")}\``;

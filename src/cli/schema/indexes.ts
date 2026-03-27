@@ -13,7 +13,8 @@ export function registerIndexes(schema: Command): void {
     .description("Show indexes for a table or all tables")
     .argument("[table]", "Table name (supports dot notation: schema.table)")
     .action(async (table: string | undefined, opts: IndexesOpts) => {
-      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias =
+        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });

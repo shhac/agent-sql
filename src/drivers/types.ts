@@ -40,10 +40,7 @@ export type ConstraintInfo = {
   definition?: string;
 };
 
-export const detectCommand = (
-  sql: string,
-  commands: ReadonlySet<string>,
-): string | undefined => {
+export const detectCommand = (sql: string, commands: ReadonlySet<string>): string | undefined => {
   const trimmed = sql.trimStart().toUpperCase();
   for (const cmd of commands) {
     if (trimmed.startsWith(cmd)) {

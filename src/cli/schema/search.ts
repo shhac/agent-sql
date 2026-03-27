@@ -13,7 +13,8 @@ export function registerSearch(schema: Command): void {
     .description("Search table and column names by pattern")
     .argument("<pattern>", "Search pattern (e.g. 'user', 'email')")
     .action(async (pattern: string, opts: SearchOpts) => {
-      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias =
+        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });

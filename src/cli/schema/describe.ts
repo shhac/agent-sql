@@ -15,7 +15,8 @@ export function registerDescribe(schema: Command): void {
     .argument("<table>", "Table name (supports dot notation: schema.table)")
     .option("--detailed", "Include constraints, indexes, and comments")
     .action(async (table: string, opts: DescribeOpts) => {
-      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias =
+        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });

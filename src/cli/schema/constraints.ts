@@ -33,7 +33,8 @@ export function registerConstraints(schema: Command): void {
         return;
       }
 
-      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias =
+        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });

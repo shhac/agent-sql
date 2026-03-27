@@ -14,7 +14,8 @@ export function registerTables(schema: Command): void {
     .description("List all tables")
     .option("--include-system", "Include system tables (pg_catalog, information_schema)")
     .action(async (opts: TablesOpts) => {
-      const connectionAlias = opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias =
+        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });
