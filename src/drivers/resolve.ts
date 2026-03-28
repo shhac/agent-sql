@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 import type { Driver } from "./types";
 import type { DriverConnection } from "./types";
 import type { Connection } from "../lib/config";
@@ -10,35 +8,19 @@ import { connectPg } from "./pg";
 import { connectSqlite } from "./sqlite";
 import { connectMysql } from "./mysql";
 import { connectSnowflake } from "./snowflake";
+import { detectDriverFromUrl } from "./resolve-detect";
+import { resolveAdHocConnection } from "./resolve-ad-hoc";
+
+export {
+  detectDriverFromUrl,
+  isConnectionUrl,
+  isFilePath,
+  SQLITE_FILE_EXTENSIONS,
+} from "./resolve-detect";
 
 type ResolveOpts = {
   connection?: string;
   write?: boolean;
-};
-
-const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
-  [/^postgres(ql)?:\/\//, "pg"],
-  [/^mysql:\/\//, "mysql"],
-  [/^mariadb:\/\//, "mysql"],
-  [/^sqlite:\/\//, "sqlite"],
-  [/^snowflake:\/\//, "snowflake"],
-];
-
-export const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
-
-export const detectDriverFromUrl = (url: string): Driver | undefined => {
-  for (const [pattern, driver] of DRIVER_URL_PATTERNS) {
-    if (pattern.test(url)) {
-      return driver;
-    }
-  }
-
-  const lower = url.toLowerCase();
-  if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-    return "sqlite";
-  }
-
-  return undefined;
 };
 
 const resolveAlias = (explicit?: string): string => {
@@ -134,125 +116,6 @@ const trackDriver = (connection: DriverConnection): DriverConnection => {
       return originalClose();
     },
   };
-};
-
-export const isConnectionUrl = (value: string): boolean =>
-  DRIVER_URL_PATTERNS.some(([pattern]) => pattern.test(value));
-
-export const isFilePath = (value: string): boolean => {
-  const lower = value.toLowerCase();
-  if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-    return true;
-  }
-  if (value.startsWith("/") || value.startsWith("./") || value.startsWith("../")) {
-    return existsSync(resolve(value));
-  }
-  return false;
-};
-
-const parseConnectionUrl = (
-  url: string,
-): { host: string; port: number; database: string; username: string; password: string } => {
-  const parsed = new URL(url);
-  return {
-    host: parsed.hostname || "localhost",
-    port: parsed.port ? Number(parsed.port) : 0,
-    database: parsed.pathname.replace(/^\//, "") || "",
-    username: decodeURIComponent(parsed.username),
-    password: decodeURIComponent(parsed.password),
-  };
-};
-
-const rejectAdHocUrlWrite = (write: boolean): void => {
-  if (!write) {
-    return;
-  }
-  throw Object.assign(
-    new Error(
-      "Write mode is not available for ad-hoc connections. Set up a named connection with a write-enabled credential to use --write.",
-    ),
-    { fixableBy: "human" as const },
-  );
-};
-
-const resolveAdHocConnection = async (
-  connectionStr: string,
-  write: boolean,
-): Promise<DriverConnection | undefined> => {
-  // URL check first — more recognizable shape than file paths
-  if (isConnectionUrl(connectionStr)) {
-    const driver = detectDriverFromUrl(connectionStr);
-    if (!driver) {
-      return undefined;
-    }
-
-    if (driver === "sqlite") {
-      rejectAdHocUrlWrite(write);
-      const filePath = connectionStr.replace(/^sqlite:\/\//, "");
-      return trackDriver(await connectSqlite({ path: resolve(filePath), readonly: true }));
-    }
-
-    if (driver === "snowflake") {
-      rejectAdHocUrlWrite(write);
-      const token = process.env.AGENT_SQL_SNOWFLAKE_TOKEN;
-      if (!token) {
-        throw Object.assign(
-          new Error(
-            "Ad-hoc Snowflake connections require AGENT_SQL_SNOWFLAKE_TOKEN environment variable.",
-          ),
-          { fixableBy: "human" as const },
-        );
-      }
-      const parsed = new URL(connectionStr);
-      const pathParts = parsed.pathname.replace(/^\//, "").split("/");
-      return trackDriver(
-        await connectSnowflake({
-          account: parsed.hostname,
-          database: pathParts[0] || undefined,
-          schema: pathParts[1] || undefined,
-          warehouse: parsed.searchParams.get("warehouse") ?? undefined,
-          role: parsed.searchParams.get("role") ?? undefined,
-          token,
-          readonly: true,
-        }),
-      );
-    }
-
-    rejectAdHocUrlWrite(write);
-    const urlParts = parseConnectionUrl(connectionStr);
-    const defaultPort = driver === "pg" ? 5432 : 3306;
-    const defaultDb = driver === "pg" ? "postgres" : "mysql";
-    const connectOpts = {
-      host: urlParts.host,
-      port: urlParts.port || defaultPort,
-      database: urlParts.database || defaultDb,
-      username: urlParts.username,
-      password: urlParts.password,
-      readonly: true,
-    };
-
-    if (driver === "pg") {
-      return trackDriver(await connectPg(connectOpts));
-    }
-    return trackDriver(await connectMysql(connectOpts));
-  }
-
-  // File path check — SQLite file, write allowed via --write
-  if (isFilePath(connectionStr)) {
-    const absPath = resolve(connectionStr);
-    const fileExists = await Bun.file(absPath).exists();
-    if (!fileExists && !write) {
-      throw Object.assign(new Error(`SQLite database not found: ${connectionStr}`), {
-        hint: "Check the file path, or use --write to create a new database.",
-        fixableBy: "agent" as const,
-      });
-    }
-    return trackDriver(
-      await connectSqlite({ path: absPath, readonly: !write, create: !fileExists }),
-    );
-  }
-
-  return undefined;
 };
 
 type ConfigConnectOpts = {
@@ -358,7 +221,7 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
   const write = opts?.write ?? false;
 
   // Try ad-hoc connection (URL or file path) before config lookup
-  const adHoc = await resolveAdHocConnection(alias, write);
+  const adHoc = await resolveAdHocConnection({ connectionStr: alias, write, trackDriver });
   if (adHoc) {
     return adHoc;
   }

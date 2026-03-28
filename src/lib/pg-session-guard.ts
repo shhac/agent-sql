@@ -1,4 +1,5 @@
 import { loadModule, parseSync } from "libpg-query";
+import { withCatchSync } from "./with-catch";
 
 type ValidationResult = { ok: true } | { ok: false; error: string };
 
@@ -11,12 +12,9 @@ export function validateReadOnlyQuery(sql: string): ValidationResult {
     return { ok: false, error: "Empty query" };
   }
 
-  let parsed: ReturnType<typeof parseSync>;
-  try {
-    parsed = parseSync(sql);
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: `SQL parse error: ${msg}` };
+  const [parseError, parsed] = withCatchSync(() => parseSync(sql));
+  if (parseError) {
+    return { ok: false, error: `SQL parse error: ${parseError.message}` };
   }
 
   const { stmts } = parsed;

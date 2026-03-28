@@ -4,7 +4,7 @@ import type { Driver, Connection } from "../../lib/config.ts";
 import { storeConnection, setDefaultConnection } from "../../lib/config.ts";
 import { getCredential, getCredentialNames } from "../../lib/credentials.ts";
 import { printJson, printError } from "../../lib/output.ts";
-import { detectDriverFromUrl, isFilePath } from "../../drivers/resolve.ts";
+import { detectDriverFromUrl, isFilePath, SQLITE_FILE_EXTENSIONS } from "../../drivers/resolve.ts";
 
 type AddOpts = {
   driver?: Driver;
@@ -20,8 +20,6 @@ type AddOpts = {
   schema?: string;
   default?: boolean;
 };
-
-const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
 
 const resolveDriver = (opts: AddOpts): Driver => {
   if (opts.driver) {
