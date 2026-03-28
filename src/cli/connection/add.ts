@@ -68,12 +68,12 @@ const parseConnectionString = (connStr: string, opts: AddOpts): void => {
     if (!opts.account) {
       opts.account = parsed.hostname;
     }
-    const pathParts = parsed.pathname.replace(/^\//, "").split("/");
-    if (!opts.database && pathParts[0]) {
-      opts.database = pathParts[0];
+    const [database, schema] = parsed.pathname.replace(/^\//, "").split("/");
+    if (!opts.database && database) {
+      opts.database = database;
     }
-    if (!opts.schema && pathParts[1]) {
-      opts.schema = pathParts[1];
+    if (!opts.schema && schema) {
+      opts.schema = schema;
     }
     const wh = parsed.searchParams.get("warehouse");
     if (!opts.warehouse && wh) {
@@ -159,7 +159,8 @@ export function registerAdd(connection: Command): void {
     .option("--schema <schema>", "Default schema")
     .option("--credential <name>", "Credential alias for authentication")
     .option("--default", "Set as default connection")
-    .action((alias: string, connStr: string | undefined, opts: AddOpts) => {
+    .action((...args: [string, string | undefined, AddOpts]) => {
+      const [alias, connStr, opts] = args;
       try {
         if (connStr) {
           parseConnectionString(connStr, opts);
