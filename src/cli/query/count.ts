@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { DriverConnection } from "../../drivers/types.ts";
 import { printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
+import { resolveConnectionAlias, withDriverAction } from "../action-helpers.ts";
 
 type CountOptions = {
   connection?: string;
@@ -25,15 +25,11 @@ export function registerCount(parent: Command): void {
     .option("--where <condition>", "WHERE clause filter")
     .action(async (table: string, opts: CountOptions) => {
       const connectionAlias = resolveConnectionAlias(opts, parent);
-      try {
-        await withDriver({ connection: connectionAlias }, async (driver) => {
-          const sql = buildCountSql(driver, { table, where: opts.where });
-          const result = await driver.query(sql);
-          const count = result.rows[0]?.count ?? 0;
-          printJson({ table, count: Number(count) });
-        });
-      } catch (err) {
-        handleActionError(err, connectionAlias);
-      }
+      await withDriverAction({ connection: connectionAlias }, async (driver) => {
+        const sql = buildCountSql(driver, { table, where: opts.where });
+        const result = await driver.query(sql);
+        const count = result.rows[0]?.count ?? 0;
+        printJson({ table, count: Number(count) });
+      });
     });
 }

@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getConfigDir, ensureConfigDir } from "./paths";
+import { validateConfig } from "./validate";
+import type { Driver } from "../drivers/types";
 
-export type Driver = "pg" | "sqlite" | "mysql" | "snowflake";
+export type { Driver };
 
 export type Connection = {
   driver: Driver;
@@ -62,11 +64,12 @@ export const readConfig = (): Config => {
     return { connections: {}, settings: {} };
   }
   try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Config>;
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const validated = validateConfig(parsed);
     cache.config = {
-      default_connection: raw.default_connection,
-      connections: raw.connections ?? {},
-      settings: raw.settings ?? {},
+      default_connection: validated.default_connection,
+      connections: validated.connections as Record<string, Connection>,
+      settings: validated.settings as Settings,
     };
     return cache.config;
   } catch {

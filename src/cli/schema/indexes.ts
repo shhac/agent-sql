@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
+import { resolveConnectionAlias, withDriverAction } from "../action-helpers.ts";
 
 type IndexesOpts = {
   connection?: string;
@@ -14,13 +14,9 @@ export function registerIndexes(schema: Command): void {
     .action(async (table: string | undefined, opts: IndexesOpts) => {
       const connectionAlias = resolveConnectionAlias(opts, schema);
 
-      try {
-        await withDriver({ connection: connectionAlias }, async (driver) => {
-          const indexes = await driver.getIndexes(table);
-          printJson({ indexes });
-        });
-      } catch (err) {
-        handleActionError(err, connectionAlias);
-      }
+      await withDriverAction({ connection: connectionAlias }, async (driver) => {
+        const indexes = await driver.getIndexes(table);
+        printJson({ indexes });
+      });
     });
 }

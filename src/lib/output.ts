@@ -2,6 +2,7 @@ import { getFormat } from "./format.js";
 import { formatYaml } from "./format-yaml.js";
 import { formatCsv } from "./format-csv.js";
 import { formatJsonl } from "./format-jsonl.js";
+import { assertNever } from "./assert-never.js";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -70,11 +71,20 @@ function writeStderr(json: string): void {
 export function printJson(data: unknown, options?: PrintJsonOptions): void {
   const output = options?.prune ? (pruneEmpty(data) ?? {}) : data;
   const format = getFormat();
-  if (format === "yaml") {
-    writeStdout(formatYaml(output).trimEnd());
-    return;
+  switch (format) {
+    case "yaml": {
+      writeStdout(formatYaml(output).trimEnd());
+      return;
+    }
+    case "jsonl":
+    case "csv":
+    case "json": {
+      writeStdout(JSON.stringify(output, null, 2));
+      return;
+    }
+    default:
+      assertNever(format);
   }
-  writeStdout(JSON.stringify(output, null, 2));
 }
 
 export function printError(payload: ErrorPayload): void {
@@ -91,37 +101,54 @@ export function printError(payload: ErrorPayload): void {
 
 export function printPaginated(payload: PaginatedPayload): void {
   const format = getFormat();
-  if (format === "jsonl") {
-    const output = formatJsonl({
-      columns: payload.columns,
-      rows: payload.items,
-      hasMore: payload.hasMore,
-      rowCount: payload.rowCount,
-    });
-    if (output) {
-      writeStdoutRaw(output);
+  switch (format) {
+    case "jsonl": {
+      const output = formatJsonl({
+        columns: payload.columns,
+        rows: payload.items,
+        hasMore: payload.hasMore,
+        rowCount: payload.rowCount,
+      });
+      if (output) {
+        writeStdoutRaw(output);
+      }
+      return;
     }
-    return;
+    case "csv": {
+      writeStdout(formatCsv({ columns: payload.columns, rows: payload.items }).trimEnd());
+      return;
+    }
+    case "yaml": {
+      const result: Record<string, unknown> = {
+        columns: payload.columns,
+        rows: payload.items,
+      };
+      if (payload.hasMore) {
+        result.pagination = {
+          hasMore: true,
+          rowCount: payload.rowCount,
+        };
+      }
+      writeStdout(formatYaml(result).trimEnd());
+      return;
+    }
+    case "json": {
+      const result: Record<string, unknown> = {
+        columns: payload.columns,
+        rows: payload.items,
+      };
+      if (payload.hasMore) {
+        result.pagination = {
+          hasMore: true,
+          rowCount: payload.rowCount,
+        };
+      }
+      writeStdout(JSON.stringify(result, null, 2));
+      return;
+    }
+    default:
+      assertNever(format);
   }
-  const result: Record<string, unknown> = {
-    columns: payload.columns,
-    rows: payload.items,
-  };
-  if (payload.hasMore) {
-    result.pagination = {
-      hasMore: true,
-      rowCount: payload.rowCount,
-    };
-  }
-  if (format === "csv") {
-    writeStdout(formatCsv({ columns: payload.columns, rows: payload.items }).trimEnd());
-    return;
-  }
-  if (format === "yaml") {
-    writeStdout(formatYaml(result).trimEnd());
-    return;
-  }
-  writeStdout(JSON.stringify(result, null, 2));
 }
 
 const compactToNamed = (columns: string[], rows: unknown[][]): Record<string, unknown>[] =>
@@ -135,39 +162,56 @@ const compactToNamed = (columns: string[], rows: unknown[][]): Record<string, un
 
 export function printCompact(payload: CompactPayload): void {
   const format = getFormat();
-  if (format === "jsonl") {
-    const namedRows = compactToNamed(payload.columns, payload.rows);
-    const output = formatJsonl({
-      columns: payload.columns,
-      rows: namedRows,
-      hasMore: payload.hasMore,
-      rowCount: payload.rowCount,
-    });
-    if (output) {
-      writeStdoutRaw(output);
+  switch (format) {
+    case "jsonl": {
+      const namedRows = compactToNamed(payload.columns, payload.rows);
+      const output = formatJsonl({
+        columns: payload.columns,
+        rows: namedRows,
+        hasMore: payload.hasMore,
+        rowCount: payload.rowCount,
+      });
+      if (output) {
+        writeStdoutRaw(output);
+      }
+      return;
     }
-    return;
+    case "csv": {
+      const namedRows = compactToNamed(payload.columns, payload.rows);
+      writeStdout(formatCsv({ columns: payload.columns, rows: namedRows }).trimEnd());
+      return;
+    }
+    case "yaml": {
+      const result: Record<string, unknown> = {
+        columns: payload.columns,
+        rows: payload.rows,
+      };
+      if (payload.hasMore) {
+        result.pagination = {
+          hasMore: true,
+          rowCount: payload.rowCount,
+        };
+      }
+      writeStdout(formatYaml(result).trimEnd());
+      return;
+    }
+    case "json": {
+      const result: Record<string, unknown> = {
+        columns: payload.columns,
+        rows: payload.rows,
+      };
+      if (payload.hasMore) {
+        result.pagination = {
+          hasMore: true,
+          rowCount: payload.rowCount,
+        };
+      }
+      writeStdout(JSON.stringify(result, null, 2));
+      return;
+    }
+    default:
+      assertNever(format);
   }
-  const result: Record<string, unknown> = {
-    columns: payload.columns,
-    rows: payload.rows,
-  };
-  if (payload.hasMore) {
-    result.pagination = {
-      hasMore: true,
-      rowCount: payload.rowCount,
-    };
-  }
-  if (format === "csv") {
-    const namedRows = compactToNamed(payload.columns, payload.rows);
-    writeStdout(formatCsv({ columns: payload.columns, rows: namedRows }).trimEnd());
-    return;
-  }
-  if (format === "yaml") {
-    writeStdout(formatYaml(result).trimEnd());
-    return;
-  }
-  writeStdout(JSON.stringify(result, null, 2));
 }
 
 export function resolvePageSize(opts: PageSizeOptions): number {

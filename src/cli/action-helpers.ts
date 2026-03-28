@@ -23,6 +23,17 @@ export const withDriver = async <T>(
   }
 };
 
+export const withDriverAction = async (
+  opts: WithDriverOpts & { connectionAlias?: string },
+  fn: (driver: DriverConnection) => Promise<void>,
+): Promise<void> => {
+  try {
+    await withDriver(opts, fn);
+  } catch (err) {
+    handleActionError(err, opts.connectionAlias ?? opts.connection);
+  }
+};
+
 export const handleActionError = (err: unknown, connectionAlias?: string): void => {
   const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
     connectionAlias,

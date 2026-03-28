@@ -1,12 +1,12 @@
-type FixableBy = "agent" | "human" | "retry";
+export type FixableBy = "agent" | "human" | "retry";
 
-type EnhancedError = {
+export type EnhancedError = {
   message: string;
   hint?: string;
   fixableBy: FixableBy;
 };
 
-type ErrorContext = {
+export type ErrorContext = {
   connectionAlias?: string;
   availableTables?: string[];
   availableConnections?: string[];

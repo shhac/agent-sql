@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
+import { resolveConnectionAlias, withDriverAction } from "../action-helpers.ts";
 
 type TablesOpts = {
   connection?: string;
@@ -15,13 +15,9 @@ export function registerTables(schema: Command): void {
     .action(async (opts: TablesOpts) => {
       const connectionAlias = resolveConnectionAlias(opts, schema);
 
-      try {
-        await withDriver({ connection: connectionAlias }, async (driver) => {
-          const tables = await driver.getTables({ includeSystem: opts.includeSystem });
-          printJson({ tables });
-        });
-      } catch (err) {
-        handleActionError(err, connectionAlias);
-      }
+      await withDriverAction({ connection: connectionAlias }, async (driver) => {
+        const tables = await driver.getTables({ includeSystem: opts.includeSystem });
+        printJson({ tables });
+      });
     });
 }

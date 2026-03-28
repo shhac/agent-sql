@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { keychainGet, keychainSet, keychainDelete, keychainDeleteAll } from "./keychain.ts";
 import { getConfigDir, ensureConfigDir } from "./paths.ts";
+import { validateCredential } from "./validate.ts";
 
 export type Credential = {
   username?: string;
@@ -93,7 +94,12 @@ export const getCredential = (name: string): Credential | null => {
       return null;
     }
     try {
-      return JSON.parse(raw) as Credential;
+      const validated = validateCredential(JSON.parse(raw));
+      return {
+        writePermission: validated.writePermission ?? false,
+        ...(validated.username !== undefined && { username: validated.username }),
+        ...(validated.password !== undefined && { password: validated.password }),
+      };
     } catch {
       return null;
     }
@@ -133,7 +139,7 @@ export const listCredentials = (): CredentialListEntry[] => {
       const raw = keychainGet(name);
       if (raw) {
         try {
-          const cred = JSON.parse(raw) as Credential;
+          const cred = validateCredential(JSON.parse(raw));
           if (cred.username !== undefined) {
             result.username = cred.username;
           }

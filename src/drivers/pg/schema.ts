@@ -3,6 +3,18 @@ import { parseTableRef } from "../table-ref";
 
 type PgDb = { unsafe: (sql: string, params?: unknown[]) => Promise<unknown[]> };
 
+// Bun.SQL returns PG array_agg results as string literals like "{a,b}" instead of arrays
+const parsePgArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value as string[];
+  }
+  if (typeof value === "string" && value.startsWith("{") && value.endsWith("}")) {
+    const inner = value.slice(1, -1);
+    return inner.length === 0 ? [] : inner.split(",");
+  }
+  return [];
+};
+
 export const createPgSchema = (db: PgDb) => {
   const getTables = async (tableOpts?: { includeSystem?: boolean }): Promise<TableInfo[]> => {
     const filter = tableOpts?.includeSystem
@@ -105,7 +117,7 @@ export const createPgSchema = (db: PgDb) => {
       name: r.indexname,
       table: `${r.schemaname}.${r.tablename}`,
       schema: r.schemaname,
-      columns: r.columns,
+      columns: parsePgArray(r.columns),
       unique: r.indisunique,
     }));
   };
@@ -167,11 +179,11 @@ export const createPgSchema = (db: PgDb) => {
       table: `${r.table_schema}.${r.table_name}`,
       schema: r.table_schema,
       type: typeMap[r.constraint_type] ?? "check",
-      columns: r.columns,
+      columns: parsePgArray(r.columns),
       ...(r.constraint_type === "FOREIGN KEY" && r.ref_table
         ? {
             referencedTable: `${r.ref_schema}.${r.ref_table}`,
-            referencedColumns: r.ref_columns ?? [],
+            referencedColumns: parsePgArray(r.ref_columns),
           }
         : {}),
     }));

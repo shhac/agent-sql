@@ -1,11 +1,10 @@
 import type { Command } from "commander";
 import type { DriverConnection } from "../../drivers/types.ts";
 import {
-  handleActionError,
   resolveConnectionAlias,
   configureTruncationFromOpts,
   printQueryResults,
-  withDriver,
+  withDriverAction,
 } from "../action-helpers.ts";
 
 type SampleOptions = {
@@ -40,23 +39,19 @@ export function registerSample(parent: Command): void {
     .option("--full", "Show all fields untruncated")
     .action(async (table: string, opts: SampleOptions) => {
       const connectionAlias = resolveConnectionAlias(opts, parent);
-      try {
-        configureTruncationFromOpts(opts);
+      configureTruncationFromOpts(opts);
 
-        const limit = opts.limit !== undefined ? Number(opts.limit) : DEFAULT_SAMPLE_SIZE;
-        await withDriver({ connection: connectionAlias }, async (driver) => {
-          const sql = buildSampleSql(driver, { table, limit, where: opts.where });
-          const result = await driver.query(sql);
+      const limit = opts.limit !== undefined ? Number(opts.limit) : DEFAULT_SAMPLE_SIZE;
+      await withDriverAction({ connection: connectionAlias }, async (driver) => {
+        const sql = buildSampleSql(driver, { table, limit, where: opts.where });
+        const result = await driver.query(sql);
 
-          printQueryResults({
-            result,
-            displayRows: result.rows,
-            hasMore: false,
-            compact: opts.compact,
-          });
+        printQueryResults({
+          result,
+          displayRows: result.rows,
+          hasMore: false,
+          compact: opts.compact,
         });
-      } catch (err) {
-        handleActionError(err, connectionAlias);
-      }
+      });
     });
 }

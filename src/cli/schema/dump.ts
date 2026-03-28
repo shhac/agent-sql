@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { TableInfo } from "../../drivers/types.ts";
 import { printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
+import { resolveConnectionAlias, withDriverAction } from "../action-helpers.ts";
 
 type DumpOpts = {
   connection?: string;
@@ -39,34 +39,30 @@ export function registerDump(parent: Command): void {
     .action(async (opts: DumpOpts) => {
       const connectionAlias = resolveConnectionAlias(opts, parent);
 
-      try {
-        await withDriver({ connection: connectionAlias }, async (driver) => {
-          const allTables = await driver.getTables({ includeSystem: opts.includeSystem });
-          const filter = opts.tables ? parseTableFilter(opts.tables) : undefined;
-          const filtered = filter ? allTables.filter((t) => matchesFilter(t, filter)) : allTables;
+      await withDriverAction({ connection: connectionAlias }, async (driver) => {
+        const allTables = await driver.getTables({ includeSystem: opts.includeSystem });
+        const filter = opts.tables ? parseTableFilter(opts.tables) : undefined;
+        const filtered = filter ? allTables.filter((t) => matchesFilter(t, filter)) : allTables;
 
-          const tables = await Promise.all(
-            filtered.map(async (t) => {
-              const name = qualifiedName(t);
-              const [columns, indexes, constraints] = await Promise.all([
-                driver.describeTable(name),
-                driver.getIndexes(name),
-                driver.getConstraints(name),
-              ]);
-              return {
-                name: t.name,
-                schema: t.schema,
-                columns,
-                indexes,
-                constraints,
-              };
-            }),
-          );
+        const tables = await Promise.all(
+          filtered.map(async (t) => {
+            const name = qualifiedName(t);
+            const [columns, indexes, constraints] = await Promise.all([
+              driver.describeTable(name),
+              driver.getIndexes(name),
+              driver.getConstraints(name),
+            ]);
+            return {
+              name: t.name,
+              schema: t.schema,
+              columns,
+              indexes,
+              constraints,
+            };
+          }),
+        );
 
-          printJson({ tables });
-        });
-      } catch (err) {
-        handleActionError(err, connectionAlias);
-      }
+        printJson({ tables });
+      });
     });
 }

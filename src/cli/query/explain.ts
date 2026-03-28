@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { printError, printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
+import { resolveConnectionAlias, withDriverAction } from "../action-helpers.ts";
 
 type ExplainOptions = {
   connection?: string;
@@ -24,26 +24,23 @@ export function registerExplain(parent: Command): void {
     .option("--analyze", "Run EXPLAIN ANALYZE (executes the query; read-only queries only)")
     .action(async (sql: string, opts: ExplainOptions) => {
       const connectionAlias = resolveConnectionAlias(opts, parent);
-      try {
-        if (opts.analyze) {
-          const safety = validateAnalyzeSafety(sql);
-          if (safety) {
-            printError({ message: safety, fixableBy: "agent" });
-            return;
-          }
+
+      if (opts.analyze) {
+        const safety = validateAnalyzeSafety(sql);
+        if (safety) {
+          printError({ message: safety, fixableBy: "agent" });
+          return;
         }
-
-        const prefix = opts.analyze ? "EXPLAIN ANALYZE" : "EXPLAIN";
-        const explainSql = `${prefix} ${sql}`;
-
-        await withDriver({ connection: connectionAlias }, async (driver) => {
-          const result = await driver.query(explainSql);
-          printJson({
-            plan: result.rows,
-          });
-        });
-      } catch (err) {
-        handleActionError(err, connectionAlias);
       }
+
+      const prefix = opts.analyze ? "EXPLAIN ANALYZE" : "EXPLAIN";
+      const explainSql = `${prefix} ${sql}`;
+
+      await withDriverAction({ connection: connectionAlias }, async (driver) => {
+        const result = await driver.query(explainSql);
+        printJson({
+          plan: result.rows,
+        });
+      });
     });
 }
