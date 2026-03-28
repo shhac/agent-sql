@@ -1,19 +1,19 @@
 import type { DriverConnection } from "../drivers/types.ts";
 
-let activeDriver: DriverConnection | null = null;
+const state: { driver: DriverConnection | null } = { driver: null };
 
 export const setActiveDriver = (driver: DriverConnection): void => {
-  activeDriver = driver;
+  state.driver = driver;
 };
 
 export const clearActiveDriver = (): void => {
-  activeDriver = null;
+  state.driver = null;
 };
 
 export const installSignalHandler = (): void => {
   process.on("SIGINT", async () => {
-    if (activeDriver) {
-      await activeDriver.close().catch(() => {});
+    if (state.driver) {
+      await state.driver.close().catch(() => {});
     }
     process.exit(130);
   });

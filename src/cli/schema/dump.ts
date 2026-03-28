@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import type { TableInfo } from "../../drivers/types.ts";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { printJson, printError } from "../../lib/output.ts";
-import { enhanceError } from "../../lib/errors.ts";
+import { printJson } from "../../lib/output.ts";
+import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
 
 type DumpOpts = {
   connection?: string;
@@ -38,8 +38,7 @@ export function registerDump(parent: Command): void {
     )
     .option("--include-system", "Include system tables")
     .action(async (opts: DumpOpts) => {
-      const connectionAlias =
-        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias = resolveConnectionAlias(opts, parent);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });
@@ -71,14 +70,7 @@ export function registerDump(parent: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias,
-        });
-        printError({
-          message: enhanced.message,
-          hint: enhanced.hint,
-          fixableBy: enhanced.fixableBy,
-        });
+        handleActionError(err, connectionAlias);
       }
     });
 }

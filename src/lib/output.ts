@@ -44,15 +44,13 @@ function pruneEmpty(data: unknown): unknown {
   }
   if (typeof data === "object") {
     const result: Record<string, unknown> = {};
-    let hasKeys = false;
     for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
       const pruned = pruneEmpty(value);
       if (pruned !== undefined) {
         result[key] = pruned;
-        hasKeys = true;
       }
     }
-    return hasKeys ? result : undefined;
+    return Object.keys(result).length > 0 ? result : undefined;
   }
   return data;
 }
@@ -126,17 +124,19 @@ export function printPaginated(payload: PaginatedPayload): void {
   writeStdout(JSON.stringify(result, null, 2));
 }
 
+const compactToNamed = (columns: string[], rows: unknown[][]): Record<string, unknown>[] =>
+  rows.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
+
 export function printCompact(payload: CompactPayload): void {
   const format = getFormat();
-  // JSONL for compact: reconstruct named rows from columns + arrays
   if (format === "jsonl") {
-    const namedRows = payload.rows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      payload.columns.forEach((col, i) => {
-        obj[col] = row[i];
-      });
-      return obj;
-    });
+    const namedRows = compactToNamed(payload.columns, payload.rows);
     const output = formatJsonl({
       columns: payload.columns,
       rows: namedRows,
@@ -159,13 +159,7 @@ export function printCompact(payload: CompactPayload): void {
     };
   }
   if (format === "csv") {
-    const namedRows = payload.rows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      payload.columns.forEach((col, i) => {
-        obj[col] = row[i];
-      });
-      return obj;
-    });
+    const namedRows = compactToNamed(payload.columns, payload.rows);
     writeStdout(formatCsv({ columns: payload.columns, rows: namedRows }).trimEnd());
     return;
   }

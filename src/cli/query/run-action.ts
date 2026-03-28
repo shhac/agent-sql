@@ -1,18 +1,11 @@
 import { resolveDriver } from "../../drivers/resolve.ts";
 import { getSetting } from "../../lib/config.ts";
-import { enhanceError } from "../../lib/errors.ts";
+import { printJson, resolvePageSize } from "../../lib/output.ts";
 import {
-  printCompact,
-  printError,
-  printJson,
-  printPaginated,
-  resolvePageSize,
-} from "../../lib/output.ts";
-import {
-  applyTruncation,
-  applyTruncationCompact,
-  configureTruncation,
-} from "../../lib/truncation.ts";
+  handleActionError,
+  configureTruncationFromOpts,
+  printQueryResults,
+} from "../action-helpers.ts";
 
 export type RunOptions = {
   connection?: string;
@@ -48,11 +41,7 @@ const isWriteResult = (result: { rowsAffected?: number; command?: string }): boo
 
 export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
   try {
-    configureTruncation({
-      expand: opts.expand,
-      full: opts.full,
-      maxLength: getSetting("truncation.maxLength") as number | undefined,
-    });
+    configureTruncationFromOpts(opts);
 
     const maxRows = getSetting("query.maxRows") as number | undefined;
     const pageSize = resolvePageSize({
@@ -82,39 +71,16 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
       const hasMore = !opts.write && result.rows.length > effectiveLimit;
       const displayRows = hasMore ? result.rows.slice(0, effectiveLimit) : result.rows;
 
-      if (opts.compact) {
-        const arrayRows = displayRows.map((row) => result.columns.map((col) => row[col] ?? null));
-        const compactResult = applyTruncationCompact({
-          columns: result.columns,
-          rows: arrayRows,
-        });
-        printCompact({
-          columns: compactResult.columns,
-          rows: compactResult.rows,
-          hasMore,
-          rowCount: displayRows.length,
-        });
-        return;
-      }
-
-      const truncatedRows = applyTruncation(displayRows);
-      printPaginated({
-        columns: result.columns,
-        items: truncatedRows,
+      printQueryResults({
+        result,
+        displayRows,
         hasMore,
-        rowCount: displayRows.length,
+        compact: opts.compact,
       });
     } finally {
       await driver.close();
     }
   } catch (err) {
-    const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-      connectionAlias: opts.connection,
-    });
-    printError({
-      message: enhanced.message,
-      hint: enhanced.hint,
-      fixableBy: enhanced.fixableBy,
-    });
+    handleActionError(err, opts.connection);
   }
 }

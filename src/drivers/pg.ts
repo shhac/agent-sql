@@ -11,6 +11,8 @@ import {
 import { loadPgParser, validateReadOnlyQuery } from "../lib/pg-session-guard";
 import { quoteIdentPg } from "../lib/quote-ident";
 import { getTimeout } from "../lib/timeout";
+import { withConnectTimeout } from "./connect-timeout";
+import { parseTableRef } from "./table-ref";
 
 type PgOpts = {
   host: string;
@@ -28,23 +30,6 @@ const WRITE_COMMANDS: ReadonlySet<string> = new Set([
   "MERGE",
   "COPY",
 ]);
-
-const parseTableRef = (table: string): { schema: string; table: string } => {
-  const parts = table.split(".");
-  if (parts.length === 2) {
-    return { schema: parts[0]!, table: parts[1]! };
-  }
-  return { schema: "public", table: parts[0]! };
-};
-
-const CONNECT_TIMEOUT_MS = 10_000;
-
-const withConnectTimeout = <T>(promise: Promise<T>): Promise<T> => {
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Connection timed out")), CONNECT_TIMEOUT_MS),
-  );
-  return Promise.race([promise, timeout]);
-};
 
 export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   const readonly = opts.readonly ?? true;
@@ -129,7 +114,7 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   };
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
-    const ref = parseTableRef(table);
+    const ref = parseTableRef(table, "public");
     const rows = await db.unsafe(
       `
       SELECT
@@ -171,7 +156,7 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   };
 
   const getIndexes = async (table?: string): Promise<IndexInfo[]> => {
-    const ref = table ? parseTableRef(table) : undefined;
+    const ref = table ? parseTableRef(table, "public") : undefined;
     const whereClause = ref
       ? "WHERE i.schemaname = $1 AND i.tablename = $2"
       : "WHERE i.schemaname NOT IN ('pg_catalog', 'information_schema')";
@@ -216,7 +201,7 @@ export const connectPg = async (opts: PgOpts): Promise<DriverConnection> => {
   };
 
   const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
-    const ref = table ? parseTableRef(table) : undefined;
+    const ref = table ? parseTableRef(table, "public") : undefined;
     const whereClause = ref
       ? "WHERE tc.table_schema = $1 AND tc.table_name = $2"
       : "WHERE tc.table_schema NOT IN ('pg_catalog', 'information_schema')";

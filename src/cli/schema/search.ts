@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { printJson, printError } from "../../lib/output.ts";
-import { enhanceError } from "../../lib/errors.ts";
+import { printJson } from "../../lib/output.ts";
+import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
 
 type SearchOpts = {
   connection?: string;
@@ -13,8 +13,7 @@ export function registerSearch(schema: Command): void {
     .description("Search table and column names by pattern")
     .argument("<pattern>", "Search pattern (e.g. 'user', 'email')")
     .action(async (pattern: string, opts: SearchOpts) => {
-      const connectionAlias =
-        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias = resolveConnectionAlias(opts, schema);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });
@@ -25,14 +24,7 @@ export function registerSearch(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias,
-        });
-        printError({
-          message: enhanced.message,
-          hint: enhanced.hint,
-          fixableBy: enhanced.fixableBy,
-        });
+        handleActionError(err, connectionAlias);
       }
     });
 }

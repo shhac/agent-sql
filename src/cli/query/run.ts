@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { executeRun, type RunOptions } from "./run-action.ts";
+import { resolveConnectionAlias } from "../action-helpers.ts";
 
 export function registerRun(parent: Command): void {
   parent
@@ -13,8 +14,7 @@ export function registerRun(parent: Command): void {
     .option("--full", "Show all fields untruncated")
     .option("--timeout <ms>", "Query timeout override")
     .action((sql: string, opts: RunOptions) => {
-      const connection =
-        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
+      const connection = resolveConnectionAlias(opts, parent);
       return executeRun(sql, { ...opts, connection });
     });
 }

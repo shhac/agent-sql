@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { enhanceError } from "../../lib/errors.ts";
 import { printError, printJson } from "../../lib/output.ts";
+import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
 
 type ExplainOptions = {
   connection?: string;
@@ -24,8 +24,7 @@ export function registerExplain(parent: Command): void {
     .argument("<sql>", "SQL query to explain")
     .option("--analyze", "Run EXPLAIN ANALYZE (executes the query; read-only queries only)")
     .action(async (sql: string, opts: ExplainOptions) => {
-      const connectionAlias =
-        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias = resolveConnectionAlias(opts, parent);
       try {
         if (opts.analyze) {
           const safety = validateAnalyzeSafety(sql);
@@ -49,14 +48,7 @@ export function registerExplain(parent: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias,
-        });
-        printError({
-          message: enhanced.message,
-          hint: enhanced.hint,
-          fixableBy: enhanced.fixableBy,
-        });
+        handleActionError(err, connectionAlias);
       }
     });
 }

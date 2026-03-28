@@ -2,11 +2,15 @@ import { getSetting } from "./config.ts";
 
 const DEFAULT_TIMEOUT = 30000;
 
-let cliOverride: number | undefined;
+const state: { override: number | undefined } = { override: undefined };
 
 export const configureTimeout = (ms?: number): void => {
-  cliOverride = ms;
+  state.override = ms;
 };
 
 export const getTimeout = (): number =>
-  cliOverride ?? (getSetting("query.timeout") as number | undefined) ?? DEFAULT_TIMEOUT;
+  state.override ?? (getSetting("query.timeout") as number | undefined) ?? DEFAULT_TIMEOUT;
+
+export const resetTimeout = (): void => {
+  state.override = undefined;
+};

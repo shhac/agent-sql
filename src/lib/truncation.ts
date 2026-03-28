@@ -1,8 +1,10 @@
 const DEFAULT_MAX_LENGTH = 200;
 const ELLIPSIS = "\u2026";
 
-let expandedFields: Set<string> | "all" = new Set();
-let configuredMaxLength: number = DEFAULT_MAX_LENGTH;
+const state: { expandedFields: Set<string> | "all"; maxLength: number } = {
+  expandedFields: new Set(),
+  maxLength: DEFAULT_MAX_LENGTH,
+};
 
 type TruncationOpts = {
   expand?: string;
@@ -22,17 +24,22 @@ type CompactResult = {
 
 export function configureTruncation(opts: TruncationOpts): void {
   if (opts.full) {
-    expandedFields = "all";
+    state.expandedFields = "all";
   } else if (opts.expand) {
-    expandedFields = new Set(opts.expand.split(",").map((s) => s.trim().toLowerCase()));
+    state.expandedFields = new Set(opts.expand.split(",").map((s) => s.trim().toLowerCase()));
   } else {
-    expandedFields = new Set();
+    state.expandedFields = new Set();
   }
-  configuredMaxLength = opts.maxLength ?? DEFAULT_MAX_LENGTH;
+  state.maxLength = opts.maxLength ?? DEFAULT_MAX_LENGTH;
+}
+
+export function resetTruncation(): void {
+  state.expandedFields = new Set();
+  state.maxLength = DEFAULT_MAX_LENGTH;
 }
 
 function shouldExpand(fieldName: string): boolean {
-  return expandedFields === "all" || expandedFields.has(fieldName.toLowerCase());
+  return state.expandedFields === "all" || state.expandedFields.has(fieldName.toLowerCase());
 }
 
 function truncateValue(
@@ -59,7 +66,7 @@ export function applyTruncation(rows: Record<string, unknown>[]): Record<string,
         continue;
       }
 
-      const t = truncateValue(value, configuredMaxLength);
+      const t = truncateValue(value, state.maxLength);
       if (!t) {
         result[key] = value;
         continue;
@@ -91,7 +98,7 @@ export function applyTruncationCompact(input: CompactInput): CompactResult {
         continue;
       }
 
-      const t = truncateValue(value, configuredMaxLength);
+      const t = truncateValue(value, state.maxLength);
       if (!t) {
         continue;
       }

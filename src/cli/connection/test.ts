@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { printJson, printError } from "../../lib/output.ts";
+import { printJson } from "../../lib/output.ts";
+import { handleActionError } from "../action-helpers.ts";
 
 export function registerTest(connection: Command): void {
   connection
@@ -23,16 +24,7 @@ export function registerTest(connection: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Connection test failed";
-        const hint =
-          err instanceof Error && "hint" in err
-            ? (err as Error & { hint: string }).hint
-            : undefined;
-        const fixableBy =
-          err instanceof Error && "fixableBy" in err
-            ? ((err as Error & { fixableBy: string }).fixableBy as "agent" | "human" | "retry")
-            : undefined;
-        printError({ message, hint, fixableBy });
+        handleActionError(err, alias);
       }
     });
 }

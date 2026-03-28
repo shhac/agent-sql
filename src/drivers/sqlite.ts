@@ -98,10 +98,8 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
     return results;
   };
 
-  const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
-    const tables = table ? [table] : await getUserTableNames();
+  const getPrimaryKeyConstraints = (tables: string[]): ConstraintInfo[] => {
     const results: ConstraintInfo[] = [];
-
     for (const tbl of tables) {
       const cols = db.query(`PRAGMA table_info(${quoteIdent(tbl)})`).all() as PragmaTableInfo[];
       const pkCols = cols.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk);
@@ -113,7 +111,13 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
           columns: pkCols.map((c) => c.name),
         });
       }
+    }
+    return results;
+  };
 
+  const getForeignKeyConstraints = (tables: string[]): ConstraintInfo[] => {
+    const results: ConstraintInfo[] = [];
+    for (const tbl of tables) {
       const fks = db
         .query(`PRAGMA foreign_key_list(${quoteIdent(tbl)})`)
         .all() as PragmaForeignKey[];
@@ -127,7 +131,13 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
           referencedColumns: [fk.to],
         });
       }
+    }
+    return results;
+  };
 
+  const getUniqueConstraints = (tables: string[]): ConstraintInfo[] => {
+    const results: ConstraintInfo[] = [];
+    for (const tbl of tables) {
       const indexRows = db
         .query(`PRAGMA index_list(${quoteIdent(tbl)})`)
         .all() as PragmaIndexList[];
@@ -146,8 +156,16 @@ export const connectSqlite = (opts: SqliteOpts): DriverConnection => {
         });
       }
     }
-
     return results;
+  };
+
+  const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
+    const tables = table ? [table] : await getUserTableNames();
+    return [
+      ...getPrimaryKeyConstraints(tables),
+      ...getForeignKeyConstraints(tables),
+      ...getUniqueConstraints(tables),
+    ];
   };
 
   const searchSchema = async (

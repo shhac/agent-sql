@@ -16,26 +16,21 @@ const resolveVersion = (): string => {
   }
 
   try {
-    const walkUp = (dir: string, remaining: number): string | undefined => {
-      if (remaining <= 0) {
-        return undefined;
-      }
-      const candidate = join(dir, "package.json");
+    const maxDepth = 6;
+    const state = { dir: dirname(fileURLToPath(import.meta.url)), remaining: maxDepth };
+    while (state.remaining > 0) {
+      const candidate = join(state.dir, "package.json");
       if (existsSync(candidate)) {
         const raw = readFileSync(candidate, "utf8");
         const pkg = JSON.parse(raw) as { version?: unknown };
         return typeof pkg.version === "string" ? pkg.version.trim() || "unknown" : "unknown";
       }
-      const parent = dirname(dir);
-      if (parent === dir) {
-        return undefined;
+      const parent = dirname(state.dir);
+      if (parent === state.dir) {
+        break;
       }
-      return walkUp(parent, remaining - 1);
-    };
-
-    const found = walkUp(dirname(fileURLToPath(import.meta.url)), 6);
-    if (found) {
-      return found;
+      state.dir = parent;
+      state.remaining -= 1;
     }
   } catch {
     // fall through

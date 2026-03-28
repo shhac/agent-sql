@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import type { DriverConnection } from "../../drivers/types.ts";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { enhanceError } from "../../lib/errors.ts";
-import { printError, printJson } from "../../lib/output.ts";
+import { printJson } from "../../lib/output.ts";
+import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
 
 type CountOptions = {
   connection?: string;
@@ -25,8 +25,7 @@ export function registerCount(parent: Command): void {
     .argument("<table>", "Table name (supports schema.table for PG)")
     .option("--where <condition>", "WHERE clause filter")
     .action(async (table: string, opts: CountOptions) => {
-      const connectionAlias =
-        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias = resolveConnectionAlias(opts, parent);
       try {
         const driver = await resolveDriver({ connection: connectionAlias });
         const sql = buildCountSql(driver, { table, where: opts.where });
@@ -39,14 +38,7 @@ export function registerCount(parent: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias,
-        });
-        printError({
-          message: enhanced.message,
-          hint: enhanced.hint,
-          fixableBy: enhanced.fixableBy,
-        });
+        handleActionError(err, connectionAlias);
       }
     });
 }

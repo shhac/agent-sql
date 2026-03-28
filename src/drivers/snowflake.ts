@@ -17,6 +17,7 @@ import { parseRows, extractColumns } from "./snowflake/parse-results";
 import { validateReadOnly } from "./snowflake/read-only-guard";
 import { quoteIdentPg } from "../lib/quote-ident";
 import { getTimeout } from "../lib/timeout";
+import { parseTableRef } from "./table-ref";
 
 const WRITE_COMMANDS: ReadonlySet<string> = new Set([
   "INSERT",
@@ -40,14 +41,6 @@ const responseToResult = (resp: SnowflakeQueryResponse): QueryResult => {
   };
 };
 
-const parseTableRef = (table: string, defaultSchema: string): { schema: string; table: string } => {
-  const parts = table.split(".");
-  if (parts.length >= 2) {
-    return { schema: parts[0]!, table: parts[1]! };
-  }
-  return { schema: defaultSchema, table: parts[0]! };
-};
-
 export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConnection> => {
   const readonly = opts.readonly ?? true;
   const defaultSchema = opts.schema ?? "PUBLIC";
@@ -59,7 +52,10 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
     timeoutMs: getTimeout(),
   });
 
-  const execSql = async (sql: string): Promise<SnowflakeQueryResponse> =>
+  const execSql = async (
+    sql: string,
+    bindings?: Record<string, { type: string; value: string }>,
+  ): Promise<SnowflakeQueryResponse> =>
     client.executeStatement({
       statement: sql,
       timeout: timeoutSeconds,
@@ -67,6 +63,7 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
       schema: opts.schema,
       warehouse: opts.warehouse,
       role: opts.role,
+      bindings,
     });
 
   // Verify connectivity
@@ -113,7 +110,8 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
 
   const describeTable = async (table: string): Promise<ColumnInfo[]> => {
     const ref = parseTableRef(table, defaultSchema);
-    const resp = await execSql(`
+    const resp = await execSql(
+      `
 			SELECT
 				COLUMN_NAME,
 				DATA_TYPE,
@@ -122,10 +120,12 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
 				ORDINAL_POSITION
 			FROM INFORMATION_SCHEMA.COLUMNS
 			WHERE TABLE_CATALOG = CURRENT_DATABASE()
-				AND TABLE_SCHEMA = '${ref.schema.replace(/'/g, "''")}'
-				AND TABLE_NAME = '${ref.table.replace(/'/g, "''")}'
+				AND TABLE_SCHEMA = ?
+				AND TABLE_NAME = ?
 			ORDER BY ORDINAL_POSITION
-		`);
+		`,
+      { "1": { type: "TEXT", value: ref.schema }, "2": { type: "TEXT", value: ref.table } },
+    );
     const result = responseToResult(resp);
 
     // Fetch primary key columns to mark them
@@ -172,11 +172,7 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
           table: getField(first, "table_name"),
           schema: getField(first, "schema_name"),
           type: "primary_key",
-          columns: rows
-            .sort(
-              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
-            )
-            .map((r) => getField(r, "column_name")),
+          columns: sortByKeySequence(rows).map((r) => getField(r, "column_name")),
         });
       }
     } catch {
@@ -190,22 +186,15 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
       const fkGroups = groupByField(fkResult.rows, "fk_constraint_name");
       for (const [, rows] of fkGroups) {
         const first = rows[0]!;
+        const sorted = sortByKeySequence(rows);
         constraints.push({
           name: getField(first, "fk_constraint_name"),
           table: getField(first, "fk_table_name"),
           schema: getField(first, "fk_schema_name"),
           type: "foreign_key",
-          columns: rows
-            .sort(
-              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
-            )
-            .map((r) => getField(r, "fk_column_name")),
+          columns: sorted.map((r) => getField(r, "fk_column_name")),
           referencedTable: getField(first, "pk_table_name"),
-          referencedColumns: rows
-            .sort(
-              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
-            )
-            .map((r) => getField(r, "pk_column_name")),
+          referencedColumns: sorted.map((r) => getField(r, "pk_column_name")),
         });
       }
     } catch {
@@ -224,11 +213,7 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
           table: getField(first, "table_name"),
           schema: getField(first, "schema_name"),
           type: "unique",
-          columns: rows
-            .sort(
-              (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
-            )
-            .map((r) => getField(r, "column_name")),
+          columns: sortByKeySequence(rows).map((r) => getField(r, "column_name")),
         });
       }
     } catch {
@@ -245,29 +230,36 @@ export const connectSnowflake = async (opts: SnowflakeOpts): Promise<DriverConne
     columns: { table: string; column: string }[];
   }> => {
     const ilike = `%${pattern}%`;
+    const ilikeBinding = { "1": { type: "TEXT", value: ilike } };
 
-    const tableResp = await execSql(`
+    const tableResp = await execSql(
+      `
 			SELECT TABLE_SCHEMA, TABLE_NAME
 			FROM INFORMATION_SCHEMA.TABLES
 			WHERE TABLE_CATALOG = CURRENT_DATABASE()
 				AND TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA')
-				AND TABLE_NAME ILIKE '${ilike.replace(/'/g, "''")}'
+				AND TABLE_NAME ILIKE ?
 			ORDER BY TABLE_SCHEMA, TABLE_NAME
-		`);
+		`,
+      ilikeBinding,
+    );
     const tableResult = responseToResult(tableResp);
     const tables = tableResult.rows.map((r) => ({
       name: `${r.TABLE_SCHEMA as string}.${r.TABLE_NAME as string}`,
       schema: r.TABLE_SCHEMA as string,
     }));
 
-    const colResp = await execSql(`
+    const colResp = await execSql(
+      `
 			SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 			FROM INFORMATION_SCHEMA.COLUMNS
 			WHERE TABLE_CATALOG = CURRENT_DATABASE()
 				AND TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA')
-				AND COLUMN_NAME ILIKE '${ilike.replace(/'/g, "''")}'
+				AND COLUMN_NAME ILIKE ?
 			ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
-		`);
+		`,
+      ilikeBinding,
+    );
     const colResult = responseToResult(colResp);
     const columns = colResult.rows.map((r) => ({
       table: `${r.TABLE_SCHEMA as string}.${r.TABLE_NAME as string}`,
@@ -298,6 +290,11 @@ const getField = (row: Record<string, unknown>, name: string): string => {
   const val = row[name] ?? row[name.toUpperCase()] ?? row[name.toLowerCase()];
   return String(val ?? "");
 };
+
+const sortByKeySequence = (rows: Record<string, unknown>[]): Record<string, unknown>[] =>
+  [...rows].sort(
+    (a, b) => Number(getField(a, "key_sequence")) - Number(getField(b, "key_sequence")),
+  );
 
 const groupByConstraint = (
   rows: Record<string, unknown>[],

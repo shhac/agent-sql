@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { quoteIdentMysql } from "../lib/quote-ident";
 import { getTimeout } from "../lib/timeout";
+import { withConnectTimeout } from "./connect-timeout";
 
 type MysqlOpts = {
   host: string;
@@ -53,15 +54,6 @@ const lowercaseKeys = (row: Record<string, unknown>): Record<string, unknown> =>
 
 const normalizeRows = (rows: Record<string, unknown>[]): Record<string, unknown>[] =>
   rows.map(lowercaseKeys);
-
-const CONNECT_TIMEOUT_MS = 10_000;
-
-const withConnectTimeout = <T>(promise: Promise<T>): Promise<T> => {
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Connection timed out")), CONNECT_TIMEOUT_MS),
-  );
-  return Promise.race([promise, timeout]);
-};
 
 export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> => {
   const readonly = opts.readonly ?? true;

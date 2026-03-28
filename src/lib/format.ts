@@ -1,9 +1,13 @@
 export type OutputFormat = "jsonl" | "json" | "yaml" | "csv";
 
-let resolvedFormat: OutputFormat = "jsonl";
+const state = { format: "jsonl" as OutputFormat };
 
 export const configureFormat = (format: string): void => {
-  resolvedFormat = format as OutputFormat;
+  state.format = format as OutputFormat;
 };
 
-export const getFormat = (): OutputFormat => resolvedFormat;
+export const getFormat = (): OutputFormat => state.format;
+
+export const resetFormat = (): void => {
+  state.format = "jsonl";
+};

@@ -307,44 +307,23 @@ const handleConnectionNotFound = (
   return { message: err.message, hint, fixableBy: "agent" };
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handlers: ((err: any, context?: ErrorContext) => EnhancedError | undefined)[] = [
+  handlePgError,
+  handleMysqlError,
+  handleSnowflakeError,
+  handleSqliteError,
+  handleConnectionNotFound,
+];
+
 export const enhanceError = (err: Error, context?: ErrorContext): EnhancedError => {
-  // Try PG error detection (SQLSTATE code as string)
-  const pgResult = handlePgError(err as Error & { code?: string }, context);
-  if (pgResult) {
-    return pgResult;
+  for (const handler of handlers) {
+    const result = handler(err, context);
+    if (result) {
+      return result;
+    }
   }
 
-  // Try MySQL error detection (numeric errno >= 1000 or sqlState present)
-  const mysqlResult = handleMysqlError(
-    err as Error & { errno?: number; sqlState?: string },
-    context,
-  );
-  if (mysqlResult) {
-    return mysqlResult;
-  }
-
-  // Try Snowflake error detection (6-digit string code)
-  const snowflakeResult = handleSnowflakeError(
-    err as Error & { code?: string; sqlState?: string },
-    context,
-  );
-  if (snowflakeResult) {
-    return snowflakeResult;
-  }
-
-  // Try SQLite error detection (numeric code)
-  const sqliteResult = handleSqliteError(err as Error & { code?: number; errno?: number });
-  if (sqliteResult) {
-    return sqliteResult;
-  }
-
-  // Try connection-not-found pattern
-  const connResult = handleConnectionNotFound(err, context);
-  if (connResult) {
-    return connResult;
-  }
-
-  // Hostname sanitization for unrecognized errors
   const message = context?.connectionAlias
     ? sanitizeHostname(err.message, context.connectionAlias)
     : err.message;

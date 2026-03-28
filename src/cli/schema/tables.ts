@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { printJson, printError } from "../../lib/output.ts";
-import { enhanceError } from "../../lib/errors.ts";
+import { printJson } from "../../lib/output.ts";
+import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
 
 type TablesOpts = {
   connection?: string;
@@ -14,8 +14,7 @@ export function registerTables(schema: Command): void {
     .description("List all tables")
     .option("--include-system", "Include system tables (pg_catalog, information_schema)")
     .action(async (opts: TablesOpts) => {
-      const connectionAlias =
-        opts.connection ?? (schema.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias = resolveConnectionAlias(opts, schema);
 
       try {
         const driver = await resolveDriver({ connection: connectionAlias });
@@ -26,14 +25,7 @@ export function registerTables(schema: Command): void {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias,
-        });
-        printError({
-          message: enhanced.message,
-          hint: enhanced.hint,
-          fixableBy: enhanced.fixableBy,
-        });
+        handleActionError(err, connectionAlias);
       }
     });
 }

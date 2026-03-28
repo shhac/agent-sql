@@ -46,15 +46,15 @@ export type Config = {
 
 const configPath = (): string => join(getConfigDir(), "config.json");
 
-let cachedConfig: Config | null = null;
+const cache: { config: Config | null } = { config: null };
 
 export const clearConfigCache = (): void => {
-  cachedConfig = null;
+  cache.config = null;
 };
 
 export const readConfig = (): Config => {
-  if (cachedConfig) {
-    return cachedConfig;
+  if (cache.config) {
+    return cache.config;
   }
 
   const path = configPath();
@@ -63,19 +63,19 @@ export const readConfig = (): Config => {
   }
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Config>;
-    cachedConfig = {
+    cache.config = {
       default_connection: raw.default_connection,
       connections: raw.connections ?? {},
       settings: raw.settings ?? {},
     };
-    return cachedConfig;
+    return cache.config;
   } catch {
     return { connections: {}, settings: {} };
   }
 };
 
 export const writeConfig = (config: Config): void => {
-  cachedConfig = null;
+  cache.config = null;
   const dir = ensureConfigDir();
   writeFileSync(join(dir, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 };

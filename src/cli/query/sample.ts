@@ -1,14 +1,12 @@
 import type { Command } from "commander";
 import type { DriverConnection } from "../../drivers/types.ts";
 import { resolveDriver } from "../../drivers/resolve.ts";
-import { getSetting } from "../../lib/config.ts";
-import { enhanceError } from "../../lib/errors.ts";
-import { printCompact, printError, printPaginated } from "../../lib/output.ts";
 import {
-  applyTruncation,
-  applyTruncationCompact,
-  configureTruncation,
-} from "../../lib/truncation.ts";
+  handleActionError,
+  resolveConnectionAlias,
+  configureTruncationFromOpts,
+  printQueryResults,
+} from "../action-helpers.ts";
 
 type SampleOptions = {
   connection?: string;
@@ -41,14 +39,9 @@ export function registerSample(parent: Command): void {
     .option("--expand <fields>", "Comma-separated fields to show untruncated")
     .option("--full", "Show all fields untruncated")
     .action(async (table: string, opts: SampleOptions) => {
-      const connectionAlias =
-        opts.connection ?? (parent.parent?.getOptionValue("connection") as string | undefined);
+      const connectionAlias = resolveConnectionAlias(opts, parent);
       try {
-        configureTruncation({
-          expand: opts.expand,
-          full: opts.full,
-          maxLength: getSetting("truncation.maxLength") as number | undefined,
-        });
+        configureTruncationFromOpts(opts);
 
         const limit = opts.limit !== undefined ? Number(opts.limit) : DEFAULT_SAMPLE_SIZE;
         const driver = await resolveDriver({ connection: connectionAlias });
@@ -57,42 +50,17 @@ export function registerSample(parent: Command): void {
         try {
           const result = await driver.query(sql);
 
-          if (opts.compact) {
-            const arrayRows = result.rows.map((row) =>
-              result.columns.map((col) => row[col] ?? null),
-            );
-            const compactResult = applyTruncationCompact({
-              columns: result.columns,
-              rows: arrayRows,
-            });
-            printCompact({
-              columns: compactResult.columns,
-              rows: compactResult.rows,
-              hasMore: false,
-              rowCount: result.rows.length,
-            });
-            return;
-          }
-
-          const truncatedRows = applyTruncation(result.rows);
-          printPaginated({
-            columns: result.columns,
-            items: truncatedRows,
+          printQueryResults({
+            result,
+            displayRows: result.rows,
             hasMore: false,
-            rowCount: result.rows.length,
+            compact: opts.compact,
           });
         } finally {
           await driver.close();
         }
       } catch (err) {
-        const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
-          connectionAlias,
-        });
-        printError({
-          message: enhanced.message,
-          hint: enhanced.hint,
-          fixableBy: enhanced.fixableBy,
-        });
+        handleActionError(err, connectionAlias);
       }
     });
 }

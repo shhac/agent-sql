@@ -24,7 +24,7 @@ const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
   [/^snowflake:\/\//, "snowflake"],
 ];
 
-const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
+export const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
 
 export const detectDriverFromUrl = (url: string): Driver | undefined => {
   for (const [pattern, driver] of DRIVER_URL_PATTERNS) {
@@ -89,9 +89,9 @@ const checkWritePermission = (opts: {
   credential: Credential | null;
   write: boolean;
   alias: string;
-}): boolean => {
+}): void => {
   if (!opts.write) {
-    return true;
+    return;
   }
 
   if (opts.credential && !opts.credential.writePermission) {
@@ -122,13 +122,6 @@ const checkWritePermission = (opts: {
       },
     );
   }
-
-  // SQLite without credential is allowed to write
-  if (opts.driver === "sqlite" && !opts.credential) {
-    return false;
-  }
-
-  return false;
 };
 
 const trackDriver = (connection: DriverConnection): DriverConnection => {
@@ -262,6 +255,104 @@ const resolveAdHocConnection = async (
   return undefined;
 };
 
+type ConfigConnectOpts = {
+  conn: Connection;
+  credential: Credential | null;
+  readonly: boolean;
+  alias: string;
+};
+
+const connectPgFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+  if (!opts.credential?.username || !opts.credential?.password) {
+    throw Object.assign(
+      new Error(
+        `PostgreSQL connection '${opts.alias}' requires a credential with username and password.`,
+      ),
+      {
+        hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
+        fixableBy: "human" as const,
+      },
+    );
+  }
+
+  return connectPg({
+    host: opts.conn.host ?? "localhost",
+    port: opts.conn.port ?? 5432,
+    database: opts.conn.database ?? "postgres",
+    username: opts.credential.username,
+    password: opts.credential.password,
+    readonly: opts.readonly,
+  });
+};
+
+const connectSqliteFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+  const path = opts.conn.path ?? opts.conn.url?.replace(/^sqlite:\/\//, "");
+  if (!path) {
+    throw new Error(
+      `SQLite connection '${opts.alias}' requires a path. Set 'path' on the connection or use a sqlite:// URL.`,
+    );
+  }
+
+  return connectSqlite({ path, readonly: opts.readonly });
+};
+
+const connectMysqlFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+  if (!opts.credential?.username || !opts.credential?.password) {
+    throw Object.assign(
+      new Error(
+        `MySQL connection '${opts.alias}' requires a credential with username and password.`,
+      ),
+      {
+        hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
+        fixableBy: "human" as const,
+      },
+    );
+  }
+
+  return connectMysql({
+    host: opts.conn.host ?? "localhost",
+    port: opts.conn.port ?? 3306,
+    database: opts.conn.database ?? "mysql",
+    username: opts.credential.username,
+    password: opts.credential.password,
+    readonly: opts.readonly,
+  });
+};
+
+const connectSnowflakeFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+  if (!opts.credential?.password) {
+    throw Object.assign(
+      new Error(
+        `Snowflake connection '${opts.alias}' requires a credential with a PAT (personal access token) as the password.`,
+      ),
+      {
+        hint: "Add a credential with: agent-sql credential add <name> --password <pat_secret>",
+        fixableBy: "human" as const,
+      },
+    );
+  }
+
+  return connectSnowflake({
+    account: opts.conn.account ?? "",
+    database: opts.conn.database,
+    schema: opts.conn.schema,
+    warehouse: opts.conn.warehouse,
+    role: opts.conn.role,
+    token: opts.credential.password,
+    readonly: opts.readonly,
+  });
+};
+
+const configConnectBuilders: Record<
+  Driver,
+  (opts: ConfigConnectOpts) => Promise<DriverConnection>
+> = {
+  pg: connectPgFromConfig,
+  sqlite: connectSqliteFromConfig,
+  mysql: connectMysqlFromConfig,
+  snowflake: connectSnowflakeFromConfig,
+};
+
 export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnection> => {
   const alias = resolveAlias(opts?.connection);
   const write = opts?.write ?? false;
@@ -294,90 +385,9 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
 
   const readonly = !write;
 
-  if (driver === "pg") {
-    if (!credential?.username || !credential?.password) {
-      throw Object.assign(
-        new Error(
-          `PostgreSQL connection '${alias}' requires a credential with username and password.`,
-        ),
-        {
-          hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
-          fixableBy: "human" as const,
-        },
-      );
-    }
-
-    return trackDriver(
-      await connectPg({
-        host: conn.host ?? "localhost",
-        port: conn.port ?? 5432,
-        database: conn.database ?? "postgres",
-        username: credential.username,
-        password: credential.password,
-        readonly,
-      }),
-    );
+  const builder = configConnectBuilders[driver];
+  if (!builder) {
+    throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql, snowflake.`);
   }
-
-  if (driver === "sqlite") {
-    const path = conn.path ?? conn.url?.replace(/^sqlite:\/\//, "");
-    if (!path) {
-      throw new Error(
-        `SQLite connection '${alias}' requires a path. Set 'path' on the connection or use a sqlite:// URL.`,
-      );
-    }
-
-    return trackDriver(await connectSqlite({ path, readonly }));
-  }
-
-  if (driver === "mysql") {
-    if (!credential?.username || !credential?.password) {
-      throw Object.assign(
-        new Error(`MySQL connection '${alias}' requires a credential with username and password.`),
-        {
-          hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
-          fixableBy: "human" as const,
-        },
-      );
-    }
-
-    return trackDriver(
-      await connectMysql({
-        host: conn.host ?? "localhost",
-        port: conn.port ?? 3306,
-        database: conn.database ?? "mysql",
-        username: credential.username,
-        password: credential.password,
-        readonly,
-      }),
-    );
-  }
-
-  if (driver === "snowflake") {
-    if (!credential?.password) {
-      throw Object.assign(
-        new Error(
-          `Snowflake connection '${alias}' requires a credential with a PAT (personal access token) as the password.`,
-        ),
-        {
-          hint: "Add a credential with: agent-sql credential add <name> --password <pat_secret>",
-          fixableBy: "human" as const,
-        },
-      );
-    }
-
-    return trackDriver(
-      await connectSnowflake({
-        account: conn.account ?? "",
-        database: conn.database,
-        schema: conn.schema,
-        warehouse: conn.warehouse,
-        role: conn.role,
-        token: credential.password,
-        readonly,
-      }),
-    );
-  }
-
-  throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql, snowflake.`);
+  return trackDriver(await builder({ conn, credential, readonly, alias }));
 };

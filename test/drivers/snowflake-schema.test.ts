@@ -118,8 +118,7 @@ describe("Snowflake schema discovery", () => {
   test("describeTable with dot notation parses schema.table", async () => {
     sqlResponder = (sql) => {
       if (sql.includes("INFORMATION_SCHEMA.COLUMNS")) {
-        expect(sql).toContain("MYSCHEMA");
-        expect(sql).toContain("MYTABLE");
+        // Schema/table are now in bindings (? placeholders), not in SQL text
         return makeQueryResponse(
           [
             { name: "COLUMN_NAME", type: "text" },
@@ -132,6 +131,8 @@ describe("Snowflake schema discovery", () => {
         );
       }
       if (sql.includes("SHOW PRIMARY KEYS")) {
+        expect(sql).toContain("MYSCHEMA");
+        expect(sql).toContain("MYTABLE");
         return makeQueryResponse([{ name: "column_name", type: "text" }], []);
       }
       return SELECT_1;
