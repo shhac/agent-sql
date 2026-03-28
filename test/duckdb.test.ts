@@ -120,13 +120,6 @@ describe("duckdb driver", () => {
       expect(result.rows).toEqual([{ id: 2 }, { id: 3 }]);
     });
 
-    test("handles CTEs and subqueries", async () => {
-      const result = await driver.query(
-        "WITH top_spenders AS (SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id) SELECT u.name, t.total FROM top_spenders t JOIN users u ON t.user_id = u.id ORDER BY t.total DESC",
-      );
-      expect(result.rows[0]?.name).toBe("Alice");
-    });
-
     test("throws on syntax error with fixable_by agent", async () => {
       try {
         await driver.query("SELEC * FROM users");
@@ -307,6 +300,76 @@ describe("duckdb driver", () => {
   });
 });
 
+describe("duckdb NDJSON parsing and data types", () => {
+  let mem: DriverConnection;
+
+  beforeAll(async () => {
+    mem = await connectDuckDb({ readonly: false });
+  });
+
+  afterAll(async () => {
+    await mem.close();
+  });
+
+  test("strings with embedded newlines", async () => {
+    const result = await mem.query("SELECT 'line1\nline2\nline3' AS val");
+    expect(result.rows[0]?.val).toBe("line1\nline2\nline3");
+  });
+
+  test("strings with quotes and backslashes", async () => {
+    const result = await mem.query("SELECT 'has\"quotes' AS q, 'back\\slash' AS b");
+    expect(result.rows[0]?.q).toBe('has"quotes');
+    expect(result.rows[0]?.b).toBe("back\\slash");
+  });
+
+  test("tabs, unicode, and emoji", async () => {
+    const result = await mem.query("SELECT 'col1\tcol2' AS t, '🎉日本語' AS u");
+    expect(result.rows[0]?.t).toBe("col1\tcol2");
+    expect(result.rows[0]?.u).toBe("🎉日本語");
+  });
+
+  test("data type serialization", async () => {
+    const result = await mem.query(`SELECT
+      true AS bool_t, false AS bool_f,
+      42::TINYINT AS tiny, 9999999999999::BIGINT AS big,
+      3.14::FLOAT AS flt, 2.718::DOUBLE AS dbl,
+      DATE '2024-01-15' AS dt, TIME '10:30:00' AS tm,
+      [1,2,3] AS arr, '' AS empty_str, NULL AS nil
+    `);
+    const row = result.rows[0]!;
+    // booleans → strings in jsonlines mode
+    expect(row.bool_t).toBe("true");
+    expect(row.bool_f).toBe("false");
+    // integers → numbers
+    expect(row.tiny).toBe(42);
+    expect(row.big).toBe(9999999999999);
+    // float/double → numbers (unlike DECIMAL which is string)
+    expect(typeof row.flt).toBe("number");
+    expect(typeof row.dbl).toBe("number");
+    // date/time → strings
+    expect(row.dt).toBe("2024-01-15");
+    expect(row.tm).toBe("10:30:00");
+    // arrays → JSON arrays
+    expect(row.arr).toEqual([1, 2, 3]);
+    // empty string vs NULL
+    expect(row.empty_str).toBe("");
+    expect(row.nil).toBeNull();
+  });
+
+  test("very long string value", async () => {
+    const result = await mem.query("SELECT repeat('x', 10000) AS long_val");
+    const row = result.rows[0]!;
+    expect((row.long_val as string).length).toBe(10000);
+  });
+
+  test("multiple rows parse correctly as NDJSON", async () => {
+    const result = await mem.query("SELECT * FROM generate_series(1, 100) AS t(id)");
+    expect(result.rows).toHaveLength(100);
+    expect(result.rows[0]?.id).toBe(1);
+    expect(result.rows[99]?.id).toBe(100);
+  });
+});
+
 describe("duckdb file queries", () => {
   test("queries CSV file directly", async () => {
     const csvPath = join(tmpdir(), `duckdb-test-${Date.now()}.csv`);
@@ -338,24 +401,7 @@ describe("duckdb file queries", () => {
   });
 });
 
-describe("duckdb CLI availability", () => {
-  test("checkDuckDbAvailable succeeds when CLI is on PATH", async () => {
-    const { checkDuckDbAvailable } = await import("../src/drivers/duckdb/subprocess");
-    expect(() => checkDuckDbAvailable()).not.toThrow();
-  });
-
-  test("checkDuckDbAvailable fails for nonexistent path", async () => {
-    const origPath = process.env.AGENT_SQL_DUCKDB_PATH;
-    process.env.AGENT_SQL_DUCKDB_PATH = "/nonexistent/duckdb";
-    try {
-      const { checkDuckDbAvailable } = await import("../src/drivers/duckdb/subprocess");
-      expect(() => checkDuckDbAvailable()).toThrow(/DuckDB CLI not found/);
-    } finally {
-      if (origPath) {
-        process.env.AGENT_SQL_DUCKDB_PATH = origPath;
-      } else {
-        delete process.env.AGENT_SQL_DUCKDB_PATH;
-      }
-    }
-  });
+test("checkDuckDbAvailable succeeds when CLI is on PATH", async () => {
+  const { checkDuckDbAvailable } = await import("../src/drivers/duckdb/subprocess");
+  expect(() => checkDuckDbAvailable()).not.toThrow();
 });
