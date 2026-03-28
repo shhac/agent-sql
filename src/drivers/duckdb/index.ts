@@ -1,5 +1,5 @@
 import { detectCommand, type DriverConnection, type QueryResult } from "../types";
-import { checkDuckDbAvailable, execDuckDbJson } from "./subprocess";
+import { execDuckDbJson } from "./subprocess";
 import { createDuckDbSchema } from "./schema";
 import { quoteIdentPg } from "../../lib/quote-ident";
 
@@ -16,29 +16,24 @@ const WRITE_COMMANDS: ReadonlySet<string> = new Set([
   "DROP",
   "ALTER",
   "COPY",
+  "TRUNCATE",
+  "MERGE",
 ]);
 
 export const connectDuckDb = async (opts: DuckDbOpts): Promise<DriverConnection> => {
   const readonly = opts.readonly ?? true;
   const dbPath = opts.path;
 
-  checkDuckDbAvailable();
-
-  // Verify the database is accessible
+  // Verify CLI exists and database is accessible in one spawn
   await execDuckDbJson({ dbPath, sql: "SELECT 1", readonly });
 
   const query = async (sql: string, queryOpts?: { write?: boolean }): Promise<QueryResult> => {
     const command = detectCommand(sql, WRITE_COMMANDS);
 
     if (command && queryOpts?.write) {
-      const rows = await execDuckDbJson({ dbPath, sql, readonly: false });
-      const [first] = rows;
-      return {
-        columns: [],
-        rows: [],
-        rowsAffected: first ? ((first.Count as number) ?? 0) : 0,
-        command,
-      };
+      await execDuckDbJson({ dbPath, sql, readonly: false });
+      // DuckDB jsonlines produces no output for write statements; rowsAffected unavailable
+      return { columns: [], rows: [], rowsAffected: 0, command };
     }
 
     const rows = await execDuckDbJson({ dbPath, sql, readonly });

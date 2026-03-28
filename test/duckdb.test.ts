@@ -401,7 +401,98 @@ describe("duckdb file queries", () => {
   });
 });
 
-test("checkDuckDbAvailable succeeds when CLI is on PATH", async () => {
-  const { checkDuckDbAvailable } = await import("../src/drivers/duckdb/subprocess");
-  expect(() => checkDuckDbAvailable()).not.toThrow();
+describe("duckdb write mode", () => {
+  const WRITE_DB = join(tmpdir(), `duckdb-write-test-${Date.now()}.duckdb`);
+
+  beforeAll(() => {
+    Bun.spawnSync(["duckdb", WRITE_DB, "-c", "CREATE TABLE items (id INT, name VARCHAR)"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+  });
+
+  afterAll(() => {
+    try {
+      unlinkSync(WRITE_DB);
+    } catch {
+      // ignore
+    }
+  });
+
+  test("INSERT with write mode returns command and rowsAffected", async () => {
+    const d = await connectDuckDb({ path: WRITE_DB, readonly: false });
+    const result = await d.query("INSERT INTO items VALUES (1, 'pen'), (2, 'paper')", {
+      write: true,
+    });
+    expect(result.command).toBe("INSERT");
+    expect(result.columns).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.rowsAffected).toBe(0); // DuckDB jsonlines doesn't report count
+    await d.close();
+  });
+
+  test("DELETE with write mode returns command", async () => {
+    const d = await connectDuckDb({ path: WRITE_DB, readonly: false });
+    const result = await d.query("DELETE FROM items WHERE id = 1", { write: true });
+    expect(result.command).toBe("DELETE");
+    await d.close();
+  });
+
+  test("TRUNCATE detected as write command", async () => {
+    const d = await connectDuckDb({ path: WRITE_DB, readonly: false });
+    const result = await d.query("TRUNCATE TABLE items", { write: true });
+    expect(result.command).toBe("TRUNCATE");
+    await d.close();
+  });
+});
+
+describe("duckdb CLI not found", () => {
+  test("connectDuckDb throws clear error when CLI missing", async () => {
+    const orig = process.env.AGENT_SQL_DUCKDB_PATH;
+    process.env.AGENT_SQL_DUCKDB_PATH = "/nonexistent/duckdb";
+    try {
+      await expect(connectDuckDb({ readonly: false })).rejects.toThrow(/DuckDB CLI not found/);
+      await expect(connectDuckDb({ readonly: false })).rejects.toMatchObject({
+        fixableBy: "human",
+      });
+    } finally {
+      if (orig) {
+        process.env.AGENT_SQL_DUCKDB_PATH = orig;
+      } else {
+        delete process.env.AGENT_SQL_DUCKDB_PATH;
+      }
+    }
+  });
+});
+
+describe("duckdb ad-hoc resolution", () => {
+  test("duckdb:// URL with --write is rejected", async () => {
+    const { resolveDriver } = await import("../src/drivers/resolve");
+    try {
+      await resolveDriver({ connection: "duckdb://", write: true });
+      expect(true).toBe(false);
+    } catch (err) {
+      const msg = (err as Error).message;
+      expect(msg).toContain("Write mode is not available for ad-hoc connections");
+      expect((err as { fixableBy: string }).fixableBy).toBe("human");
+    }
+  });
+
+  test(".duckdb file path with --write is rejected for ad-hoc", async () => {
+    const dbPath = join(tmpdir(), `adhoc-test-${Date.now()}.duckdb`);
+    Bun.spawnSync(["duckdb", dbPath, "-c", "SELECT 1"], { stdout: "pipe", stderr: "pipe" });
+    const { resolveDriver } = await import("../src/drivers/resolve");
+    try {
+      await resolveDriver({ connection: dbPath, write: true });
+      expect(true).toBe(false);
+    } catch (err) {
+      expect((err as Error).message).toContain("Write mode is not available for ad-hoc");
+    } finally {
+      try {
+        unlinkSync(dbPath);
+      } catch {
+        // ignore
+      }
+    }
+  });
 });

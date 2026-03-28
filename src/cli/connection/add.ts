@@ -163,7 +163,10 @@ export function registerAdd(connection: Command): void {
     .description("Add a SQL connection")
     .argument("<alias>", "Short name for this connection (e.g. local, staging, prod)")
     .argument("[connection-string]", "Connection URL or file path (auto-detects driver)")
-    .option("--driver <driver>", "Database driver: pg, cockroachdb, sqlite, mysql, or snowflake")
+    .option(
+      "--driver <driver>",
+      "Database driver: pg, cockroachdb, sqlite, duckdb, mysql, or snowflake",
+    )
     .option("--host <host>", "Database host")
     .option("--port <port>", "Database port")
     .option("--database <db>", "Database name")
