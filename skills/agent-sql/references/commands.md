@@ -46,7 +46,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 
 | Flag                       | Description                                  |
 | -------------------------- | -------------------------------------------- |
-| `-c, --connection <alias>` | Connection alias, file path, or URL (overrides env/default). File paths (e.g. `./data.db`) and URLs (e.g. `postgres://...`, `cockroachdb://...`, `mysql://...`, `snowflake://...`) work without prior setup. CockroachDB default port: 26257. Snowflake ad-hoc: `snowflake://account/database/schema?warehouse=WH` with `AGENT_SQL_SNOWFLAKE_TOKEN` env var. Account format: `orgname-accountname` or `account.region`. |
+| `-c, --connection <alias>` | Connection alias, file path, or URL (overrides env/default). File paths (e.g. `./data.db`, `./data.duckdb`) and URLs (e.g. `postgres://...`, `cockroachdb://...`, `mysql://...`, `duckdb://...`, `snowflake://...`) work without prior setup. CockroachDB default port: 26257. DuckDB: requires `duckdb` CLI (`brew install duckdb`); `duckdb://` with no path for in-memory mode (query Parquet/CSV/JSON files); set `AGENT_SQL_DUCKDB_PATH` for custom CLI location. Snowflake ad-hoc: `snowflake://account/database/schema?warehouse=WH` with `AGENT_SQL_SNOWFLAKE_TOKEN` env var. Account format: `orgname-accountname` or `account.region`. |
 | `--format jsonl\|json\|yaml\|csv` | Output format (default: jsonl or config)       |
 | `--expand <field,...>`     | Expand specific truncated fields              |
 | `--full`                   | Expand all truncated fields                   |

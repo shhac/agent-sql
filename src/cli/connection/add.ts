@@ -4,7 +4,12 @@ import type { Driver, Connection } from "../../lib/config.ts";
 import { storeConnection, setDefaultConnection } from "../../lib/config.ts";
 import { getCredential, getCredentialNames } from "../../lib/credentials.ts";
 import { printJson, printError } from "../../lib/output.ts";
-import { detectDriverFromUrl, isFilePath, SQLITE_FILE_EXTENSIONS } from "../../drivers/resolve.ts";
+import {
+  detectDriverFromUrl,
+  isFilePath,
+  SQLITE_FILE_EXTENSIONS,
+  DUCKDB_FILE_EXTENSIONS,
+} from "../../drivers/resolve.ts";
 
 type AddOpts = {
   driver?: Driver;
@@ -32,16 +37,24 @@ const resolveDriver = (opts: AddOpts): Driver => {
     }
   }
   if (opts.path) {
+    const pathLower = opts.path.toLowerCase();
+    if (DUCKDB_FILE_EXTENSIONS.some((ext) => pathLower.endsWith(ext))) {
+      return "duckdb";
+    }
     return "sqlite";
   }
   throw new Error(
-    "Cannot determine driver. Use --driver pg|cockroachdb|sqlite|mysql|snowflake, a connection URL, or a file path for SQLite.",
+    "Cannot determine driver. Use --driver pg|cockroachdb|sqlite|duckdb|mysql|snowflake, a connection URL, or a file path for SQLite.",
   );
 };
 
 const parseConnectionString = (connStr: string, opts: AddOpts): void => {
-  // File path → SQLite
+  // File path → SQLite or DuckDB
   const lower = connStr.toLowerCase();
+  if (DUCKDB_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+    opts.path = connStr;
+    return;
+  }
   if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext)) || isFilePath(connStr)) {
     opts.path = connStr;
     return;
@@ -51,12 +64,17 @@ const parseConnectionString = (connStr: string, opts: AddOpts): void => {
   const driver = detectDriverFromUrl(connStr);
   if (!driver) {
     throw new Error(
-      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, cockroachdb://, mysql://, snowflake://) or a file path (.db, .sqlite).`,
+      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, cockroachdb://, duckdb://, mysql://, snowflake://) or a file path (.db, .sqlite, .duckdb).`,
     );
   }
 
   if (driver === "sqlite") {
     opts.path = connStr.replace(/^sqlite:\/\//, "");
+    return;
+  }
+
+  if (driver === "duckdb") {
+    opts.path = connStr.replace(/^duckdb:\/\//, "");
     return;
   }
 

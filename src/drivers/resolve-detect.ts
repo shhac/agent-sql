@@ -9,9 +9,12 @@ export const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
   [/^sqlite:\/\//, "sqlite"],
   [/^snowflake:\/\//, "snowflake"],
   [/^cockroachdb:\/\//, "cockroachdb"],
+  [/^duckdb:\/\//, "duckdb"],
 ];
 
 export const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
+
+export const DUCKDB_FILE_EXTENSIONS = [".duckdb"];
 
 export const detectDriverFromUrl = (url: string): Driver | undefined => {
   for (const [pattern, driver] of DRIVER_URL_PATTERNS) {
@@ -24,6 +27,9 @@ export const detectDriverFromUrl = (url: string): Driver | undefined => {
   if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
     return "sqlite";
   }
+  if (DUCKDB_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+    return "duckdb";
+  }
 
   return undefined;
 };
@@ -34,6 +40,9 @@ export const isConnectionUrl = (value: string): boolean =>
 export const isFilePath = (value: string): boolean => {
   const lower = value.toLowerCase();
   if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+    return true;
+  }
+  if (DUCKDB_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
     return true;
   }
   if (value.startsWith("/") || value.startsWith("./") || value.startsWith("../")) {

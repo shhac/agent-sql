@@ -6,7 +6,7 @@ Read-only-by-default SQL CLI for AI agents.
 - **LLM-optimized** -- `agent-sql usage` prints concise docs for agent consumption
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
-- **PostgreSQL, CockroachDB, MySQL, SQLite, and Snowflake** -- five drivers, one interface
+- **PostgreSQL, CockroachDB, MySQL, SQLite, DuckDB, and Snowflake** -- six drivers, one interface
 - **Zero runtime deps** -- single compiled binary via `bun build --compile`
 
 ## Installation
@@ -49,6 +49,10 @@ agent-sql run -c postgres://user:pass@localhost/myapp 'SELECT * FROM users'
 agent-sql run -c cockroachdb://user:pass@localhost:26257/myapp 'SELECT * FROM users'
 agent-sql run -c mysql://user:pass@localhost/myapp 'SELECT * FROM orders'
 
+# DuckDB — file path or in-memory (requires duckdb CLI: brew install duckdb)
+agent-sql run -c ./analytics.duckdb 'SELECT * FROM events'
+agent-sql run -c duckdb:// "SELECT * FROM 'data/*.parquet'"
+
 # Snowflake — inline URL + token via env var
 AGENT_SQL_SNOWFLAKE_TOKEN=<pat> agent-sql run \
   -c 'snowflake://myorg-myaccount/MY_DB/PUBLIC?warehouse=COMPUTE_WH' 'SELECT 1'
@@ -67,6 +71,9 @@ agent-sql connection add mydb mysql://localhost/myapp --credential mysql-cred
 
 # SQLite — just a file path, no credential needed
 agent-sql connection add local ./data.db
+
+# DuckDB — file path, no credential needed (requires duckdb CLI)
+agent-sql connection add analytics ./analytics.duckdb
 
 # Snowflake — PAT as password, account can look like orgname-accountname or account.region
 agent-sql credential add sf-cred --password <pat_secret>
@@ -146,13 +153,13 @@ Each command group has a `usage` subcommand for detailed, LLM-friendly documenta
 
 agent-sql is read-only by default with defense in depth:
 
-| Layer | PostgreSQL / CockroachDB | MySQL | SQLite | Snowflake |
-| --- | --- | --- | --- | --- |
-| **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default | Same as PG/MySQL |
-| **Query flag** | `--write` required on each write query | Same | Same | Same |
-| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist. CockroachDB uses the PG wire protocol — guard fails closed for CRDB-specific syntax. | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement | Client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1` |
-| **Result cap** | `query.maxRows` (default 10,000) | Same | Same | Same |
-| **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same | Same | Same |
+| Layer | PostgreSQL / CockroachDB | MySQL | SQLite | DuckDB | Snowflake |
+| --- | --- | --- | --- | --- | --- |
+| **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default | Same as SQLite | Same as PG/MySQL |
+| **Query flag** | `--write` required on each write query | Same | Same | Same | Same |
+| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist. CockroachDB uses the PG wire protocol — guard fails closed for CRDB-specific syntax. | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement | N/A -- `-readonly` CLI flag is engine-level enforcement (like SQLite) | Client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1` |
+| **Result cap** | `query.maxRows` (default 10,000) | Same | Same | Same | Same |
+| **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same | Same | Same | Same |
 
 Write operations require both a credential with `writePermission` and the `--write` flag on the query itself. This two-gate design prevents accidental writes even when credentials allow them.
 
@@ -198,13 +205,14 @@ agent-sql config reset               # reset all to defaults
 
 ## Connection resolution
 
-Resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag accepts saved aliases, file paths (e.g. `./data.db`), and connection URLs (e.g. `postgres://user:pass@host/db`).
+Resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag accepts saved aliases, file paths (e.g. `./data.db`, `./data.duckdb`), and connection URLs (e.g. `postgres://user:pass@host/db`, `duckdb://`).
 
 ## Environment variables
 
 | Variable | Description |
 | --- | --- |
 | `AGENT_SQL_CONNECTION` | Default connection alias |
+| `AGENT_SQL_DUCKDB_PATH` | Path to `duckdb` CLI binary (default: found via `$PATH`) |
 | `AGENT_SQL_SNOWFLAKE_TOKEN` | PAT for ad-hoc Snowflake connections |
 | `XDG_CONFIG_HOME` | Override config directory (default: `~/.config`) |
 

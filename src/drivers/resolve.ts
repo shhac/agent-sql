@@ -8,6 +8,7 @@ import { connectPg } from "./pg";
 import { connectSqlite } from "./sqlite";
 import { connectMysql } from "./mysql";
 import { connectSnowflake } from "./snowflake";
+import { connectDuckDb } from "./duckdb";
 import { detectDriverFromUrl } from "./resolve-detect";
 import { resolveAdHocConnection } from "./resolve-ad-hoc";
 
@@ -16,6 +17,7 @@ export {
   isConnectionUrl,
   isFilePath,
   SQLITE_FILE_EXTENSIONS,
+  DUCKDB_FILE_EXTENSIONS,
 } from "./resolve-detect";
 
 type ResolveOpts = {
@@ -62,7 +64,7 @@ const resolveDriverType = (conn: Connection): Driver => {
   }
 
   throw new Error(
-    "Cannot determine driver type. Set the 'driver' field on the connection or use a URL with a recognizable scheme (postgres://, cockroachdb://, sqlite://, mysql://).",
+    "Cannot determine driver type. Set the 'driver' field on the connection or use a URL with a recognizable scheme (postgres://, cockroachdb://, sqlite://, duckdb://, mysql://).",
   );
 };
 
@@ -223,6 +225,17 @@ const connectSnowflakeFromConfig = async (opts: ConfigConnectOpts): Promise<Driv
   });
 };
 
+const connectDuckDbFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+  const path = opts.conn.path ?? opts.conn.url?.replace(/^duckdb:\/\//, "");
+  if (!path) {
+    throw new Error(
+      `DuckDB connection '${opts.alias}' requires a path. Set 'path' on the connection or use a duckdb:// URL.`,
+    );
+  }
+
+  return connectDuckDb({ path, readonly: opts.readonly });
+};
+
 const configConnectBuilders: Record<
   Driver,
   (opts: ConfigConnectOpts) => Promise<DriverConnection>
@@ -230,6 +243,7 @@ const configConnectBuilders: Record<
   pg: connectPgFromConfig,
   cockroachdb: connectCockroachDbFromConfig,
   sqlite: connectSqliteFromConfig,
+  duckdb: connectDuckDbFromConfig,
   mysql: connectMysqlFromConfig,
   snowflake: connectSnowflakeFromConfig,
 };
@@ -269,7 +283,7 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
   const builder = configConnectBuilders[driver];
   if (!builder) {
     throw new Error(
-      `Unknown driver '${driver}'. Supported drivers: pg, cockroachdb, sqlite, mysql, snowflake.`,
+      `Unknown driver '${driver}'. Supported drivers: pg, cockroachdb, sqlite, duckdb, mysql, snowflake.`,
     );
   }
   return trackDriver(await builder({ conn, credential, readonly, alias }));

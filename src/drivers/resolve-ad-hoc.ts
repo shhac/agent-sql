@@ -4,7 +4,13 @@ import { connectPg } from "./pg";
 import { connectSqlite } from "./sqlite";
 import { connectMysql } from "./mysql";
 import { connectSnowflake } from "./snowflake";
-import { isConnectionUrl, isFilePath, detectDriverFromUrl } from "./resolve-detect";
+import { connectDuckDb } from "./duckdb";
+import {
+  isConnectionUrl,
+  isFilePath,
+  detectDriverFromUrl,
+  DUCKDB_FILE_EXTENSIONS,
+} from "./resolve-detect";
 
 const parseConnectionUrl = (
   url: string,
@@ -54,6 +60,13 @@ export const resolveAdHocConnection = async (
       return trackDriver(await connectSqlite({ path: resolve(filePath), readonly: true }));
     }
 
+    if (driver === "duckdb") {
+      rejectAdHocUrlWrite(write);
+      const filePath = connectionStr.replace(/^duckdb:\/\//, "");
+      const path = filePath ? resolve(filePath) : undefined;
+      return trackDriver(await connectDuckDb({ path, readonly: true }));
+    }
+
     if (driver === "snowflake") {
       rejectAdHocUrlWrite(write);
       const token = process.env.AGENT_SQL_SNOWFLAKE_TOKEN;
@@ -100,9 +113,17 @@ export const resolveAdHocConnection = async (
     return trackDriver(await connectMysql(connectOpts));
   }
 
-  // File path check — SQLite file, write allowed via --write
+  // File path check — SQLite or DuckDB file
   if (isFilePath(connectionStr)) {
     const absPath = resolve(connectionStr);
+    const lower = connectionStr.toLowerCase();
+    const isDuckDb = DUCKDB_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+
+    if (isDuckDb) {
+      rejectAdHocUrlWrite(write);
+      return trackDriver(await connectDuckDb({ path: absPath, readonly: true }));
+    }
+
     const fileExists = await Bun.file(absPath).exists();
     if (!fileExists && !write) {
       throw Object.assign(new Error(`SQLite database not found: ${connectionStr}`), {

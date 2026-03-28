@@ -105,6 +105,14 @@ describe("detectDriverFromUrl", () => {
     expect(detectDriverFromUrl("cockroachdb://localhost:26257/mydb")).toBe("cockroachdb");
   });
 
+  test("detects duckdb:// URLs", () => {
+    expect(detectDriverFromUrl("duckdb:///path/to/db.duckdb")).toBe("duckdb");
+  });
+
+  test("detects .duckdb file extension", () => {
+    expect(detectDriverFromUrl("/data/app.duckdb")).toBe("duckdb");
+  });
+
   test("returns undefined for unrecognized URLs", () => {
     expect(detectDriverFromUrl("http://example.com")).toBeUndefined();
   });

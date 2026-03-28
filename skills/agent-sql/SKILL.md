@@ -2,18 +2,18 @@
 name: agent-sql
 description: |
   Read-only-by-default SQL CLI for AI agents. Use when:
-  - Exploring SQL databases (PostgreSQL, CockroachDB, MySQL, SQLite, Snowflake) -- tables, columns, indexes, constraints
+  - Exploring SQL databases (PostgreSQL, CockroachDB, MySQL, SQLite, DuckDB, Snowflake) -- tables, columns, indexes, constraints
   - Querying data (SELECT, sample rows, count, explain plans)
   - Writing data when explicitly permitted (INSERT, UPDATE, DELETE with --write)
   - Checking database connections or adjusting CLI settings
-  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "cockroachdb", "cockroach", "mysql", "sqlite", "snowflake", "sql connection", "query database", "sql select", "sql insert", "sql explain", "sql count", "sql sample", "database schema", "describe table", "sql columns", "sql indexes", "mariadb"
+  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "cockroachdb", "cockroach", "mysql", "sqlite", "duckdb", "parquet", "snowflake", "sql connection", "query database", "sql select", "sql insert", "sql explain", "sql count", "sql sample", "database schema", "describe table", "sql columns", "sql indexes", "mariadb"
 ---
 
 # SQL database exploration with `agent-sql`
 
 `agent-sql` is a read-only-by-default SQL CLI binary on `$PATH`. Query output is JSONL to stdout (one JSON object per line, no envelope). Non-tabular output (schema, config, admin) uses JSON envelope. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
 
-Supports PostgreSQL, CockroachDB, MySQL, SQLite, and Snowflake.
+Supports PostgreSQL, CockroachDB, MySQL, SQLite, DuckDB, and Snowflake.
 
 ## Quick start
 
@@ -25,6 +25,8 @@ agent-sql run -c postgres://user:pass@host/db 'SELECT * FROM users' # PG URL (ze
 agent-sql run -c cockroachdb://user:pass@host:26257/db 'SELECT * FROM users' # CockroachDB URL
 agent-sql run -c mysql://user:pass@host/db 'SELECT * FROM users'   # MySQL URL (zero setup)
 agent-sql run -c snowflake://org-acct/mydb/public?warehouse=WH 'SELECT * FROM users' # Snowflake URL
+agent-sql run -c ./analytics.duckdb 'SELECT * FROM events'         # DuckDB file (zero setup)
+agent-sql run -c duckdb:// "SELECT * FROM 'data/*.parquet'"        # DuckDB in-memory (query files directly)
 agent-sql run -c myalias 'SELECT * FROM users'                     # saved connection alias
 ```
 
@@ -122,12 +124,12 @@ agent-sql connection test -c prod                    # test specific connection
 # connection add local ./data.db
 ```
 
-Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (e.g. `./data.db`), or URLs (e.g. `postgres://...`, `cockroachdb://...`, `mysql://...`, `snowflake://...`). Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var for authentication.
+Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (e.g. `./data.db`, `./data.duckdb`), or URLs (e.g. `postgres://...`, `cockroachdb://...`, `mysql://...`, `duckdb://...`, `snowflake://...`). DuckDB requires the `duckdb` CLI installed separately (`brew install duckdb`); set `AGENT_SQL_DUCKDB_PATH` for a custom location. Use `duckdb://` with no path for in-memory mode to query Parquet, CSV, and JSON files directly. Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var for authentication.
 
 ## Safety
 
 - **Read-only by default**: writes require `--write` flag AND a credential with write permission
-- **Defense in depth**: PG/CockroachDB uses database-level read-only transactions + session guard (libpg-query); MySQL uses `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement; SQLite uses OS-level SQLITE_OPEN_READONLY; Snowflake uses keyword allowlist + `MULTI_STATEMENT_COUNT=1`
+- **Defense in depth**: PG/CockroachDB uses database-level read-only transactions + session guard (libpg-query); MySQL uses `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement; SQLite uses OS-level SQLITE_OPEN_READONLY; DuckDB uses `-readonly` CLI flag (engine-level, like SQLite); Snowflake uses keyword allowlist + `MULTI_STATEMENT_COUNT=1`
 - **Result cap**: `query.maxRows` (default 10,000)
 - **Timeout**: `query.timeout` (default 30s), override per-command with `--timeout <ms>`
 

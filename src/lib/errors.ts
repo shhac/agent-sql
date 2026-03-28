@@ -317,6 +317,12 @@ const handlers: ((err: any, context?: ErrorContext) => EnhancedError | undefined
 ];
 
 export const enhanceError = (err: Error, context?: ErrorContext): EnhancedError => {
+  // Preserve pre-classified errors (e.g. from subprocess drivers)
+  const pre = err as Error & { fixableBy?: FixableBy; hint?: string };
+  if (pre.fixableBy) {
+    return { message: pre.message, hint: pre.hint, fixableBy: pre.fixableBy };
+  }
+
   for (const handler of handlers) {
     const result = handler(err, context);
     if (result) {

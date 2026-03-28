@@ -51,7 +51,7 @@ export function registerUpdate(connection: Command): void {
     .command("update")
     .description("Update a saved connection")
     .argument("<alias>", "Connection alias to update")
-    .option("--driver <driver>", "Database driver: pg, cockroachdb, sqlite, mysql, or snowflake")
+    .option("--driver <driver>", "Database driver: pg, cockroachdb, sqlite, duckdb, mysql, or snowflake")
     .option("--host <host>", "Database host")
     .option("--port <port>", "Database port")
     .option("--database <db>", "Database name")

@@ -54,6 +54,14 @@ describe("detectDriverFromUrl", () => {
     expect(detectDriverFromUrl("cockroachdb://localhost:26257/mydb")).toBe("cockroachdb");
   });
 
+  test("detects duckdb:// URLs", () => {
+    expect(detectDriverFromUrl("duckdb:///path/to/db.duckdb")).toBe("duckdb");
+  });
+
+  test("detects .duckdb file extension", () => {
+    expect(detectDriverFromUrl("/data/app.duckdb")).toBe("duckdb");
+  });
+
   test("returns undefined for unrecognized URLs", () => {
     expect(detectDriverFromUrl("http://example.com")).toBeUndefined();
   });
@@ -92,6 +100,10 @@ describe("isConnectionUrl", () => {
     expect(isConnectionUrl("cockroachdb://user:pass@localhost:26257/mydb")).toBe(true);
   });
 
+  test("recognizes duckdb:// URLs", () => {
+    expect(isConnectionUrl("duckdb:///path/to/db")).toBe(true);
+  });
+
   test("rejects plain strings", () => {
     expect(isConnectionUrl("my-connection")).toBe(false);
   });
@@ -116,6 +128,10 @@ describe("isFilePath", () => {
 
   test("recognizes .db3 extension", () => {
     expect(isFilePath("test.db3")).toBe(true);
+  });
+
+  test("recognizes .duckdb extension", () => {
+    expect(isFilePath("data.duckdb")).toBe(true);
   });
 
   test("recognizes existing files on disk", () => {
