@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { withCatch, withCatchSync } from "../src/lib/with-catch";
+import { withCatch, withCatchSync, withRetry } from "../src/lib/with-catch";
 
 describe("withCatch", () => {
   test("resolving promise returns [undefined, value]", async () => {
@@ -46,5 +46,79 @@ describe("withCatchSync", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toBeInstanceOf(Error);
     expect((result[0] as Error).message).toBe("404");
+  });
+});
+
+describe("withRetry", () => {
+  test("returns result on first success", async () => {
+    const fn = () => Promise.resolve(42);
+    const result = await withRetry(fn, {
+      maxRetries: 3,
+      shouldRetry: () => true,
+      delay: () => 0,
+    });
+    expect(result).toBe(42);
+  });
+
+  test("retries on failure then succeeds", async () => {
+    let calls = 0;
+    const fn = () => {
+      calls++;
+      if (calls < 3) {
+        throw new Error("fail");
+      }
+      return Promise.resolve("ok");
+    };
+    const result = await withRetry(fn, {
+      maxRetries: 3,
+      shouldRetry: () => true,
+      delay: () => 0,
+    });
+    expect(result).toBe("ok");
+    expect(calls).toBe(3);
+  });
+
+  test("throws after exhausting retries", async () => {
+    const fn = () => Promise.reject(new Error("always fails"));
+    await expect(
+      withRetry(fn, { maxRetries: 2, shouldRetry: () => true, delay: () => 0 }),
+    ).rejects.toThrow("always fails");
+  });
+
+  test("respects shouldRetry — stops early on non-retryable error", async () => {
+    let calls = 0;
+    const fn = () => {
+      calls++;
+      return Promise.reject(new Error("fatal"));
+    };
+    await expect(
+      withRetry(fn, {
+        maxRetries: 5,
+        shouldRetry: (err) => err.message !== "fatal",
+        delay: () => 0,
+      }),
+    ).rejects.toThrow("fatal");
+    expect(calls).toBe(1);
+  });
+
+  test("calls delay with attempt number", async () => {
+    const delays: number[] = [];
+    let calls = 0;
+    const fn = () => {
+      calls++;
+      if (calls < 3) {
+        return Promise.reject(new Error("retry"));
+      }
+      return Promise.resolve("done");
+    };
+    await withRetry(fn, {
+      maxRetries: 3,
+      shouldRetry: () => true,
+      delay: (attempt) => {
+        delays.push(attempt);
+        return 0;
+      },
+    });
+    expect(delays).toEqual([0, 1]);
   });
 });

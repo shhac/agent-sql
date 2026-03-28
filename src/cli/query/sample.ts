@@ -1,11 +1,11 @@
 import type { Command } from "commander";
 import type { DriverConnection } from "../../drivers/types.ts";
-import { resolveDriver } from "../../drivers/resolve.ts";
 import {
   handleActionError,
   resolveConnectionAlias,
   configureTruncationFromOpts,
   printQueryResults,
+  withDriver,
 } from "../action-helpers.ts";
 
 type SampleOptions = {
@@ -44,10 +44,8 @@ export function registerSample(parent: Command): void {
         configureTruncationFromOpts(opts);
 
         const limit = opts.limit !== undefined ? Number(opts.limit) : DEFAULT_SAMPLE_SIZE;
-        const driver = await resolveDriver({ connection: connectionAlias });
-        const sql = buildSampleSql(driver, { table, limit, where: opts.where });
-
-        try {
+        await withDriver({ connection: connectionAlias }, async (driver) => {
+          const sql = buildSampleSql(driver, { table, limit, where: opts.where });
           const result = await driver.query(sql);
 
           printQueryResults({
@@ -56,9 +54,7 @@ export function registerSample(parent: Command): void {
             hasMore: false,
             compact: opts.compact,
           });
-        } finally {
-          await driver.close();
-        }
+        });
       } catch (err) {
         handleActionError(err, connectionAlias);
       }

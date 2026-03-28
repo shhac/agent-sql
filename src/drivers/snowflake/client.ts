@@ -4,7 +4,7 @@
 import type { SnowflakeStatementRequest, SnowflakeQueryResponse, SnowflakeResponse } from "./types";
 import { isQueryResponse, isAsyncResponse } from "./types";
 import type { AuthHeaders } from "./auth";
-import { withCatch } from "../../lib/with-catch";
+import { withCatch, withRetry } from "../../lib/with-catch";
 
 export type SnowflakeClientOpts = {
   baseUrl: string;
@@ -40,26 +40,26 @@ export class SnowflakeClient {
   }
 
   private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
-    for (const attempt of Array.from({ length: MAX_RETRIES + 1 }, (_, i) => i)) {
-      if (attempt > 0) {
-        await sleep(jitteredDelay(attempt - 1));
-      }
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-      const [err, resp] = await withCatch(fetch(url, { ...init, signal: controller.signal }));
-      clearTimeout(timer);
-
-      if (resp && (!isRetryable(resp.status) || attempt === MAX_RETRIES)) {
+    return withRetry(
+      async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+        const [err, resp] = await withCatch(fetch(url, { ...init, signal: controller.signal }));
+        clearTimeout(timer);
+        if (err) {
+          throw err;
+        }
+        if (isRetryable(resp.status)) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
         return resp;
-      }
-
-      if (err && attempt === MAX_RETRIES) {
-        throw err;
-      }
-    }
-
-    throw new Error("Request failed after retries");
+      },
+      {
+        maxRetries: MAX_RETRIES,
+        shouldRetry: () => true,
+        delay: jitteredDelay,
+      },
+    );
   }
 
   async executeStatement(req: SnowflakeStatementRequest): Promise<SnowflakeQueryResponse> {

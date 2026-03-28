@@ -1,8 +1,7 @@
 import type { Command } from "commander";
 import type { TableInfo } from "../../drivers/types.ts";
-import { resolveDriver } from "../../drivers/resolve.ts";
 import { printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
+import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
 
 type DumpOpts = {
   connection?: string;
@@ -41,8 +40,7 @@ export function registerDump(parent: Command): void {
       const connectionAlias = resolveConnectionAlias(opts, parent);
 
       try {
-        const driver = await resolveDriver({ connection: connectionAlias });
-        try {
+        await withDriver({ connection: connectionAlias }, async (driver) => {
           const allTables = await driver.getTables({ includeSystem: opts.includeSystem });
           const filter = opts.tables ? parseTableFilter(opts.tables) : undefined;
           const filtered = filter ? allTables.filter((t) => matchesFilter(t, filter)) : allTables;
@@ -66,9 +64,7 @@ export function registerDump(parent: Command): void {
           );
 
           printJson({ tables });
-        } finally {
-          await driver.close();
-        }
+        });
       } catch (err) {
         handleActionError(err, connectionAlias);
       }

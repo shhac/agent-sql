@@ -1,10 +1,10 @@
-import { resolveDriver } from "../../drivers/resolve.ts";
 import { getSetting } from "../../lib/config.ts";
 import { printJson, resolvePageSize } from "../../lib/output.ts";
 import {
   handleActionError,
   configureTruncationFromOpts,
   printQueryResults,
+  withDriver,
 } from "../action-helpers.ts";
 
 export type RunOptions = {
@@ -50,12 +50,7 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
     });
     const effectiveLimit = maxRows ? Math.min(pageSize, maxRows) : pageSize;
 
-    const driver = await resolveDriver({
-      connection: opts.connection,
-      write: opts.write,
-    });
-
-    try {
+    await withDriver({ connection: opts.connection, write: opts.write }, async (driver) => {
       const effectiveSql = opts.write ? sql : appendLimit(sql, effectiveLimit + 1);
       const result = await driver.query(effectiveSql, { write: opts.write });
 
@@ -77,9 +72,7 @@ export async function executeRun(sql: string, opts: RunOptions): Promise<void> {
         hasMore,
         compact: opts.compact,
       });
-    } finally {
-      await driver.close();
-    }
+    });
   } catch (err) {
     handleActionError(err, opts.connection);
   }

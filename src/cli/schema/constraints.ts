@@ -1,8 +1,7 @@
 import type { Command } from "commander";
 import type { ConstraintInfo } from "../../drivers/types.ts";
-import { resolveDriver } from "../../drivers/resolve.ts";
 import { printJson, printError } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
+import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
 
 type ConstraintsOpts = {
   connection?: string;
@@ -36,16 +35,13 @@ export function registerConstraints(schema: Command): void {
       const connectionAlias = resolveConnectionAlias(opts, schema);
 
       try {
-        const driver = await resolveDriver({ connection: connectionAlias });
-        try {
+        await withDriver({ connection: connectionAlias }, async (driver) => {
           const allConstraints = await driver.getConstraints(table);
           const constraints = opts.type
             ? allConstraints.filter((c) => c.type === TYPE_MAP[opts.type!])
             : allConstraints;
           printJson({ constraints });
-        } finally {
-          await driver.close();
-        }
+        });
       } catch (err) {
         handleActionError(err, connectionAlias);
       }

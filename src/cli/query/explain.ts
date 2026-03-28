@@ -1,7 +1,6 @@
 import type { Command } from "commander";
-import { resolveDriver } from "../../drivers/resolve.ts";
 import { printError, printJson } from "../../lib/output.ts";
-import { handleActionError, resolveConnectionAlias } from "../action-helpers.ts";
+import { handleActionError, resolveConnectionAlias, withDriver } from "../action-helpers.ts";
 
 type ExplainOptions = {
   connection?: string;
@@ -37,16 +36,12 @@ export function registerExplain(parent: Command): void {
         const prefix = opts.analyze ? "EXPLAIN ANALYZE" : "EXPLAIN";
         const explainSql = `${prefix} ${sql}`;
 
-        const driver = await resolveDriver({ connection: connectionAlias });
-
-        try {
+        await withDriver({ connection: connectionAlias }, async (driver) => {
           const result = await driver.query(explainSql);
           printJson({
             plan: result.rows,
           });
-        } finally {
-          await driver.close();
-        }
+        });
       } catch (err) {
         handleActionError(err, connectionAlias);
       }

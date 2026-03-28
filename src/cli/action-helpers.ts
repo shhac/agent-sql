@@ -2,8 +2,26 @@ import { enhanceError } from "../lib/errors.ts";
 import { printError, printPaginated, printCompact } from "../lib/output.ts";
 import { applyTruncation, applyTruncationCompact, configureTruncation } from "../lib/truncation.ts";
 import { getSetting } from "../lib/config.ts";
-import type { QueryResult } from "../drivers/types.ts";
+import type { QueryResult, DriverConnection } from "../drivers/types.ts";
 import type { Command } from "commander";
+import { resolveDriver } from "../drivers/resolve.ts";
+
+type WithDriverOpts = {
+  connection?: string;
+  write?: boolean;
+};
+
+export const withDriver = async <T>(
+  opts: WithDriverOpts,
+  fn: (driver: DriverConnection) => Promise<T>,
+): Promise<T> => {
+  const driver = await resolveDriver(opts);
+  try {
+    return await fn(driver);
+  } finally {
+    await driver.close();
+  }
+};
 
 export const handleActionError = (err: unknown, connectionAlias?: string): void => {
   const enhanced = enhanceError(err instanceof Error ? err : new Error(String(err)), {
