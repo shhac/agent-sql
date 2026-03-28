@@ -36,7 +36,7 @@ export const connectDuckDb = async (opts: DuckDbOpts): Promise<DriverConnection>
       return {
         columns: [],
         rows: [],
-        rowsAffected: first ? (first.Count as number) ?? 0 : 0,
+        rowsAffected: first ? ((first.Count as number) ?? 0) : 0,
         command,
       };
     }

@@ -1,9 +1,4 @@
-import type {
-  TableInfo,
-  ColumnInfo,
-  IndexInfo,
-  ConstraintInfo,
-} from "../types";
+import type { TableInfo, ColumnInfo, IndexInfo, ConstraintInfo } from "../types";
 import { execDuckDbJson } from "./subprocess";
 
 type SchemaOpts = {
@@ -11,16 +6,11 @@ type SchemaOpts = {
   readonly: boolean;
 };
 
-const runQuery = async (
-  opts: SchemaOpts,
-  sql: string,
-): Promise<Record<string, unknown>[]> =>
+const runQuery = async (opts: SchemaOpts, sql: string): Promise<Record<string, unknown>[]> =>
   execDuckDbJson({ dbPath: opts.dbPath, sql, readonly: opts.readonly });
 
 export const createDuckDbSchema = (opts: SchemaOpts) => {
-  const getTables = async (
-    tableOpts?: { includeSystem?: boolean },
-  ): Promise<TableInfo[]> => {
+  const getTables = async (tableOpts?: { includeSystem?: boolean }): Promise<TableInfo[]> => {
     const rows = await runQuery(
       opts,
       tableOpts?.includeSystem
@@ -29,10 +19,7 @@ export const createDuckDbSchema = (opts: SchemaOpts) => {
     );
     return rows.map((r) => ({
       name: r.table_name as string,
-      type:
-        (r.table_type as string) === "VIEW"
-          ? ("view" as const)
-          : ("table" as const),
+      type: (r.table_type as string) === "VIEW" ? ("view" as const) : ("table" as const),
     }));
   };
 
@@ -51,9 +38,7 @@ export const createDuckDbSchema = (opts: SchemaOpts) => {
   };
 
   const getIndexes = async (table?: string): Promise<IndexInfo[]> => {
-    const where = table
-      ? ` WHERE table_name = '${table.replace(/'/g, "''")}'`
-      : "";
+    const where = table ? ` WHERE table_name = '${table.replace(/'/g, "''")}'` : "";
     const rows = await runQuery(
       opts,
       `SELECT index_name, table_name, is_unique, expressions FROM duckdb_indexes()${where} ORDER BY index_name`,
@@ -67,12 +52,8 @@ export const createDuckDbSchema = (opts: SchemaOpts) => {
     }));
   };
 
-  const getConstraints = async (
-    table?: string,
-  ): Promise<ConstraintInfo[]> => {
-    const where = table
-      ? ` WHERE table_name = '${table.replace(/'/g, "''")}'`
-      : "";
+  const getConstraints = async (table?: string): Promise<ConstraintInfo[]> => {
+    const where = table ? ` WHERE table_name = '${table.replace(/'/g, "''")}'` : "";
     const rows = await runQuery(
       opts,
       `SELECT constraint_type, table_name, constraint_column_names, constraint_column_indexes FROM duckdb_constraints()${where} ORDER BY table_name`,
@@ -135,7 +116,10 @@ const parseColumnList = (value: unknown): string[] => {
     return value.map(String);
   }
   if (typeof value === "string") {
-    return value.replace(/^\[|\]$/g, "").split(",").map((s) => s.trim());
+    return value
+      .replace(/^\[|\]$/g, "")
+      .split(",")
+      .map((s) => s.trim());
   }
   return [];
 };

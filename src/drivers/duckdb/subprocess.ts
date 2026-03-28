@@ -14,10 +14,7 @@ const findDuckDb = (): string => {
   return "duckdb";
 };
 
-export const execDuckDb = async (
-  args: string[],
-  sql: string,
-): Promise<ExecResult> => {
+export const execDuckDb = async (args: string[], sql: string): Promise<ExecResult> => {
   const timeoutMs = getTimeout();
   const bin = findDuckDb();
 
@@ -47,10 +44,8 @@ type JsonQueryOpts = {
   readonly: boolean;
 };
 
-export const execDuckDbJson = async (
-  opts: JsonQueryOpts,
-): Promise<Record<string, unknown>[]> => {
-  const args = ["-json"];
+export const execDuckDbJson = async (opts: JsonQueryOpts): Promise<Record<string, unknown>[]> => {
+  const args = ["-cmd", ".mode jsonlines"];
   if (opts.dbPath && opts.readonly) {
     args.push("-readonly");
   }
@@ -65,12 +60,20 @@ export const execDuckDbJson = async (
     throw classifyError(message);
   }
 
-  const trimmed = result.stdout.trim();
-  // DuckDB outputs "[{]" for empty result sets — not valid JSON
-  if (!trimmed || trimmed === "[]" || trimmed === "[{]") {
-    return [];
+  return parseNdjson(result.stdout);
+};
+
+const parseNdjson = (stdout: string): Record<string, unknown>[] => {
+  const results: Record<string, unknown>[] = [];
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    // Skip empty lines and DuckDB's "{" quirk for empty result sets
+    if (!trimmed || trimmed === "{") {
+      continue;
+    }
+    results.push(JSON.parse(trimmed) as Record<string, unknown>);
   }
-  return JSON.parse(trimmed) as Record<string, unknown>[];
+  return results;
 };
 
 const classifyError = (message: string): Error => {
@@ -91,10 +94,7 @@ const classifyError = (message: string): Error => {
     });
   }
 
-  if (
-    firstLine.includes("read-only mode") ||
-    firstLine.includes("Permission Error")
-  ) {
+  if (firstLine.includes("read-only mode") || firstLine.includes("Permission Error")) {
     return Object.assign(new Error(firstLine), {
       hint: "This connection is read-only. To enable writes, use a credential with writePermission and pass --write.",
       fixableBy: "human" as const,
@@ -125,9 +125,7 @@ export const checkDuckDbAvailable = (): void => {
     }
   } catch {
     throw Object.assign(
-      new Error(
-        `DuckDB CLI not found (${bin}). Install with: brew install duckdb`,
-      ),
+      new Error(`DuckDB CLI not found (${bin}). Install with: brew install duckdb`),
       {
         hint: "DuckDB requires the duckdb CLI on PATH. Set AGENT_SQL_DUCKDB_PATH to use a custom location.",
         fixableBy: "human" as const,

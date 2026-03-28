@@ -90,24 +90,18 @@ describe("duckdb driver", () => {
     });
 
     test("preserves NULL values", async () => {
-      const result = await driver.query(
-        "SELECT email, bio FROM users WHERE id = 2",
-      );
+      const result = await driver.query("SELECT email, bio FROM users WHERE id = 2");
       expect(result.rows[0]).toEqual({ email: null, bio: null });
     });
 
     test("handles empty result set", async () => {
-      const result = await driver.query(
-        "SELECT * FROM users WHERE id = 999",
-      );
+      const result = await driver.query("SELECT * FROM users WHERE id = 999");
       expect(result.rows).toEqual([]);
       expect(result.columns).toEqual([]);
     });
 
     test("handles aggregations", async () => {
-      const result = await driver.query(
-        "SELECT COUNT(*) AS cnt, AVG(age) AS avg_age FROM users",
-      );
+      const result = await driver.query("SELECT COUNT(*) AS cnt, AVG(age) AS avg_age FROM users");
       expect(result.rows[0]?.cnt).toBe(3);
       expect(typeof result.rows[0]?.avg_age).toBe("number");
     });
@@ -122,9 +116,7 @@ describe("duckdb driver", () => {
     });
 
     test("handles LIMIT and OFFSET", async () => {
-      const result = await driver.query(
-        "SELECT id FROM users ORDER BY id LIMIT 2 OFFSET 1",
-      );
+      const result = await driver.query("SELECT id FROM users ORDER BY id LIMIT 2 OFFSET 1");
       expect(result.rows).toEqual([{ id: 2 }, { id: 3 }]);
     });
 
@@ -246,9 +238,7 @@ describe("duckdb driver", () => {
 
     test("returns index columns", async () => {
       const indexes = await driver.getIndexes();
-      const userIdx = indexes.find(
-        (i) => i.name === "idx_orders_user",
-      );
+      const userIdx = indexes.find((i) => i.name === "idx_orders_user");
       expect(userIdx?.columns).toEqual(["user_id"]);
       expect(userIdx?.table).toBe("orders");
     });
@@ -324,9 +314,7 @@ describe("duckdb file queries", () => {
 
     try {
       const driver = await connectDuckDb({ readonly: false });
-      const result = await driver.query(
-        `SELECT * FROM '${csvPath}' ORDER BY id`,
-      );
+      const result = await driver.query(`SELECT * FROM '${csvPath}' ORDER BY id`);
       expect(result.rows).toHaveLength(2);
       expect(result.rows[0]).toEqual({ id: 1, name: "Alice", score: 95 });
       await driver.close();
