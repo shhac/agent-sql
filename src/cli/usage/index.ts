@@ -2,11 +2,12 @@ import type { Command } from "commander";
 
 const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSONL output)
 
-Supports PostgreSQL, MySQL, SQLite, and Snowflake. Output formats: JSONL (default), JSON, YAML, CSV.
+Supports PostgreSQL, CockroachDB, MySQL, SQLite, and Snowflake. Output formats: JSONL (default), JSON, YAML, CSV.
 
 AD-HOC USAGE (zero setup):
   agent-sql run -c ./data.db "SELECT * FROM users"                     # SQLite file path
   agent-sql run -c postgres://user:pass@host/db "SELECT 1"            # PostgreSQL URL
+  agent-sql run -c cockroachdb://user:pass@host:26257/db "SELECT 1"   # CockroachDB URL
   agent-sql run -c mysql://user:pass@host/db "SELECT 1"               # MySQL URL
   agent-sql run -c snowflake://acct/db/schema?warehouse=WH "SELECT 1" # Snowflake URL (needs AGENT_SQL_SNOWFLAKE_TOKEN)
   agent-sql schema tables -c ./mydb.sqlite                             # schema from file
@@ -37,7 +38,7 @@ COMMANDS:
 GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
-  -c accepts connection aliases, file paths (./data.db), or URLs (postgres://..., mysql://..., snowflake://...).
+  -c accepts connection aliases, file paths (./data.db), or URLs (postgres://..., cockroachdb://..., mysql://..., snowflake://...).
   PG, MySQL, and Snowflake require a stored credential for named connections. SQLite uses file path (credential optional).
   Snowflake ad-hoc URLs: snowflake://account/database/schema?warehouse=WH&role=ROLE (requires AGENT_SQL_SNOWFLAKE_TOKEN env var).
 

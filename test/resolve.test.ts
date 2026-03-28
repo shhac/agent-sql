@@ -50,6 +50,10 @@ describe("detectDriverFromUrl", () => {
     expect(detectDriverFromUrl("snowflake://myorg-myaccount/DB/SCHEMA")).toBe("snowflake");
   });
 
+  test("detects cockroachdb:// URLs", () => {
+    expect(detectDriverFromUrl("cockroachdb://localhost:26257/mydb")).toBe("cockroachdb");
+  });
+
   test("returns undefined for unrecognized URLs", () => {
     expect(detectDriverFromUrl("http://example.com")).toBeUndefined();
   });
@@ -82,6 +86,10 @@ describe("isConnectionUrl", () => {
 
   test("recognizes snowflake:// URLs", () => {
     expect(isConnectionUrl("snowflake://myorg-myaccount/DB/SCHEMA")).toBe(true);
+  });
+
+  test("recognizes cockroachdb:// URLs", () => {
+    expect(isConnectionUrl("cockroachdb://user:pass@localhost:26257/mydb")).toBe(true);
   });
 
   test("rejects plain strings", () => {
@@ -195,6 +203,11 @@ describe("resolveDriver ad-hoc connections", () => {
   test("-c postgres://user:pass@localhost/db is detected as connection URL", () => {
     expect(isConnectionUrl("postgres://user:pass@localhost/db")).toBe(true);
     expect(detectDriverFromUrl("postgres://user:pass@localhost/db")).toBe("pg");
+  });
+
+  test("-c cockroachdb://user:pass@localhost:26257/db is detected as connection URL", () => {
+    expect(isConnectionUrl("cockroachdb://user:pass@localhost:26257/db")).toBe(true);
+    expect(detectDriverFromUrl("cockroachdb://user:pass@localhost:26257/db")).toBe("cockroachdb");
   });
 
   test("-c mysql://user:pass@localhost/db is detected as connection URL", () => {

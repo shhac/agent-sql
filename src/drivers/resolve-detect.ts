@@ -8,6 +8,7 @@ export const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
   [/^mariadb:\/\//, "mysql"],
   [/^sqlite:\/\//, "sqlite"],
   [/^snowflake:\/\//, "snowflake"],
+  [/^cockroachdb:\/\//, "cockroachdb"],
 ];
 
 export const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];

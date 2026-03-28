@@ -62,7 +62,7 @@ const resolveDriverType = (conn: Connection): Driver => {
   }
 
   throw new Error(
-    "Cannot determine driver type. Set the 'driver' field on the connection or use a URL with a recognizable scheme (postgres://, sqlite://, mysql://).",
+    "Cannot determine driver type. Set the 'driver' field on the connection or use a URL with a recognizable scheme (postgres://, cockroachdb://, sqlite://, mysql://).",
   );
 };
 
@@ -89,11 +89,19 @@ const checkWritePermission = (opts: {
   }
 
   if (
-    (opts.driver === "pg" || opts.driver === "mysql" || opts.driver === "snowflake") &&
+    (opts.driver === "pg" ||
+      opts.driver === "cockroachdb" ||
+      opts.driver === "mysql" ||
+      opts.driver === "snowflake") &&
     !opts.credential
   ) {
-    const driverName =
-      opts.driver === "pg" ? "PostgreSQL" : opts.driver === "mysql" ? "MySQL" : "Snowflake";
+    const driverNames: Record<string, string> = {
+      pg: "PostgreSQL",
+      cockroachdb: "CockroachDB",
+      mysql: "MySQL",
+      snowflake: "Snowflake",
+    };
+    const driverName = driverNames[opts.driver] ?? opts.driver;
     throw Object.assign(
       new Error(
         `Write mode requested but ${driverName} connection '${opts.alias}' has no credential. ${driverName} requires a credential with writePermission to enable writes.`,
@@ -125,11 +133,14 @@ type ConfigConnectOpts = {
   alias: string;
 };
 
-const connectPgFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+const connectPgLike = async (
+  opts: ConfigConnectOpts,
+  defaults: { label: string; port: number; database: string },
+): Promise<DriverConnection> => {
   if (!opts.credential?.username || !opts.credential?.password) {
     throw Object.assign(
       new Error(
-        `PostgreSQL connection '${opts.alias}' requires a credential with username and password.`,
+        `${defaults.label} connection '${opts.alias}' requires a credential with username and password.`,
       ),
       {
         hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
@@ -140,13 +151,19 @@ const connectPgFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConne
 
   return connectPg({
     host: opts.conn.host ?? "localhost",
-    port: opts.conn.port ?? 5432,
-    database: opts.conn.database ?? "postgres",
+    port: opts.conn.port ?? defaults.port,
+    database: opts.conn.database ?? defaults.database,
     username: opts.credential.username,
     password: opts.credential.password,
     readonly: opts.readonly,
   });
 };
+
+const connectPgFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> =>
+  connectPgLike(opts, { label: "PostgreSQL", port: 5432, database: "postgres" });
+
+const connectCockroachDbFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> =>
+  connectPgLike(opts, { label: "CockroachDB", port: 26257, database: "defaultdb" });
 
 const connectSqliteFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
   const path = opts.conn.path ?? opts.conn.url?.replace(/^sqlite:\/\//, "");
@@ -211,6 +228,7 @@ const configConnectBuilders: Record<
   (opts: ConfigConnectOpts) => Promise<DriverConnection>
 > = {
   pg: connectPgFromConfig,
+  cockroachdb: connectCockroachDbFromConfig,
   sqlite: connectSqliteFromConfig,
   mysql: connectMysqlFromConfig,
   snowflake: connectSnowflakeFromConfig,
@@ -250,7 +268,9 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
 
   const builder = configConnectBuilders[driver];
   if (!builder) {
-    throw new Error(`Unknown driver '${driver}'. Supported drivers: pg, sqlite, mysql, snowflake.`);
+    throw new Error(
+      `Unknown driver '${driver}'. Supported drivers: pg, cockroachdb, sqlite, mysql, snowflake.`,
+    );
   }
   return trackDriver(await builder({ conn, credential, readonly, alias }));
 };

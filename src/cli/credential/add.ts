@@ -33,7 +33,7 @@ export function registerAdd(credential: Command): void {
           username: opts.username ?? null,
           writePermission,
           storage,
-          hint: `Use with: agent-sql connection add <alias> --driver <pg|sqlite> --credential ${name}`,
+          hint: `Use with: agent-sql connection add <alias> --driver <pg|cockroachdb|sqlite|mysql|snowflake> --credential ${name}`,
         });
       } catch (err) {
         printError({ message: err instanceof Error ? err.message : "Failed to add credential" });

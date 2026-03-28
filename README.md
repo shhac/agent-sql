@@ -6,7 +6,7 @@ Read-only-by-default SQL CLI for AI agents.
 - **LLM-optimized** -- `agent-sql usage` prints concise docs for agent consumption
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
-- **PostgreSQL, MySQL, SQLite, and Snowflake** -- four drivers, one interface
+- **PostgreSQL, CockroachDB, MySQL, SQLite, and Snowflake** -- five drivers, one interface
 - **Zero runtime deps** -- single compiled binary via `bun build --compile`
 
 ## Installation
@@ -44,8 +44,9 @@ The `-c` flag accepts file paths, connection URLs, or saved aliases:
 # SQLite — just point at a file, no setup needed
 agent-sql run -c ./data.db 'SELECT * FROM users'
 
-# PostgreSQL / MySQL — inline URL
+# PostgreSQL / CockroachDB / MySQL — inline URL
 agent-sql run -c postgres://user:pass@localhost/myapp 'SELECT * FROM users'
+agent-sql run -c cockroachdb://user:pass@localhost:26257/myapp 'SELECT * FROM users'
 agent-sql run -c mysql://user:pass@localhost/myapp 'SELECT * FROM orders'
 
 # Snowflake — inline URL + token via env var
@@ -145,11 +146,11 @@ Each command group has a `usage` subcommand for detailed, LLM-friendly documenta
 
 agent-sql is read-only by default with defense in depth:
 
-| Layer | PostgreSQL | MySQL | SQLite | Snowflake |
+| Layer | PostgreSQL / CockroachDB | MySQL | SQLite | Snowflake |
 | --- | --- | --- | --- | --- |
 | **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default | Same as PG/MySQL |
 | **Query flag** | `--write` required on each write query | Same | Same | Same |
-| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement | Client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1` |
+| **SQL parser** | `libpg-query` (PG's actual parser, WASM) validates statement types against an allowlist. CockroachDB uses the PG wire protocol — guard fails closed for CRDB-specific syntax. | `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement | N/A -- `SQLITE_OPEN_READONLY` is OS-level enforcement | Client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1` |
 | **Result cap** | `query.maxRows` (default 10,000) | Same | Same | Same |
 | **Timeout** | `query.timeout` (default 30s), per-command `--timeout <ms>` | Same | Same | Same |
 

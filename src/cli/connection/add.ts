@@ -35,7 +35,7 @@ const resolveDriver = (opts: AddOpts): Driver => {
     return "sqlite";
   }
   throw new Error(
-    "Cannot determine driver. Use --driver pg|sqlite|mysql|snowflake, a connection URL, or a file path for SQLite.",
+    "Cannot determine driver. Use --driver pg|cockroachdb|sqlite|mysql|snowflake, a connection URL, or a file path for SQLite.",
   );
 };
 
@@ -51,7 +51,7 @@ const parseConnectionString = (connStr: string, opts: AddOpts): void => {
   const driver = detectDriverFromUrl(connStr);
   if (!driver) {
     throw new Error(
-      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, mysql://, snowflake://) or a file path (.db, .sqlite).`,
+      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, cockroachdb://, mysql://, snowflake://) or a file path (.db, .sqlite).`,
     );
   }
 
@@ -84,7 +84,7 @@ const parseConnectionString = (connStr: string, opts: AddOpts): void => {
     return;
   }
 
-  // PG or MySQL
+  // PG, CockroachDB, or MySQL
   opts.url = connStr;
   const parsed = new URL(connStr);
   if (!opts.host && parsed.hostname) {
@@ -145,7 +145,7 @@ export function registerAdd(connection: Command): void {
     .description("Add a SQL connection")
     .argument("<alias>", "Short name for this connection (e.g. local, staging, prod)")
     .argument("[connection-string]", "Connection URL or file path (auto-detects driver)")
-    .option("--driver <driver>", "Database driver: pg, sqlite, mysql, or snowflake")
+    .option("--driver <driver>", "Database driver: pg, cockroachdb, sqlite, mysql, or snowflake")
     .option("--host <host>", "Database host")
     .option("--port <port>", "Database port")
     .option("--database <db>", "Database name")

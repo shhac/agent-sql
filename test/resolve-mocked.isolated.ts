@@ -101,6 +101,10 @@ describe("detectDriverFromUrl", () => {
     expect(detectDriverFromUrl("/data/app.db3")).toBe("sqlite");
   });
 
+  test("detects cockroachdb:// URLs", () => {
+    expect(detectDriverFromUrl("cockroachdb://localhost:26257/mydb")).toBe("cockroachdb");
+  });
+
   test("returns undefined for unrecognized URLs", () => {
     expect(detectDriverFromUrl("http://example.com")).toBeUndefined();
   });
@@ -184,6 +188,15 @@ describe("write permission checks", () => {
     };
     await expect(resolveDriver({ connection: "myconn", write: true })).rejects.toThrow(
       /PostgreSQL.*requires a credential with writePermission/,
+    );
+  });
+
+  test("CockroachDB without credential rejects write", async () => {
+    mockConnections = {
+      myconn: { driver: "cockroachdb", host: "localhost", database: "test" },
+    };
+    await expect(resolveDriver({ connection: "myconn", write: true })).rejects.toThrow(
+      /CockroachDB.*requires a credential with writePermission/,
     );
   });
 

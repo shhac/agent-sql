@@ -11,11 +11,12 @@ COMMANDS:
     Examples:
       connection add mydb postgres://localhost:5432/myapp --credential pg-cred
       connection add mydb mysql://localhost/myapp --credential mysql-cred
+      connection add crdb cockroachdb://localhost:26257/myapp --credential crdb-cred
       connection add local ./data.db
       connection add sf snowflake://org-acct/DB/PUBLIC?warehouse=WH --credential sf-cred
-    --driver pg|sqlite|mysql|snowflake  Database driver (auto-detected from URL if omitted).
-    --host <host>             Database host (pg, mysql).
-    --port <port>             Database port (pg, mysql).
+    --driver pg|cockroachdb|sqlite|mysql|snowflake  Database driver (auto-detected from URL if omitted).
+    --host <host>             Database host (pg, cockroachdb, mysql).
+    --port <port>             Database port (pg, cockroachdb, mysql).
     --database <db>           Database name (pg, mysql, snowflake).
     --path <path>             Path to SQLite file (resolved to absolute at add time).
     --url <url>               Connection URL (alternative to positional connection-string).
@@ -48,7 +49,7 @@ COMMANDS:
 
 SETUP ORDER: Create a credential first ("credential add"), then reference it in "connection add --credential <name>".
 
-AD-HOC: -c also accepts file paths (./data.db) and URLs (postgres://..., mysql://..., snowflake://...) without prior setup.
+AD-HOC: -c also accepts file paths (./data.db) and URLs (postgres://..., cockroachdb://..., mysql://..., snowflake://...) without prior setup.
   Snowflake ad-hoc: snowflake://account/database/schema?warehouse=WH&role=ROLE (requires AGENT_SQL_SNOWFLAKE_TOKEN env var).
 
 RESOLUTION ORDER: -c flag > AGENT_SQL_CONNECTION env > config default > error

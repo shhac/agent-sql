@@ -82,8 +82,9 @@ export const resolveAdHocConnection = async (
 
     rejectAdHocUrlWrite(write);
     const urlParts = parseConnectionUrl(connectionStr);
-    const defaultPort = driver === "pg" ? 5432 : 3306;
-    const defaultDb = driver === "pg" ? "postgres" : "mysql";
+    const pgLike = driver === "pg" || driver === "cockroachdb";
+    const defaultPort = pgLike ? (driver === "cockroachdb" ? 26257 : 5432) : 3306;
+    const defaultDb = pgLike ? (driver === "cockroachdb" ? "defaultdb" : "postgres") : "mysql";
     const connectOpts = {
       host: urlParts.host,
       port: urlParts.port || defaultPort,
@@ -93,7 +94,7 @@ export const resolveAdHocConnection = async (
       readonly: true,
     };
 
-    if (driver === "pg") {
+    if (pgLike) {
       return trackDriver(await connectPg(connectOpts));
     }
     return trackDriver(await connectMysql(connectOpts));
