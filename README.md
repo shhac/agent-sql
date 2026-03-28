@@ -53,34 +53,31 @@ AGENT_SQL_SNOWFLAKE_TOKEN=<pat> agent-sql run \
   -c 'snowflake://myorg-myaccount/MY_DB/PUBLIC?warehouse=COMPUTE_WH' 'SELECT 1'
 ```
 
-For databases you use repeatedly, save a named connection:
+For databases you use repeatedly, save a named connection. The second argument is a connection string — driver, host, port, and database are auto-detected:
 
 ```bash
-# PostgreSQL — credential first, then connection
+# PostgreSQL — credential first, then connection with URL
 agent-sql credential add pg-cred --username app --password secret
-agent-sql connection add mydb --driver pg --host localhost --database myapp --credential pg-cred
+agent-sql connection add mydb postgres://localhost:5432/myapp --credential pg-cred
 
 # MySQL
 agent-sql credential add mysql-cred --username app --password secret
-agent-sql connection add mydb --driver mysql --host localhost --database myapp --credential mysql-cred
+agent-sql connection add mydb mysql://localhost/myapp --credential mysql-cred
 
-# SQLite — no credential needed
-agent-sql connection add local --driver sqlite --path ./data.db
+# SQLite — just a file path, no credential needed
+agent-sql connection add local ./data.db
 
 # Snowflake — PAT as password, account can look like orgname-accountname or account.region
 agent-sql credential add sf-cred --password <pat_secret>
 agent-sql connection add sf-prod \
-  --driver snowflake \
-  --account myorg-myaccount \
-  --database MY_DB \
-  --schema PUBLIC \
-  --warehouse COMPUTE_WH \
-  --role MY_ROLE \
+  "snowflake://myorg-myaccount/MY_DB/PUBLIC?warehouse=COMPUTE_WH&role=MY_ROLE" \
   --credential sf-cred
 
 # Verify
 agent-sql connection test
 ```
+
+Flags (`--driver`, `--host`, `--port`, etc.) still work for explicit setup and override anything parsed from the connection string.
 
 ### 2. Explore schema
 
@@ -111,8 +108,7 @@ agent-sql [-c <alias>] [--format jsonl|json|yaml|csv] [--full] [--expand <fields
 │   ├── list
 │   └── usage
 ├── connection                                         # then create connections that reference them
-│   ├── add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
-│   │                                                  [--account --warehouse --role --schema]  # snowflake
+│   ├── add <alias> [connection-string] [--credential <name>] [--driver --host --port ...]
 │   ├── update <alias> [--credential <name>] [--no-credential] [--database <db>]
 │   ├── remove <alias>
 │   ├── list

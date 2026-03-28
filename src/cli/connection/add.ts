@@ -4,7 +4,7 @@ import type { Driver, Connection } from "../../lib/config.ts";
 import { storeConnection, setDefaultConnection } from "../../lib/config.ts";
 import { getCredential, getCredentialNames } from "../../lib/credentials.ts";
 import { printJson, printError } from "../../lib/output.ts";
-import { detectDriverFromUrl } from "../../drivers/resolve.ts";
+import { detectDriverFromUrl, isFilePath } from "../../drivers/resolve.ts";
 
 type AddOpts = {
   driver?: Driver;
@@ -21,6 +21,8 @@ type AddOpts = {
   default?: boolean;
 };
 
+const SQLITE_FILE_EXTENSIONS = [".sqlite", ".db", ".sqlite3", ".db3"];
+
 const resolveDriver = (opts: AddOpts): Driver => {
   if (opts.driver) {
     return opts.driver;
@@ -35,8 +37,70 @@ const resolveDriver = (opts: AddOpts): Driver => {
     return "sqlite";
   }
   throw new Error(
-    "Cannot determine driver. Use --driver pg|sqlite|mysql|snowflake, --url with a recognizable scheme, or --path for SQLite.",
+    "Cannot determine driver. Use --driver pg|sqlite|mysql|snowflake, a connection URL, or a file path for SQLite.",
   );
+};
+
+const parseConnectionString = (connStr: string, opts: AddOpts): void => {
+  // File path → SQLite
+  const lower = connStr.toLowerCase();
+  if (SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext)) || isFilePath(connStr)) {
+    opts.path = connStr;
+    return;
+  }
+
+  // URL → parse by driver
+  const driver = detectDriverFromUrl(connStr);
+  if (!driver) {
+    throw new Error(
+      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, mysql://, snowflake://) or a file path (.db, .sqlite).`,
+    );
+  }
+
+  if (driver === "sqlite") {
+    opts.path = connStr.replace(/^sqlite:\/\//, "");
+    return;
+  }
+
+  if (driver === "snowflake") {
+    const parsed = new URL(connStr);
+    opts.url = connStr;
+    if (!opts.account) {
+      opts.account = parsed.hostname;
+    }
+    const pathParts = parsed.pathname.replace(/^\//, "").split("/");
+    if (!opts.database && pathParts[0]) {
+      opts.database = pathParts[0];
+    }
+    if (!opts.schema && pathParts[1]) {
+      opts.schema = pathParts[1];
+    }
+    const wh = parsed.searchParams.get("warehouse");
+    if (!opts.warehouse && wh) {
+      opts.warehouse = wh;
+    }
+    const role = parsed.searchParams.get("role");
+    if (!opts.role && role) {
+      opts.role = role;
+    }
+    return;
+  }
+
+  // PG or MySQL
+  opts.url = connStr;
+  const parsed = new URL(connStr);
+  if (!opts.host && parsed.hostname) {
+    opts.host = parsed.hostname;
+  }
+  if (!opts.port && parsed.port) {
+    opts.port = parsed.port;
+  }
+  if (!opts.database) {
+    const db = parsed.pathname.replace(/^\//, "");
+    if (db) {
+      opts.database = db;
+    }
+  }
 };
 
 const buildConnection = (opts: AddOpts): Connection => {
@@ -82,6 +146,7 @@ export function registerAdd(connection: Command): void {
     .command("add")
     .description("Add a SQL connection")
     .argument("<alias>", "Short name for this connection (e.g. local, staging, prod)")
+    .argument("[connection-string]", "Connection URL or file path (auto-detects driver)")
     .option("--driver <driver>", "Database driver: pg, sqlite, mysql, or snowflake")
     .option("--host <host>", "Database host")
     .option("--port <port>", "Database port")
@@ -94,8 +159,12 @@ export function registerAdd(connection: Command): void {
     .option("--schema <schema>", "Default schema")
     .option("--credential <name>", "Credential alias for authentication")
     .option("--default", "Set as default connection")
-    .action((alias: string, opts: AddOpts) => {
+    .action((alias: string, connStr: string | undefined, opts: AddOpts) => {
       try {
+        if (connStr) {
+          parseConnectionString(connStr, opts);
+        }
+
         if (opts.credential) {
           const cred = getCredential(opts.credential);
           if (!cred) {

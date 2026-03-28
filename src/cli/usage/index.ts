@@ -13,7 +13,7 @@ AD-HOC USAGE (zero setup):
 
 NAMED CONNECTIONS (human-only setup):
   credential add <alias> --username <u> --password <p> [--write]
-  connection add <alias> --driver pg|mysql|sqlite|snowflake [--host --port --database --path --url --credential]
+  connection add <alias> [connection-string] [--credential <name>] [--driver --host --port --database --path --url]
   connection test [alias]
 
 COMMANDS:

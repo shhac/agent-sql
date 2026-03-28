@@ -116,6 +116,9 @@ Connections are set up by the user. The agent can list and test but not add/remo
 agent-sql connection list                            # saved connections + defaults
 agent-sql connection test                            # test default connection
 agent-sql connection test -c prod                    # test specific connection
+# Human-only setup examples:
+# connection add mydb postgres://localhost:5432/myapp --credential pg-cred
+# connection add local ./data.db
 ```
 
 Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (e.g. `./data.db`), or URLs (e.g. `postgres://...`, `mysql://...`, `snowflake://...`). Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var for authentication.

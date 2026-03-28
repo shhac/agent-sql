@@ -3,16 +3,22 @@ import type { Command } from "commander";
 const USAGE_TEXT = `connection — Manage SQL database connections
 
 COMMANDS:
-  connection add <alias> --driver pg|sqlite|mysql|snowflake [options]
+  connection add <alias> [connection-string] [--credential <name>] [options]
     Save a database connection. Alias is a short name (e.g. local, staging, prod).
-    --driver pg|sqlite|mysql|snowflake  Database driver (auto-detected from --url if omitted).
+    The optional connection-string positional argument accepts a URL or file path.
+    Driver is auto-detected from the scheme; host/port/database/account/schema/warehouse/role
+    are parsed from the URL. Flags override anything parsed from the connection string.
+    Examples:
+      connection add mydb postgres://localhost:5432/myapp --credential pg-cred
+      connection add mydb mysql://localhost/myapp --credential mysql-cred
+      connection add local ./data.db
+      connection add sf snowflake://org-acct/DB/PUBLIC?warehouse=WH --credential sf-cred
+    --driver pg|sqlite|mysql|snowflake  Database driver (auto-detected from URL if omitted).
     --host <host>             Database host (pg, mysql).
     --port <port>             Database port (pg, mysql).
     --database <db>           Database name (pg, mysql, snowflake).
     --path <path>             Path to SQLite file (resolved to absolute at add time).
-    --url <url>               Connection URL. Driver auto-detected from scheme:
-                              postgres:// → pg, mysql:// → mysql, sqlite:// → sqlite,
-                              snowflake:// → snowflake.
+    --url <url>               Connection URL (alternative to positional connection-string).
     --account <id>            Snowflake account identifier (orgname-accountname or account.region).
     --warehouse <wh>          Snowflake warehouse.
     --role <role>             Snowflake role.
