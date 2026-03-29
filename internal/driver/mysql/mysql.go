@@ -163,6 +163,64 @@ func scanRows(rows *sql.Rows) (*driver.QueryResult, error) {
 	return &driver.QueryResult{Columns: columns, Rows: results}, nil
 }
 
+func (c *mysqlConn) QueryStream(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.StreamingResult, error) {
+	cmd := driver.DetectCommand(sqlStr, writeCommands)
+
+	if cmd != "" && opts.Write && !c.readonly {
+		result, err := c.db.ExecContext(ctx, sqlStr)
+		if err != nil {
+			return nil, classifyError(err)
+		}
+		affected, _ := result.RowsAffected()
+		return &driver.StreamingResult{RowsAffected: affected, Command: cmd}, nil
+	}
+
+	if c.readonly {
+		tx, err := c.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, classifyError(err)
+		}
+
+		rows, err := tx.QueryContext(ctx, sqlStr)
+		if err != nil {
+			tx.Rollback()
+			return nil, classifyError(err)
+		}
+
+		iter, err := driver.SQLRowsIterator(rows, driver.NormalizeValue)
+		if err != nil {
+			tx.Rollback()
+			return nil, classifyError(err)
+		}
+
+		// Wrap the iterator to commit the transaction on close
+		origClose := iter.Close
+		wrapped := driver.NewRowIterator(
+			iter.Columns(),
+			iter.Next,
+			iter.Scan,
+			iter.Err,
+			func() error {
+				closeErr := origClose()
+				tx.Commit()
+				return closeErr
+			},
+		)
+		return &driver.StreamingResult{Iterator: wrapped}, nil
+	}
+
+	rows, err := c.db.QueryContext(ctx, sqlStr)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+
+	iter, err := driver.SQLRowsIterator(rows, driver.NormalizeValue)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	return &driver.StreamingResult{Iterator: iter}, nil
+}
+
 func (c *mysqlConn) Close() error {
 	return c.db.Close()
 }

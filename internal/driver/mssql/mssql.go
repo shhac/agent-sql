@@ -129,6 +129,35 @@ func (c *mssqlConn) Query(ctx context.Context, sqlStr string, opts driver.QueryO
 	return &driver.QueryResult{Columns: columns, Rows: results}, nil
 }
 
+func (c *mssqlConn) QueryStream(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.StreamingResult, error) {
+	if c.readonly && !opts.Write {
+		if err := guardReadOnly(sqlStr); err != nil {
+			return nil, err
+		}
+	}
+
+	cmd := driver.DetectCommand(sqlStr, writeCommands)
+	if cmd != "" && opts.Write {
+		result, err := c.db.ExecContext(ctx, sqlStr)
+		if err != nil {
+			return nil, classifyError(err)
+		}
+		affected, _ := result.RowsAffected()
+		return &driver.StreamingResult{RowsAffected: affected, Command: cmd}, nil
+	}
+
+	rows, err := c.db.QueryContext(ctx, sqlStr)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+
+	iter, err := driver.SQLRowsIterator(rows, driver.NormalizeValue)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	return &driver.StreamingResult{Iterator: iter}, nil
+}
+
 func (c *mssqlConn) Close() error {
 	return c.db.Close()
 }

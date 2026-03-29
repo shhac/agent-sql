@@ -119,7 +119,7 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 }
 
 // ExecuteRun runs a SQL query on an already-resolved connection and writes results.
-// Handles limit resolution, automatic LIMIT injection, write result detection, and output.
+// Uses streaming (QueryStream) when the driver supports it, falling back to buffered Query.
 func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, expand string, full bool, compact bool, formatFlag string) error {
 	pageSize := resolveLimit(limitFlag)
 	maxRows := resolveMaxRows()
@@ -128,12 +128,67 @@ func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFla
 		effectiveLimit = maxRows
 	}
 
+	isSelectLike := !write && driver.DetectCommand(sql, driver.WriteCommands) == ""
 	effectiveSQL := sql
-	if !write && !sqlHasLimit.MatchString(sql) {
+	if isSelectLike && !sqlHasLimit.MatchString(sql) {
 		effectiveSQL = strings.TrimRight(strings.TrimRight(sql, " \t\n"), ";") + fmt.Sprintf(" LIMIT %d", effectiveLimit+1)
 	}
 
-	result, err := drv.Query(ctx, effectiveSQL, driver.QueryOpts{Write: write})
+	opts := driver.QueryOpts{Write: write}
+	format := output.ResolveFormat(formatFlag)
+
+	// Try streaming path
+	if streamer, ok := drv.(driver.StreamingQuerier); ok && isSelectLike {
+		return executeStreaming(ctx, streamer, effectiveSQL, opts, effectiveLimit, expand, full, compact, format)
+	}
+
+	// Buffered fallback
+	return executeBuffered(ctx, drv, effectiveSQL, opts, write, effectiveLimit, expand, full, compact, format)
+}
+
+func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql string, opts driver.QueryOpts, limit int, expand string, full bool, compact bool, format output.Format) error {
+	sr, err := streamer.QueryStream(ctx, sql, opts)
+	if err != nil {
+		output.WriteError(os.Stderr, err)
+		return nil
+	}
+	if sr.Iterator == nil {
+		// Write result
+		output.PrintJSON(map[string]any{
+			"result": "ok", "rowsAffected": sr.RowsAffected, "command": sr.Command,
+		}, true)
+		return nil
+	}
+	defer sr.Iterator.Close()
+
+	w := makeWriter(expand, full, format, sr.Iterator.Columns())
+
+	count := 0
+	for sr.Iterator.Next() {
+		if count >= limit {
+			// One extra row means hasMore=true
+			w.WritePagination(&output.Pagination{HasMore: true, RowCount: limit})
+			w.Flush()
+			return nil
+		}
+		row, err := sr.Iterator.Scan()
+		if err != nil {
+			output.WriteError(os.Stderr, err)
+			return nil
+		}
+		w.WriteRow(row)
+		count++
+	}
+	if err := sr.Iterator.Err(); err != nil {
+		output.WriteError(os.Stderr, err)
+		return nil
+	}
+	w.Flush()
+	return nil
+}
+
+func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opts driver.QueryOpts, write bool, limit int, expand string, full bool, compact bool, format output.Format) error {
+	result, err := drv.Query(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
 		return nil
@@ -141,20 +196,18 @@ func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFla
 
 	if write && isWriteResult(result) {
 		output.PrintJSON(map[string]any{
-			"result":       "ok",
-			"rowsAffected": result.RowsAffected,
-			"command":      result.Command,
+			"result": "ok", "rowsAffected": result.RowsAffected, "command": result.Command,
 		}, true)
 		return nil
 	}
 
-	hasMore := !write && len(result.Rows) > effectiveLimit
+	hasMore := !write && len(result.Rows) > limit
 	displayRows := result.Rows
 	if hasMore {
-		displayRows = result.Rows[:effectiveLimit]
+		displayRows = result.Rows[:limit]
 	}
 
-	writeQueryResults(displayRows, hasMore, expand, full, compact, output.ResolveFormat(formatFlag), result.Columns)
+	writeQueryResults(displayRows, hasMore, expand, full, compact, format, result.Columns)
 	return nil
 }
 
@@ -337,7 +390,7 @@ func isWriteResult(result *driver.QueryResult) bool {
 	return false
 }
 
-func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full bool, compact bool, format output.Format, columns []string) {
+func makeWriter(expand string, full bool, format output.Format, columns []string) *truncation.TruncatingWriter {
 	expandMap := make(map[string]bool)
 	if expand != "" {
 		for _, f := range strings.Split(expand, ",") {
@@ -351,11 +404,14 @@ func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full 
 		maxLen = *cfg.Settings.Truncation.MaxLength
 	}
 
-	w := truncation.NewTruncatingWriter(
+	return truncation.NewTruncatingWriter(
 		output.NewWriter(os.Stdout, format, columns),
 		truncation.Config{MaxLength: maxLen, Expand: expandMap, Full: full},
 	)
+}
 
+func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full bool, compact bool, format output.Format, columns []string) {
+	w := makeWriter(expand, full, format, columns)
 	_ = compact // TODO: compact mode support
 
 	for _, row := range rows {

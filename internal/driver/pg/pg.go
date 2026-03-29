@@ -135,6 +135,70 @@ func (c *pgConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts
 	return &driver.QueryResult{Columns: columns, Rows: results}, nil
 }
 
+func (c *pgConn) QueryStream(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.StreamingResult, error) {
+	if c.readonly {
+		if err := driver.GuardReadOnly(sqlStr); err != nil {
+			return nil, err
+		}
+	}
+
+	cmd := driver.DetectCommand(sqlStr, writeCommands)
+	if cmd != "" && opts.Write {
+		tag, err := c.conn.Exec(ctx, sqlStr)
+		if err != nil {
+			return nil, classifyError(err)
+		}
+		return &driver.StreamingResult{
+			RowsAffected: tag.RowsAffected(),
+			Command:      cmd,
+		}, nil
+	}
+
+	if c.readonly {
+		if _, err := c.conn.Exec(ctx, "BEGIN READ ONLY"); err != nil {
+			return nil, classifyError(err)
+		}
+	}
+
+	rows, err := c.conn.Query(ctx, sqlStr)
+	if err != nil {
+		if c.readonly {
+			c.conn.Exec(ctx, "ROLLBACK")
+		}
+		return nil, classifyError(err)
+	}
+
+	columns := fieldNames(rows.FieldDescriptions())
+	needsRollback := c.readonly
+	conn := c.conn
+
+	iter := driver.NewRowIterator(
+		columns,
+		func() bool { return rows.Next() },
+		func() (map[string]any, error) {
+			values, err := rows.Values()
+			if err != nil {
+				return nil, classifyError(err)
+			}
+			row := make(map[string]any, len(columns))
+			for i, col := range columns {
+				row[col] = normalizeValue(values[i])
+			}
+			return row, nil
+		},
+		func() error { return rows.Err() },
+		func() error {
+			rows.Close()
+			if needsRollback {
+				conn.Exec(ctx, "ROLLBACK")
+			}
+			return nil
+		},
+	)
+
+	return &driver.StreamingResult{Iterator: iter}, nil
+}
+
 func (c *pgConn) Close() error {
 	return c.conn.Close(context.Background())
 }
