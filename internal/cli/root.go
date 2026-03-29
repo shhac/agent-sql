@@ -60,6 +60,7 @@ func newRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().BoolVar(&flagFull, "full", false, "Expand all truncated fields")
 	root.PersistentFlags().IntVar(&flagTimeout, "timeout", 0, "Query timeout in milliseconds")
 	root.PersistentFlags().BoolVar(&flagCompact, "compact", false, "Compact output (parallel arrays)")
+	root.PersistentFlags().MarkHidden("compact") // not yet implemented
 
 	// Register command groups
 	registerRunCommand(root)

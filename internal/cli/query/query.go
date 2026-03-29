@@ -24,7 +24,6 @@ Run SQL:
   agent-sql run "<sql>"                    Execute any SQL query
   agent-sql query run "<sql>"              Same as above (long form)
   agent-sql query run "<sql>" --write      Enable write mode (INSERT/UPDATE/DELETE)
-  agent-sql query run "<sql>" --compact    Array-of-arrays output (saves tokens)
   agent-sql query run "<sql>" --limit 50   Limit result rows
 
 Sample rows:
@@ -46,7 +45,6 @@ OPTIONS
   --format json|yaml|csv      Output format (default: jsonl, or config defaults.format)
   --limit <n>                 Max rows (run: from config, sample: 5)
   --write                     Enable write mode (requires write-enabled credential)
-  --compact                   Array-of-arrays format for large results
   --where <condition>         WHERE clause for sample/count
   --analyze                   EXPLAIN ANALYZE (explain only, read-only queries)
   --expand <fields>           Comma-separated fields to show untruncated

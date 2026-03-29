@@ -47,14 +47,7 @@ func PrintJSON(data any, prune bool) {
 	enc.Encode(normalized)
 }
 
-// PrintError writes a classified error to stderr as JSON.
-func PrintError(qerr *agenterrors.QueryError) {
-	os.Exit(1) // set exit code
-	// Actually, we should write then let the caller exit.
-	// Reset — we'll handle exit in the CLI layer.
-}
-
-// WriteError writes an error to stderr as JSON and sets the process exit code.
+// WriteError writes an error to stderr as JSON.
 func WriteError(w io.Writer, err error) {
 	var qerr *agenterrors.QueryError
 	if !agenterrors.As(err, &qerr) {
