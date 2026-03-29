@@ -59,8 +59,7 @@ func newRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().StringVar(&flagExpand, "expand", "", "Expand specific truncated fields (comma-separated)")
 	root.PersistentFlags().BoolVar(&flagFull, "full", false, "Expand all truncated fields")
 	root.PersistentFlags().IntVar(&flagTimeout, "timeout", 0, "Query timeout in milliseconds")
-	root.PersistentFlags().BoolVar(&flagCompact, "compact", false, "Compact output (parallel arrays)")
-	root.PersistentFlags().MarkHidden("compact") // not yet implemented
+	root.PersistentFlags().BoolVar(&flagCompact, "compact", false, "Compact output (typed NDJSON: columns once, then row arrays)")
 
 	// Register command groups
 	registerRunCommand(root)

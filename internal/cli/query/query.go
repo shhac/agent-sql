@@ -24,6 +24,7 @@ Run SQL:
   agent-sql run "<sql>"                    Execute any SQL query
   agent-sql query run "<sql>"              Same as above (long form)
   agent-sql query run "<sql>" --write      Enable write mode (INSERT/UPDATE/DELETE)
+  agent-sql query run "<sql>" --compact    Typed NDJSON (columns once, row arrays)
   agent-sql query run "<sql>" --limit 50   Limit result rows
 
 Sample rows:
@@ -159,7 +160,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	}
 	defer sr.Iterator.Close()
 
-	w := makeWriter(expand, full, format, sr.Iterator.Columns())
+	w := makeWriter(expand, full, compact, format, sr.Iterator.Columns())
 
 	count := 0
 	for sr.Iterator.Next() {
@@ -388,7 +389,7 @@ func isWriteResult(result *driver.QueryResult) bool {
 	return false
 }
 
-func makeWriter(expand string, full bool, format output.Format, columns []string) *truncation.TruncatingWriter {
+func makeWriter(expand string, full bool, compact bool, format output.Format, columns []string) *truncation.TruncatingWriter {
 	expandMap := make(map[string]bool)
 	if expand != "" {
 		for _, f := range strings.Split(expand, ",") {
@@ -402,15 +403,21 @@ func makeWriter(expand string, full bool, format output.Format, columns []string
 		maxLen = *cfg.Settings.Truncation.MaxLength
 	}
 
+	var inner output.ResultWriter
+	if compact {
+		inner = output.NewCompactWriter(os.Stdout, columns)
+	} else {
+		inner = output.NewWriter(os.Stdout, format, columns)
+	}
+
 	return truncation.NewTruncatingWriter(
-		output.NewWriter(os.Stdout, format, columns),
+		inner,
 		truncation.Config{MaxLength: maxLen, Expand: expandMap, Full: full},
 	)
 }
 
 func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full bool, compact bool, format output.Format, columns []string) {
-	w := makeWriter(expand, full, format, columns)
-	_ = compact // TODO: compact mode support
+	w := makeWriter(expand, full, compact, format, columns)
 
 	for _, row := range rows {
 		w.WriteRow(row)
