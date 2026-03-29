@@ -192,7 +192,7 @@ compare_stderr "mysql-bad-sql" run -c "$MY" "SELEC * FROM users"
 compare_stderr "mysql-missing-table" run -c "$MY" "SELECT * FROM nonexistent"
 
 echo ""
-echo "=== MariaDB Parity ===
+echo "=== MariaDB Parity ==="
 MDB="mariadb://root:test@localhost:13307/testdb"
 
 if docker ps --format '{{.Names}}' | grep -q parity-mariadb; then
@@ -207,7 +207,7 @@ else
 fi
 
 echo ""
-echo "=== Write Mode Parity ===""
+echo "=== Write Mode Parity ==="
 
 # SQLite write test (use a temp copy)
 WRITE_DB="/tmp/parity-write-test.db"
