@@ -31,9 +31,19 @@ func (c *CompactWriter) WriteRow(row map[string]any) error {
 	if !c.wrote {
 		if len(c.columns) == 0 {
 			for k := range row {
-				c.columns = append(c.columns, k)
+				if k != "@truncated" {
+					c.columns = append(c.columns, k)
+				}
 			}
 		}
+		// Filter @truncated from columns header
+		dataCols := make([]string, 0, len(c.columns))
+		for _, col := range c.columns {
+			if col != "@truncated" {
+				dataCols = append(dataCols, col)
+			}
+		}
+		c.columns = dataCols
 		if err := c.enc.Encode(msg{"columns", c.columns}); err != nil {
 			return err
 		}
@@ -42,11 +52,7 @@ func (c *CompactWriter) WriteRow(row map[string]any) error {
 
 	arr := make([]any, len(c.columns))
 	for i, col := range c.columns {
-		v := row[col]
-		if col == "@truncated" {
-			continue // skip truncation metadata in compact mode
-		}
-		arr[i] = v
+		arr[i] = row[col]
 	}
 	return c.enc.Encode(msg{"row", arr})
 }
