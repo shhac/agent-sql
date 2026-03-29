@@ -87,6 +87,10 @@ src/
 - **Truncation**: Strings over `truncation.maxLength` truncated with `...`, per-row `@truncated: { "column": originalLength }` metadata. Compact mode uses top-level parallel arrays.
 - **PG namespaces**: Dot notation everywhere (`schema.table`), system schemas excluded by default (`--include-system` to show)
 
+## Releasing
+
+The Homebrew tap lives at `../homebrew-tap`. After updating the formula there, always `cd` back to this repo's root directory before continuing. Never leave the working directory pointing at the homebrew-tap repo.
+
 ## After making changes
 
 When changing CLI behavior, flags, output shape, or commands, also update the applicable docs:
