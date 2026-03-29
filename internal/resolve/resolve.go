@@ -131,6 +131,15 @@ func credFor(conn *config.Connection) *credential.Credential {
 	return credential.Get(conn.Credential)
 }
 
+var credentialRequired = map[driver.Driver]string{
+	driver.DriverPG:          "PostgreSQL",
+	driver.DriverCockroachDB: "CockroachDB",
+	driver.DriverMySQL:       "MySQL",
+	driver.DriverMariaDB:     "MariaDB",
+	driver.DriverSnowflake:   "Snowflake",
+	driver.DriverMSSQL:       "MSSQL",
+}
+
 func checkWritePermission(d driver.Driver, cred *credential.Credential, alias string) error {
 	if cred != nil && !cred.WritePermission {
 		return errors.New(
@@ -139,18 +148,9 @@ func checkWritePermission(d driver.Driver, cred *credential.Credential, alias st
 		)
 	}
 
-	needsCred := d == driver.DriverPG || d == driver.DriverCockroachDB ||
-		d == driver.DriverMySQL || d == driver.DriverMariaDB ||
-		d == driver.DriverSnowflake || d == driver.DriverMSSQL
-
-	if needsCred && cred == nil {
-		names := map[driver.Driver]string{
-			driver.DriverPG: "PostgreSQL", driver.DriverCockroachDB: "CockroachDB",
-			driver.DriverMySQL: "MySQL", driver.DriverMariaDB: "MariaDB",
-			driver.DriverSnowflake: "Snowflake", driver.DriverMSSQL: "MSSQL",
-		}
+	if name, ok := credentialRequired[d]; ok && cred == nil {
 		return errors.New(
-			fmt.Sprintf("Write mode requested but %s connection '%s' has no credential.", names[d], alias),
+			fmt.Sprintf("Write mode requested but %s connection '%s' has no credential.", name, alias),
 			errors.FixableByHuman,
 		)
 	}
@@ -181,19 +181,13 @@ func connectFromConfig(ctx context.Context, d driver.Driver, conn *config.Connec
 	cred := credFor(conn)
 	switch d {
 	case driver.DriverSQLite:
-		path := conn.Path
-		if path == "" && conn.URL != "" {
-			path = strings.TrimPrefix(conn.URL, "sqlite://")
-		}
+		path := resolveFilePath(conn, "sqlite://")
 		if path == "" {
 			return nil, errors.New("SQLite connection requires a path.", errors.FixableByAgent)
 		}
 		return sqlite.Connect(sqlite.Opts{Path: path, Readonly: readonly})
 	case driver.DriverDuckDB:
-		path := conn.Path
-		if path == "" && conn.URL != "" {
-			path = strings.TrimPrefix(conn.URL, "duckdb://")
-		}
+		path := resolveFilePath(conn, "duckdb://")
 		if path == "" {
 			return nil, errors.New("DuckDB connection requires a path.", errors.FixableByAgent)
 		}
@@ -390,6 +384,16 @@ func parsePort(s string, def int) int {
 		return def
 	}
 	return p
+}
+
+func resolveFilePath(conn *config.Connection, urlPrefix string) string {
+	if conn.Path != "" {
+		return conn.Path
+	}
+	if conn.URL != "" {
+		return strings.TrimPrefix(conn.URL, urlPrefix)
+	}
+	return ""
 }
 
 func orStr(val, def string) string {

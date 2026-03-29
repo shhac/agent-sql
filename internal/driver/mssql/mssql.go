@@ -99,34 +99,12 @@ func (c *mssqlConn) Query(ctx context.Context, sqlStr string, opts driver.QueryO
 	if err != nil {
 		return nil, classifyError(err)
 	}
-	defer rows.Close()
 
-	columns, err := rows.Columns()
+	result, err := driver.ScanAllRows(rows, driver.NormalizeValue)
 	if err != nil {
-		return nil, err
-	}
-
-	var results []map[string]any
-	for rows.Next() {
-		values := make([]any, len(columns))
-		ptrs := make([]any, len(columns))
-		for i := range values {
-			ptrs[i] = &values[i]
-		}
-		if err := rows.Scan(ptrs...); err != nil {
-			return nil, err
-		}
-		row := make(map[string]any, len(columns))
-		for i, col := range columns {
-			row[col] = driver.NormalizeValue(values[i])
-		}
-		results = append(results, row)
-	}
-	if err := rows.Err(); err != nil {
 		return nil, classifyError(err)
 	}
-
-	return &driver.QueryResult{Columns: columns, Rows: results}, nil
+	return result, nil
 }
 
 func (c *mssqlConn) QueryStream(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.StreamingResult, error) {

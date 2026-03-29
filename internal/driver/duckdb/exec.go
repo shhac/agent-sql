@@ -27,29 +27,6 @@ func (c *duckdbConn) exec(ctx context.Context, sql string) ([]map[string]any, er
 	args := c.buildArgs(sql)
 	cmd := exec.CommandContext(ctx, c.bin, args...)
 
-	stdout, err := cmd.Output()
-	stderr := ""
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		stderr = string(exitErr.Stderr)
-	}
-
-	if err != nil {
-		msg := strings.TrimSpace(stderr)
-		if msg == "" {
-			msg = "DuckDB query failed"
-		}
-		return nil, classifyError(msg)
-	}
-
-	return parseNDJSON(string(stdout))
-}
-
-// execQuery captures both stdout and stderr separately so warnings
-// can be forwarded while still detecting errors via exit code.
-func (c *duckdbConn) execQuery(ctx context.Context, sql string) ([]map[string]any, error) {
-	args := c.buildArgs(sql)
-	cmd := exec.CommandContext(ctx, c.bin, args...)
-
 	var stderrBuf strings.Builder
 	cmd.Stderr = &stderrBuf
 

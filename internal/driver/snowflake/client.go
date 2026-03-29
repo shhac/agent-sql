@@ -130,10 +130,7 @@ func (c *snowflakeConn) doWithRetry(ctx context.Context, method, url string, bod
 		httpResp, err := c.client.Do(httpReq)
 		if err != nil {
 			lastErr = err
-			if isRetryable(0) {
-				continue
-			}
-			return nil, err
+			continue // transport errors are always retryable
 		}
 
 		respBody, err := io.ReadAll(httpResp.Body)

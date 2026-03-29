@@ -73,7 +73,7 @@ func (c *duckdbConn) Query(ctx context.Context, sqlStr string, opts driver.Query
 		}, nil
 	}
 
-	rows, err := c.execQuery(ctx, sqlStr)
+	rows, err := c.exec(ctx, sqlStr)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (c *duckdbConn) GetTables(ctx context.Context, includeSystem bool) ([]drive
 		query = "SELECT table_name, table_type FROM information_schema.tables ORDER BY table_name"
 	}
 
-	rows, err := c.execQuery(ctx, query)
+	rows, err := c.exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (c *duckdbConn) DescribeTable(ctx context.Context, table string) ([]driver.
 		escaped,
 	)
 
-	rows, err := c.execQuery(ctx, query)
+	rows, err := c.exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (c *duckdbConn) GetIndexes(ctx context.Context, table string) ([]driver.Ind
 		)
 	}
 
-	rows, err := c.execQuery(ctx, query)
+	rows, err := c.exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (c *duckdbConn) GetConstraints(ctx context.Context, table string) ([]driver
 		)
 	}
 
-	rows, err := c.execQuery(ctx, query)
+	rows, err := c.exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (c *duckdbConn) GetConstraints(ctx context.Context, table string) ([]driver
 	var constraints []driver.ConstraintInfo
 	for _, r := range rows {
 		constraintType, _ := r["constraint_type"].(string)
-		mapped := mapConstraintType(constraintType)
+		mapped := driver.MapConstraintType(constraintType)
 		if mapped == "" {
 			continue
 		}
@@ -207,7 +207,7 @@ func (c *duckdbConn) GetConstraints(ctx context.Context, table string) ([]driver
 		constraints = append(constraints, driver.ConstraintInfo{
 			Name:    fmt.Sprintf("%s_%s", tbl, mapped),
 			Table:   tbl,
-			Type:    driver.ConstraintType(mapped),
+			Type:    mapped,
 			Columns: parseColumnList(r["constraint_column_names"]),
 		})
 	}
@@ -226,12 +226,12 @@ func (c *duckdbConn) SearchSchema(ctx context.Context, pattern string) (*driver.
 		escaped,
 	)
 
-	tableRows, err := c.execQuery(ctx, tableQuery)
+	tableRows, err := c.exec(ctx, tableQuery)
 	if err != nil {
 		return nil, err
 	}
 
-	colRows, err := c.execQuery(ctx, colQuery)
+	colRows, err := c.exec(ctx, colQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -261,21 +261,6 @@ func (c *duckdbConn) Close() error {
 }
 
 // --- helpers ---
-
-func mapConstraintType(duckType string) string {
-	switch duckType {
-	case "PRIMARY KEY":
-		return string(driver.ConstraintPrimaryKey)
-	case "FOREIGN KEY":
-		return string(driver.ConstraintForeignKey)
-	case "UNIQUE":
-		return string(driver.ConstraintUnique)
-	case "CHECK":
-		return string(driver.ConstraintCheck)
-	default:
-		return ""
-	}
-}
 
 // parseExpressionList parses DuckDB's expressions format: "[col1, col2]"
 func parseExpressionList(expr string) []string {

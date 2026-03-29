@@ -243,22 +243,8 @@ func (c *snowflakeConn) GetConstraints(ctx context.Context, table string) ([]dri
 	}
 
 	// Primary keys
-	if pkRows, err := c.execShowCommand(ctx, "SHOW PRIMARY KEYS"+inClause); err == nil {
-		for _, group := range groupByField(pkRows, "constraint_name") {
-			first := group[0]
-			sorted := sortByKeySequence(group)
-			cols := make([]string, len(sorted))
-			for i, r := range sorted {
-				cols[i] = stringVal(r, "column_name")
-			}
-			constraints = append(constraints, driver.ConstraintInfo{
-				Name:    stringVal(first, "constraint_name"),
-				Table:   stringVal(first, "table_name"),
-				Schema:  stringVal(first, "schema_name"),
-				Type:    driver.ConstraintPrimaryKey,
-				Columns: cols,
-			})
-		}
+	if pks, err := c.fetchConstraints(ctx, inClause, "SHOW PRIMARY KEYS", "constraint_name", "column_name", driver.ConstraintPrimaryKey); err == nil {
+		constraints = append(constraints, pks...)
 	}
 
 	// Foreign keys
@@ -285,22 +271,8 @@ func (c *snowflakeConn) GetConstraints(ctx context.Context, table string) ([]dri
 	}
 
 	// Unique keys
-	if ukRows, err := c.execShowCommand(ctx, "SHOW UNIQUE KEYS"+inClause); err == nil {
-		for _, group := range groupByField(ukRows, "constraint_name") {
-			first := group[0]
-			sorted := sortByKeySequence(group)
-			cols := make([]string, len(sorted))
-			for i, r := range sorted {
-				cols[i] = stringVal(r, "column_name")
-			}
-			constraints = append(constraints, driver.ConstraintInfo{
-				Name:    stringVal(first, "constraint_name"),
-				Table:   stringVal(first, "table_name"),
-				Schema:  stringVal(first, "schema_name"),
-				Type:    driver.ConstraintUnique,
-				Columns: cols,
-			})
-		}
+	if uks, err := c.fetchConstraints(ctx, inClause, "SHOW UNIQUE KEYS", "constraint_name", "column_name", driver.ConstraintUnique); err == nil {
+		constraints = append(constraints, uks...)
 	}
 
 	return constraints, nil
@@ -364,6 +336,33 @@ func (c *snowflakeConn) SearchSchema(ctx context.Context, pattern string) (*driv
 }
 
 // -- Helpers ------------------------------------------------------------------
+
+// fetchConstraints extracts simple (non-FK) constraints from a SHOW command.
+// The nameField and colField identify which row fields hold the constraint name
+// and column name respectively.
+func (c *snowflakeConn) fetchConstraints(ctx context.Context, inClause, showCmd, nameField, colField string, cType driver.ConstraintType) ([]driver.ConstraintInfo, error) {
+	rows, err := c.execShowCommand(ctx, showCmd+inClause)
+	if err != nil {
+		return nil, err
+	}
+	var result []driver.ConstraintInfo
+	for _, group := range groupByField(rows, nameField) {
+		first := group[0]
+		sorted := sortByKeySequence(group)
+		cols := make([]string, len(sorted))
+		for i, r := range sorted {
+			cols[i] = stringVal(r, colField)
+		}
+		result = append(result, driver.ConstraintInfo{
+			Name:    stringVal(first, nameField),
+			Table:   stringVal(first, "table_name"),
+			Schema:  stringVal(first, "schema_name"),
+			Type:    cType,
+			Columns: cols,
+		})
+	}
+	return result, nil
+}
 
 func (c *snowflakeConn) parseTableRef(table string) (schema, tbl string) {
 	return driver.SplitSchemaTable(table, c.defaultSchema)

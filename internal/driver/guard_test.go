@@ -105,6 +105,45 @@ func TestGuardReadOnlyCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestGuardReadOnlyBypassVectors documents known limitations of the keyword guard.
+// The guard checks only the first word of the statement. Multi-statement and CTE
+// bypasses are mitigated by server-side enforcement:
+//   - PG/CockroachDB: BEGIN READ ONLY per query
+//   - MySQL/MariaDB: START TRANSACTION READ ONLY per query
+//   - SQLite: SQLITE_OPEN_READONLY at OS level
+//   - DuckDB: -readonly CLI flag at engine level
+//   - MSSQL: db_datareader role recommended for production
+//   - Snowflake: client-side allowlist + MULTI_STATEMENT_COUNT=1
+func TestGuardReadOnlyBypassVectors(t *testing.T) {
+	t.Run("SQL comment before SELECT passes guard", func(t *testing.T) {
+		// The guard sees "--" as the first word (not a write command), so it allows.
+		// This is correct: the actual statement after the comment is a SELECT.
+		err := GuardReadOnly("-- DROP TABLE\nSELECT 1")
+		if err != nil {
+			t.Errorf("comment before SELECT should be allowed, got: %v", err)
+		}
+	})
+
+	t.Run("multi-statement via semicolon not caught by guard", func(t *testing.T) {
+		// The guard only checks the first word ("SELECT"), so the second statement
+		// is not caught. Server-side enforcement (BEGIN READ ONLY, etc.) prevents
+		// the write from executing.
+		err := GuardReadOnly("SELECT 1; DROP TABLE x")
+		if err != nil {
+			t.Errorf("guard only checks first word, got: %v", err)
+		}
+	})
+
+	t.Run("CTE-wrapped write not caught by guard", func(t *testing.T) {
+		// First word is "WITH" (allowed), so the DELETE inside the CTE is not
+		// caught by the keyword guard. Server-side enforcement prevents execution.
+		err := GuardReadOnly("WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x")
+		if err != nil {
+			t.Errorf("guard only checks first word, got: %v", err)
+		}
+	})
+}
+
 func TestGuardReadOnlyWhitespaceHandling(t *testing.T) {
 	tests := []struct {
 		sql     string
