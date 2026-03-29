@@ -27,6 +27,7 @@ type Opts struct {
 	Role      string
 	Token     string // PAT secret
 	Readonly  bool
+	BaseURL   string // override API base URL (for testing with mock servers)
 }
 
 // readOnlyAllowed lists statement types permitted in read-only mode.
@@ -56,7 +57,10 @@ func Connect(opts Opts) (driver.Connection, error) {
 		return nil, errors.New("Snowflake PAT token is required", errors.FixableByHuman)
 	}
 
-	baseURL := "https://" + opts.Account + ".snowflakecomputing.com"
+	baseURL := opts.BaseURL
+	if baseURL == "" {
+		baseURL = "https://" + opts.Account + ".snowflakecomputing.com"
+	}
 	defaultSchema := opts.Schema
 	if defaultSchema == "" {
 		defaultSchema = "PUBLIC"
