@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/shhac/agent-sql/internal/config"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 )
 
@@ -101,6 +102,40 @@ const (
 	FormatYAML   Format = "yaml"
 	FormatCSV    Format = "csv"
 )
+
+// NewWriter creates a ResultWriter for the given format.
+func NewWriter(w io.Writer, format Format, columns []string) ResultWriter {
+	switch format {
+	case FormatJSON:
+		return NewJSONWriter(w, columns)
+	case FormatYAML:
+		return NewYAMLWriter(w, columns)
+	case FormatCSV:
+		return NewCSVWriter(w, columns)
+	default:
+		return NewNDJSONWriter(w)
+	}
+}
+
+// ResolveFormat resolves the output format from flag > config > default.
+func ResolveFormat(flagFormat string) Format {
+	if flagFormat != "" {
+		f, err := ParseFormat(flagFormat)
+		if err != nil {
+			return FormatNDJSON
+		}
+		return f
+	}
+	cfg := config.Read()
+	if cfg.Settings.Defaults != nil && cfg.Settings.Defaults.Format != "" {
+		f, err := ParseFormat(cfg.Settings.Defaults.Format)
+		if err != nil {
+			return FormatNDJSON
+		}
+		return f
+	}
+	return FormatNDJSON
+}
 
 // ParseFormat parses a format string, returning an error for unknown formats.
 func ParseFormat(s string) (Format, error) {

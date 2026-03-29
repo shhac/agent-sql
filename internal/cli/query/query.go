@@ -110,7 +110,7 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			}
 			defer drv.Close()
 
-			return ExecuteRun(ctx, drv, args[0], limit, write, g.Expand, g.Full, g.Compact)
+			return ExecuteRun(ctx, drv, args[0], limit, write, g.Expand, g.Full, g.Compact, g.Format)
 		},
 	}
 	run.Flags().IntVarP(&limit, "limit", "l", 0, "Maximum rows to return")
@@ -120,7 +120,7 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 
 // ExecuteRun runs a SQL query on an already-resolved connection and writes results.
 // Handles limit resolution, automatic LIMIT injection, write result detection, and output.
-func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, expand string, full bool, compact bool) error {
+func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, expand string, full bool, compact bool, formatFlag string) error {
 	pageSize := resolveLimit(limitFlag)
 	maxRows := resolveMaxRows()
 	effectiveLimit := pageSize
@@ -154,7 +154,7 @@ func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFla
 		displayRows = result.Rows[:effectiveLimit]
 	}
 
-	writeQueryResults(displayRows, hasMore, expand, full, compact)
+	writeQueryResults(displayRows, hasMore, expand, full, compact, output.ResolveFormat(formatFlag), result.Columns)
 	return nil
 }
 
@@ -196,7 +196,7 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 				return nil
 			}
 
-			writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact)
+			writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
 			return nil
 		},
 	}
@@ -337,7 +337,7 @@ func isWriteResult(result *driver.QueryResult) bool {
 	return false
 }
 
-func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full bool, compact bool) {
+func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full bool, compact bool, format output.Format, columns []string) {
 	expandMap := make(map[string]bool)
 	if expand != "" {
 		for _, f := range strings.Split(expand, ",") {
@@ -352,7 +352,7 @@ func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full 
 	}
 
 	w := truncation.NewTruncatingWriter(
-		output.NewNDJSONWriter(os.Stdout),
+		output.NewWriter(os.Stdout, format, columns),
 		truncation.Config{MaxLength: maxLen, Expand: expandMap, Full: full},
 	)
 
@@ -368,4 +368,6 @@ func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full 
 			RowCount: len(rows),
 		})
 	}
+
+	w.Flush()
 }

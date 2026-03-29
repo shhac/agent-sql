@@ -39,6 +39,11 @@ func connGlobals() (string, int) {
 	return flagConnection, flagTimeout
 }
 
+// schemaGlobals returns connection, timeout, and format for schema commands.
+func schemaGlobals() (string, int, string) {
+	return flagConnection, flagTimeout, flagFormat
+}
+
 func newRootCmd(version string) *cobra.Command {
 	root := &cobra.Command{
 		Use:     "agent-sql",
@@ -60,7 +65,7 @@ func newRootCmd(version string) *cobra.Command {
 	registerRunCommand(root)
 	registerUsageCommand(root)
 	query.Register(root, allGlobals)
-	schema.Register(root, connGlobals)
+	schema.Register(root, schemaGlobals)
 	connection.Register(root, connGlobals)
 	clicredential.Register(root)
 	cliconfig.Register(root)

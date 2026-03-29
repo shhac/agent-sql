@@ -141,6 +141,233 @@ func TestNDJSONWriterWritesOneObjectPerLine(t *testing.T) {
 	}
 }
 
+// --- JSON Writer tests ---
+
+func TestJSONWriterEnvelope(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewJSONWriter(&buf, nil)
+
+	w.WriteRow(map[string]any{"id": float64(1), "name": "Alice"})
+	w.WriteRow(map[string]any{"id": float64(2), "name": "Bob"})
+	w.Flush()
+
+	var envelope map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, buf.String())
+	}
+
+	cols, ok := envelope["columns"].([]any)
+	if !ok {
+		t.Fatal("expected columns array")
+	}
+	if len(cols) != 2 {
+		t.Errorf("expected 2 columns, got %d", len(cols))
+	}
+
+	rows, ok := envelope["rows"].([]any)
+	if !ok {
+		t.Fatal("expected rows array")
+	}
+	if len(rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(rows))
+	}
+
+	if _, ok := envelope["pagination"]; ok {
+		t.Error("pagination should not be present when not set")
+	}
+}
+
+func TestJSONWriterWithPagination(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewJSONWriter(&buf, nil)
+
+	w.WriteRow(map[string]any{"id": float64(1), "name": "Alice"})
+	w.WritePagination(&Pagination{HasMore: true, RowCount: 1})
+	w.Flush()
+
+	var envelope map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	pag, ok := envelope["pagination"].(map[string]any)
+	if !ok {
+		t.Fatal("expected pagination object")
+	}
+	if pag["hasMore"] != true {
+		t.Errorf("hasMore = %v, want true", pag["hasMore"])
+	}
+	if pag["rowCount"] != float64(1) {
+		t.Errorf("rowCount = %v, want 1", pag["rowCount"])
+	}
+}
+
+func TestJSONWriterEmptyResult(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewJSONWriter(&buf, nil)
+	w.Flush()
+
+	var envelope map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	rows, ok := envelope["rows"].([]any)
+	if !ok {
+		t.Fatal("expected rows array")
+	}
+	if len(rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(rows))
+	}
+}
+
+// --- YAML Writer tests ---
+
+func TestYAMLWriterOutput(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewYAMLWriter(&buf, nil)
+
+	w.WriteRow(map[string]any{"id": 1, "name": "Alice"})
+	w.WriteRow(map[string]any{"id": 2, "name": "Bob"})
+	w.Flush()
+
+	out := buf.String()
+	if !strings.Contains(out, "columns:") {
+		t.Error("YAML output should contain 'columns:'")
+	}
+	if !strings.Contains(out, "rows:") {
+		t.Error("YAML output should contain 'rows:'")
+	}
+	if !strings.Contains(out, "Alice") {
+		t.Error("YAML output should contain 'Alice'")
+	}
+	if !strings.Contains(out, "Bob") {
+		t.Error("YAML output should contain 'Bob'")
+	}
+}
+
+func TestYAMLWriterWithPagination(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewYAMLWriter(&buf, nil)
+
+	w.WriteRow(map[string]any{"id": 1, "name": "Alice"})
+	w.WritePagination(&Pagination{HasMore: true, RowCount: 1})
+	w.Flush()
+
+	out := buf.String()
+	if !strings.Contains(out, "pagination:") {
+		t.Errorf("YAML should contain pagination:\n%s", out)
+	}
+	if !strings.Contains(out, "hasMore: true") {
+		t.Errorf("YAML should contain 'hasMore: true':\n%s", out)
+	}
+}
+
+// --- CSV Writer tests ---
+
+func TestCSVWriterBasic(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewCSVWriter(&buf, []string{"id", "name"})
+
+	w.WriteRow(map[string]any{"id": float64(1), "name": "Alice"})
+	w.WriteRow(map[string]any{"id": float64(2), "name": "Bob"})
+	w.Flush()
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines (header + 2 rows), got %d: %q", len(lines), buf.String())
+	}
+	if lines[0] != "id,name" {
+		t.Errorf("header = %q, want %q", lines[0], "id,name")
+	}
+	if lines[1] != "1,Alice" {
+		t.Errorf("row 1 = %q, want %q", lines[1], "1,Alice")
+	}
+	if lines[2] != "2,Bob" {
+		t.Errorf("row 2 = %q, want %q", lines[2], "2,Bob")
+	}
+}
+
+func TestCSVWriterNulls(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewCSVWriter(&buf, []string{"id", "name"})
+
+	w.WriteRow(map[string]any{"id": float64(1), "name": nil})
+	w.Flush()
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if lines[1] != "1," {
+		t.Errorf("null should render as empty: got %q", lines[1])
+	}
+}
+
+func TestCSVWriterSpecialChars(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewCSVWriter(&buf, []string{"name", "bio"})
+
+	w.WriteRow(map[string]any{"name": "Alice", "bio": "likes commas, quotes\", and\nnewlines"})
+	w.Flush()
+
+	lines := buf.String()
+	// RFC 4180: fields with commas, quotes, or newlines are quoted
+	if !strings.Contains(lines, `"likes commas`) {
+		t.Errorf("expected quoted field for special chars:\n%s", lines)
+	}
+}
+
+func TestCSVWriterPaginationNoop(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewCSVWriter(&buf, []string{"id"})
+
+	w.WriteRow(map[string]any{"id": float64(1)})
+	w.WritePagination(&Pagination{HasMore: true, RowCount: 1})
+	w.Flush()
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2 {
+		t.Errorf("CSV should have only header + 1 row (no pagination), got %d lines", len(lines))
+	}
+}
+
+func TestCSVWriterNestedObject(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewCSVWriter(&buf, []string{"id", "data"})
+
+	w.WriteRow(map[string]any{"id": float64(1), "data": map[string]any{"key": "val"}})
+	w.Flush()
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if !strings.Contains(lines[1], `{`) {
+		t.Errorf("nested object should be JSON string: %q", lines[1])
+	}
+}
+
+// --- NewWriter factory test ---
+
+func TestNewWriterFactory(t *testing.T) {
+	var buf bytes.Buffer
+
+	ndjson := NewWriter(&buf, FormatNDJSON, nil)
+	if _, ok := ndjson.(*NDJSONWriter); !ok {
+		t.Errorf("FormatNDJSON should return *NDJSONWriter, got %T", ndjson)
+	}
+
+	jsonW := NewWriter(&buf, FormatJSON, nil)
+	if _, ok := jsonW.(*JSONWriter); !ok {
+		t.Errorf("FormatJSON should return *JSONWriter, got %T", jsonW)
+	}
+
+	yamlW := NewWriter(&buf, FormatYAML, nil)
+	if _, ok := yamlW.(*YAMLWriter); !ok {
+		t.Errorf("FormatYAML should return *YAMLWriter, got %T", yamlW)
+	}
+
+	csvW := NewWriter(&buf, FormatCSV, []string{"a"})
+	if _, ok := csvW.(*CSVWriter); !ok {
+		t.Errorf("FormatCSV should return *CSVWriter, got %T", csvW)
+	}
+}
+
 func TestNDJSONWriterWritePagination(t *testing.T) {
 	var buf bytes.Buffer
 	w := NewNDJSONWriter(&buf)
