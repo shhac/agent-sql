@@ -3,6 +3,12 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
+
+	cliconfig "github.com/shhac/agent-sql/internal/cli/config"
+	"github.com/shhac/agent-sql/internal/cli/connection"
+	clicredential "github.com/shhac/agent-sql/internal/cli/credential"
+	"github.com/shhac/agent-sql/internal/cli/query"
+	"github.com/shhac/agent-sql/internal/cli/schema"
 )
 
 // Global flags accessible to all commands.
@@ -14,6 +20,16 @@ var (
 	flagTimeout    int
 	flagCompact    bool
 )
+
+// allGlobals returns all 6 global flag values for query commands.
+func allGlobals() (string, string, string, bool, int, bool) {
+	return flagConnection, flagFormat, flagExpand, flagFull, flagTimeout, flagCompact
+}
+
+// connGlobals returns the connection and timeout global flags for schema/connection commands.
+func connGlobals() (string, int) {
+	return flagConnection, flagTimeout
+}
 
 func newRootCmd(version string) *cobra.Command {
 	root := &cobra.Command{
@@ -35,6 +51,11 @@ func newRootCmd(version string) *cobra.Command {
 	// Register command groups
 	registerRunCommand(root)
 	registerUsageCommand(root)
+	query.Register(root, allGlobals)
+	schema.Register(root, connGlobals)
+	connection.Register(root, connGlobals)
+	clicredential.Register(root)
+	cliconfig.Register(root)
 
 	return root
 }
