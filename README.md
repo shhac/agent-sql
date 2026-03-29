@@ -7,7 +7,7 @@ Read-only-by-default SQL CLI for AI agents.
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
 - **PostgreSQL, CockroachDB, MySQL, SQLite, DuckDB, and Snowflake** -- six drivers, one interface
-- **Zero runtime deps** -- single compiled binary via `bun build --compile`
+- **Single binary** -- standalone compiled binary via `bun build --compile` (DuckDB requires `duckdb` CLI installed separately)
 
 ## Installation
 
