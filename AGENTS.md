@@ -1,101 +1,104 @@
 # agent-sql
 
-Read-only-by-default SQL CLI for AI agents. TypeScript + Bun, compiled to standalone binaries.
+Read-only-by-default SQL CLI for AI agents. Go, compiled to standalone binaries.
 
 ## Design docs
 
 Design docs live in `design-docs/` (gitignored, local-only). If present:
 
-- `design-docs/agent-sql/design.md` — source of truth for all design decisions
-- `design-docs/TASKS.md` — implementation plan with dependencies
-- `design-docs/` — research on reference tools, Bun SQL support, read-only enforcement, SQL lexer options, MySQL readonly analysis
+- `design-docs/go-rewrite.md` — Go rewrite plan with phased migration strategy
+- `design-docs/subprocess-drivers.md` — subprocess driver pattern design
+- `design-docs/TASKS.md` — implementation task tracker
 
 ## Runtime
 
-- **Bun** — runtime, test runner, and compiler (`bun build --compile` for standalone binaries)
-- **Bun.SQL** — native PostgreSQL, MySQL, and MariaDB driver via `import { SQL } from "bun"` with `sql.unsafe()` for raw SQL execution
-- **bun:sqlite** — native SQLite driver via `import { Database } from "bun:sqlite"`
+- **Go** — single compiled binary, no runtime dependencies
+- **pgx** — native PostgreSQL driver (also used by CockroachDB)
+- **go-sql-driver/mysql** — native MySQL driver (also used by MariaDB)
+- **modernc.org/sqlite** — pure Go SQLite driver (no CGo)
+- **go-mssqldb** — native MSSQL driver (pure Go, SQL auth only — no Azure SDK)
 - **DuckDB** — subprocess driver, spawns `duckdb` CLI with NDJSON output (requires CLI installed separately)
-- No npm packages needed for database access (except `libpg-query` for PG read-only guard)
+- **Snowflake** — HTTP REST API v2 with PAT authentication (lightweight, no gosnowflake)
 
 ## Key design decisions
 
-See design docs (if present) for full rationale on each.
-
-- **Read-only by default** — credentials (username, password, writePermission) stored in macOS Keychain, not in config file. Config has zero sensitive data.
-- **PG/CockroachDB session guard** — `libpg-query` (PG's actual parser, WASM) with an allowlist of permitted statement types. CockroachDB uses PG wire protocol; guard fails closed for CRDB-specific syntax.
-- **SQLite readonly** — `SQLITE_OPEN_READONLY` is OS-level, cannot be bypassed by SQL. No guard needed.
-- **MySQL/MariaDB readonly** — `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement. No parser needed. MariaDB uses `max_statement_time` for timeout (vs MySQL's `MAX_EXECUTION_TIME`).
+- **Read-only by default** — credentials stored in macOS Keychain, not in config file. Config has zero sensitive data.
+- **PG/CockroachDB read-only** — keyword-based guard + `SET default_transaction_read_only = on` + `BEGIN READ ONLY` per query. Defense in depth.
+- **SQLite readonly** — `SQLITE_OPEN_READONLY` via `?mode=ro` DSN. OS-level enforcement.
+- **MySQL/MariaDB readonly** — `START TRANSACTION READ ONLY` per query + session-level enforcement. MariaDB uses `max_statement_time` for timeout (vs MySQL's `MAX_EXECUTION_TIME`).
 - **DuckDB readonly** — `-readonly` CLI flag, engine-level enforcement (like SQLite). No guard needed.
 - **Snowflake readonly** — client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1`.
-- **Subprocess drivers** — pattern for databases without native Bun drivers. Spawns CLI tool with structured output (NDJSON), parses results. See `design-docs/subprocess-drivers.md`.
-- **Output** — JSON to stdout, errors to stderr. NULLs preserved in query results. `@truncated` structured object per row. `fixable_by` field on errors.
+- **MSSQL readonly** — keyword-based guard. Server-side `db_datareader` role recommended for production.
+- **Subprocess drivers** — pattern for databases without lightweight native drivers. Spawns CLI tool with NDJSON output. See `design-docs/subprocess-drivers.md`.
+- **Streaming output** — NDJSON written row-by-row via `ResultWriter` interface. Never buffers full result sets for streaming formats.
+- **Output** — NDJSON to stdout (default), errors to stderr as JSON. NULLs preserved. `@truncated` per row. `fixable_by` on errors.
 - **Skill boundary** — query, schema, config, connection list/test, usage exposed to LLMs. Credential and connection mutation are human-only.
+- **Pure Go** — no CGo dependencies. Keyword guard instead of `pg_query_go`. Cross-compilation is trivial.
 
 ## Dev tools
 
-**Use `bun` for everything — not node, npm, or npx.** This is a Bun project. Use `bun run`, `bun test`, `bun add`, `bunx`.
-
-- **Linting**: `bun run lint` / `bun run lint:fix` (oxlint — `type` over `interface`, kebab-case filenames, max 350 lines/file, max 2 params/function)
-- **Formatting**: `bun run format` (oxfmt)
-- **Testing**: `bun test`
-- **Typecheck**: `bun run typecheck`
-- **Dev runner**: `bun run dev -- <args>`
-- **Git hooks**: simple-git-hooks (pre-commit: lint fix + format)
+- **Build**: `make build`
+- **Test**: `make test` (full) / `make test-short` (skip integration)
+- **Lint**: `make lint` (golangci-lint)
+- **Format**: `make fmt` (gofmt + goimports)
+- **Dev runner**: `make dev ARGS="run -c ./data.db 'SELECT 1'"`
+- **Vet**: `make vet`
 
 ## Architecture
 
 ```
-src/
-  index.ts                    # CLI entry — registers commands via commander, top-level `run` alias
-  cli/
-    connection/               # connection add/remove/update/list/test/set-default/usage (human-only)
-    credential/               # credential add/remove/list/usage (human-only)
-    config/                   # config get/set/reset/list-keys/usage
-    schema/                   # schema tables/describe/indexes/constraints/search/dump/usage
+cmd/
+  agent-sql/                  # CLI entry point (main.go)
+internal/
+  cli/                        # cobra commands
+    root.go                   # global flags (-c, --format, --expand, --full, --timeout)
+    run.go                    # top-level `run` alias
+    usage.go                  # LLM reference card
     query/                    # query run/sample/explain/count/usage
-    usage/                    # Top-level LLM reference card
-  lib/
-    config.ts                 # Config file I/O (connections + settings, no credentials)
-    credentials.ts            # Credential storage (Keychain on macOS, file fallback)
-    output.ts                 # printJson, printPaginated, printError, printCompact
-    truncation.ts             # applyTruncation with @truncated structured object
-    errors.ts                 # Per-driver error mapping, fixable_by classification
-    timeout.ts                # CLI --timeout > config > default 30s
-    keychain.ts               # macOS Keychain via security CLI
-    pg-session-guard.ts       # libpg-query allowlist for PG read-only mode
-    version.ts                # Build-time define > env > package.json
-  drivers/
-    types.ts                  # DriverConnection interface, QueryResult, schema types
-    pg/                       # PostgreSQL (Bun.SQL) — also used by CockroachDB
-    sqlite.ts                 # SQLite (bun:sqlite)
-    mysql/                    # MySQL (Bun.SQL with mysql adapter) — also used by MariaDB
+    schema/                   # schema tables/describe/indexes/constraints/search/dump/usage
+    connection/               # connection add/remove/update/list/test/set-default/usage
+    credential/               # credential add/remove/list/usage
+    config/                   # config get/set/reset/list-keys/usage
+  driver/
+    driver.go                 # Connection interface, QueryResult, schema types
+    resolve.go                # Driver resolution from config / URL / file path
+    detect.go                 # URL scheme and file extension detection
+    guard.go                  # Keyword-based read-only guard (shared by PG, MSSQL)
+    pg/                       # PostgreSQL (pgx) — also used by CockroachDB
+    cockroachdb/              # Thin wrapper over pg (port 26257, db defaultdb)
+    mysql/                    # MySQL (go-sql-driver/mysql) — also used by MariaDB
+    mariadb/                  # Thin wrapper over mysql (max_statement_time)
+    sqlite/                   # SQLite (modernc.org/sqlite, pure Go)
     duckdb/                   # DuckDB (subprocess — spawns duckdb CLI with NDJSON output)
-    snowflake/                # Snowflake (REST API with PAT auth)
-    resolve.ts                # Driver resolution from connection config
-    resolve-detect.ts         # URL scheme and file extension detection
-    resolve-ad-hoc.ts         # Ad-hoc connections (URLs, file paths)
+    snowflake/                # Snowflake (HTTP REST API v2)
+    mssql/                    # MSSQL (go-mssqldb)
+  config/                     # Config file I/O (connections + settings)
+  credential/                 # Credential storage (Keychain on macOS, file fallback)
+  output/                     # ResultWriter interface, NDJSON/JSON/YAML/CSV formatters
+  truncation/                 # @truncated decorator (ResultWriter wrapper)
+  errors/                     # QueryError type, per-driver error classification
 ```
 
 ## Key patterns
 
-- **Command registration**: Each `cli/*/index.ts` exports `registerXyzCommand({ program })` called from `index.ts`
-- **Output**: Query results through `printJson()` / `printPaginated()` / `printCompact()`. Errors through `printError()` with `fixable_by` classification. Admin output prunes nulls; query output preserves them.
-- **Connection resolution**: `-c` accepts aliases, file paths (SQLite `.db`, DuckDB `.duckdb`), or connection URLs (postgres://, cockroachdb://, mysql://, mariadb://, duckdb://, snowflake://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections
-- **Driver abstraction**: Shared `DriverConnection` interface, each driver implements schema discovery with its own native queries, returns shared types
-- **Error messages**: Always include valid alternatives for LLM self-correction and `fixable_by` (`"agent"` / `"human"` / `"retry"`)
-- **Truncation**: Strings over `truncation.maxLength` truncated with `...`, per-row `@truncated: { "column": originalLength }` metadata. Compact mode uses top-level parallel arrays.
-- **PG namespaces**: Dot notation everywhere (`schema.table`), system schemas excluded by default (`--include-system` to show)
+- **Connection interface**: Every driver implements `driver.Connection`. CLI commands call interface methods — zero driver-specific branching.
+- **context.Context**: All driver methods take `context.Context` for timeout/cancellation (except `QuoteIdent` and `Close`).
+- **ResultWriter**: Streaming output interface. NDJSON writes rows as they arrive. JSON/YAML buffer internally. Truncation is a decorator wrapping the inner writer.
+- **Error classification**: `errors.QueryError` with `FixableBy` field (`agent`/`human`/`retry`). Drivers pre-classify; `errors.Classify()` handles the rest.
+- **Connection resolution**: `-c` accepts aliases, file paths (`.db`, `.duckdb`), or URLs (postgres://, cockroachdb://, mysql://, mariadb://, duckdb://, snowflake://, mssql://, sqlserver://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default.
+- **Keyword guard**: Shared read-only guard for PG and MSSQL. Blocks statements starting with INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, MERGE, GRANT, REVOKE. PG also uses server-side `BEGIN READ ONLY`.
+- **Thin wrappers**: CockroachDB wraps PG (different defaults). MariaDB wraps MySQL (different timeout syntax).
 
 ## Releasing
 
-The Homebrew tap lives at `../homebrew-tap`. After updating the formula there, always `cd` back to this repo's root directory before continuing. Never leave the working directory pointing at the homebrew-tap repo.
+Defer Homebrew updates until Go implementation reaches full parity.
+The Bun implementation lives in `agent-sql-bun/` during migration.
 
 ## After making changes
 
 When changing CLI behavior, flags, output shape, or commands, also update the applicable docs:
-- `src/cli/usage/index.ts` — top-level LLM reference card
-- `src/cli/*/usage.ts` — per-command usage text
+- `internal/cli/usage.go` — top-level LLM reference card
+- `internal/cli/*/usage.go` — per-command usage text
 - `skills/agent-sql/SKILL.md` — Claude Code skill definition
 - `skills/agent-sql/references/commands.md` — full command reference
 - `skills/agent-sql/references/output.md` — output format reference
@@ -106,27 +109,33 @@ When changing CLI behavior, flags, output shape, or commands, also update the ap
 Every file below must be updated. Use the existing drivers as a model.
 
 **Core:**
-- [ ] `src/drivers/types.ts` — add to `Driver` union type
-- [ ] `src/drivers/<name>/` — driver implementation (index.ts, schema.ts, and subprocess.ts if subprocess-based)
-- [ ] `src/drivers/resolve-detect.ts` — URL pattern and/or file extension detection
-- [ ] `src/drivers/resolve-ad-hoc.ts` — ad-hoc connection handling (URL and file path)
-- [ ] `src/drivers/resolve.ts` — import, `configConnectBuilders` entry, write permission check, driver name in error messages
-- [ ] `src/lib/errors.ts` — error handler if needed (subprocess drivers use pre-classified errors instead)
+- [ ] `internal/driver/driver.go` — add to `Driver` constants
+- [ ] `internal/driver/<name>/` — driver implementation
+- [ ] `internal/driver/detect.go` — URL pattern and/or file extension detection
+- [ ] `internal/driver/resolve.go` — builder entry, write permission check, driver name in error messages
 
 **CLI text (every place that lists drivers):**
-- [ ] `src/cli/connection/add.ts` — `--driver` option description, `resolveDriver` error, `parseConnectionString` error, connection string parsing logic
-- [ ] `src/cli/connection/update.ts` — `--driver` option description
-- [ ] `src/cli/connection/usage.ts` — examples, `--driver` enum, AD-HOC section
-- [ ] `src/cli/credential/add.ts` — hint text
-- [ ] `src/cli/usage/index.ts` — driver list, ad-hoc examples, CONNECTION section
+- [ ] `internal/cli/connection/add.go` — `--driver` flag description, connection string parsing
+- [ ] `internal/cli/connection/update.go` — `--driver` flag description
+- [ ] `internal/cli/connection/usage.go` — examples, AD-HOC section
+- [ ] `internal/cli/credential/add.go` — hint text
+- [ ] `internal/cli/usage.go` — driver list, ad-hoc examples, CONNECTION section
 
 **Documentation:**
-- [ ] `skills/agent-sql/SKILL.md` — description, triggers, driver list, quick start, safety section, connection resolution
+- [ ] `skills/agent-sql/SKILL.md` — description, triggers, driver list, quick start, safety section
 - [ ] `skills/agent-sql/references/commands.md` — `-c` flag description
-- [ ] `README.md` — tagline, quick start, named connections, safety table, connection resolution, env vars
-- [ ] `CLAUDE.md` — this file (runtime, design decisions, architecture tree, key patterns)
+- [ ] `README.md` — tagline, quick start, safety table, connection resolution
+- [ ] `AGENTS.md` — this file (runtime, design decisions, architecture)
 
 **Tests:**
-- [ ] `test/<name>.test.ts` — driver-specific tests (query, schema, read-only, data types, error classification)
-- [ ] `test/resolve.test.ts` — URL detection, file extension detection, isConnectionUrl, isFilePath
-- [ ] `test/resolve-mocked.isolated.ts` — URL detection, write permission check
+- [ ] `internal/driver/<name>/<name>_test.go` — query, schema, readonly, data types, error classification
+- [ ] `internal/driver/detect_test.go` — URL detection, file extension detection
+- [ ] `internal/driver/resolve_test.go` — write permission check
+
+## Legacy Bun implementation
+
+The TypeScript/Bun implementation lives in `agent-sql-bun/` during migration. Both tools share the same config files at `~/.config/agent-sql/`. To run the Bun version:
+
+```bash
+cd agent-sql-bun && bun run dev -- <args>
+```
