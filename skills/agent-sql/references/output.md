@@ -213,12 +213,14 @@ Combines tables, columns, indexes, and constraints in one response. Same structu
     {
       "alias": "local",
       "driver": "sqlite",
+      "display_url": "sqlite:///Users/paul/data/app.sqlite",
       "path": "/Users/paul/data/app.sqlite",
       "default": true
     },
     {
       "alias": "prod",
       "driver": "pg",
+      "display_url": "postgres://db.example.com:5432/myapp",
       "host": "db.example.com",
       "port": 5432,
       "database": "myapp",
@@ -227,11 +229,21 @@ Combines tables, columns, indexes, and constraints in one response. Same structu
     {
       "alias": "warehouse",
       "driver": "snowflake",
+      "display_url": "snowflake://myorg-myaccount/ANALYTICS/PUBLIC",
       "account": "myorg-myaccount",
       "database": "ANALYTICS",
       "schema": "PUBLIC",
       "warehouse": "COMPUTE_WH",
       "credential": "sf-readonly"
+    },
+    {
+      "alias": "ms",
+      "driver": "mssql",
+      "display_url": "mssql://sqlhost:1433/reporting",
+      "host": "sqlhost",
+      "port": 1433,
+      "database": "reporting",
+      "credential": "mssql-readonly"
     }
   ]
 }

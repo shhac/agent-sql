@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -278,4 +279,59 @@ func mapToSettings(m map[string]any) Settings {
 	var s Settings
 	json.Unmarshal(data, &s)
 	return s
+}
+
+// DisplayURL builds a human-readable connection URL from config fields.
+// Never includes credentials -- only the connection target.
+func (c Connection) DisplayURL() string {
+	switch c.Driver {
+	case "sqlite":
+		if c.Path != "" {
+			return "sqlite://" + c.Path
+		}
+		return "sqlite://"
+	case "duckdb":
+		if c.Path != "" {
+			return "duckdb://" + c.Path
+		}
+		return "duckdb://"
+	case "pg":
+		return hostPortDBURL("postgres", c.Host, c.Port, c.Database)
+	case "cockroachdb":
+		return hostPortDBURL("cockroachdb", c.Host, c.Port, c.Database)
+	case "mysql":
+		return hostPortDBURL("mysql", c.Host, c.Port, c.Database)
+	case "mariadb":
+		return hostPortDBURL("mariadb", c.Host, c.Port, c.Database)
+	case "mssql":
+		return hostPortDBURL("mssql", c.Host, c.Port, c.Database)
+	case "snowflake":
+		u := "snowflake://"
+		if c.Account != "" {
+			u += c.Account
+		}
+		if c.Database != "" {
+			u += "/" + c.Database
+		}
+		if c.Schema != "" {
+			u += "/" + c.Schema
+		}
+		return u
+	default:
+		return c.Driver + "://"
+	}
+}
+
+func hostPortDBURL(scheme, host string, port int, database string) string {
+	u := scheme + "://"
+	if host != "" {
+		u += host
+	}
+	if port != 0 {
+		u += ":" + strconv.Itoa(port)
+	}
+	if database != "" {
+		u += "/" + database
+	}
+	return u
 }

@@ -1,19 +1,20 @@
 ---
 name: agent-sql
 description: |
-  Read-only-by-default SQL CLI for AI agents. Use when:
-  - Exploring SQL databases (PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, Snowflake, MSSQL) -- tables, columns, indexes, constraints
+  Read-only-by-default SQL CLI for AI agents. Supports 8 databases: PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, Snowflake, MSSQL. Use when:
+  - Exploring SQL databases -- tables, columns, indexes, constraints
   - Querying data (SELECT, sample rows, count, explain plans)
-  - Writing data when explicitly permitted (INSERT, UPDATE, DELETE with --write)
+  - Writing data when explicitly permitted (--write flag)
   - Checking database connections or adjusting CLI settings
-  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "cockroachdb", "cockroach", "mysql", "sqlite", "duckdb", "parquet", "snowflake", "mssql", "sql server", "sql connection", "query database", "sql select", "sql insert", "sql explain", "sql count", "sql sample", "database schema", "describe table", "sql columns", "sql indexes", "mariadb"
+  See references/commands.md for the full command map and references/output.md for output format details.
+  Triggers: "sql query", "sql database", "sql table", "sql schema", "postgres", "postgresql", "cockroachdb", "cockroach", "mysql", "sqlite", "duckdb", "parquet", "snowflake", "mssql", "sql server", "sqlserver", "sql connection", "query database", "sql select", "sql insert", "sql explain", "sql count", "sql sample", "database schema", "describe table", "sql columns", "sql indexes", "mariadb", "maria db"
 ---
 
 # SQL database exploration with `agent-sql`
 
-`agent-sql` is a read-only-by-default SQL CLI binary on `$PATH`. Query output is JSONL to stdout (one JSON object per line, no envelope). Non-tabular output (schema, config, admin) uses JSON envelope. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
+`agent-sql` is a read-only-by-default SQL CLI on `$PATH`. Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, Snowflake, and MSSQL.
 
-Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, Snowflake, and MSSQL.
+Query output goes to stdout as JSONL (one JSON object per line). Non-tabular output (schema, config, admin) uses a JSON envelope. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
 
 ## Quick start
 
@@ -36,7 +37,7 @@ For named connections, discover what's available:
 
 ```bash
 agent-sql usage                          # full reference card
-agent-sql connection list                # see available connections
+agent-sql connection list                # saved connections + display URLs + defaults
 agent-sql connection test                # verify default connection works
 ```
 
@@ -118,7 +119,7 @@ Key settings: `defaults.format` (jsonl), `defaults.limit` (20), `query.timeout` 
 Connections are set up by the user. The agent can list and test but not add/remove/modify:
 
 ```bash
-agent-sql connection list                            # saved connections + defaults
+agent-sql connection list                            # saved connections + display URLs + defaults
 agent-sql connection test                            # test default connection
 agent-sql connection test -c prod                    # test specific connection
 # Human-only setup examples:
@@ -126,12 +127,12 @@ agent-sql connection test -c prod                    # test specific connection
 # connection add local ./data.db
 ```
 
-Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (e.g. `./data.db`, `./data.duckdb`), or URLs (e.g. `postgres://...`, `cockroachdb://...`, `mysql://...`, `mariadb://...`, `duckdb://...`, `snowflake://...`, `mssql://...`, `sqlserver://...`). DuckDB requires the `duckdb` CLI installed separately (`brew install duckdb`); set `AGENT_SQL_DUCKDB_PATH` for a custom location. Use `duckdb://` with no path for in-memory mode to query Parquet, CSV, and JSON files directly. Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var for authentication.
+Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (`.db`, `.duckdb`), or URLs (`postgres://`, `cockroachdb://`, `mysql://`, `mariadb://`, `duckdb://`, `snowflake://`, `mssql://`, `sqlserver://`). DuckDB requires the `duckdb` CLI (`brew install duckdb`); `duckdb://` with no path for in-memory mode (query Parquet/CSV/JSON files). Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var.
 
 ## Safety
 
 - **Read-only by default**: writes require `--write` flag AND a credential with write permission
-- **Defense in depth**: PG/CockroachDB uses database-level read-only transactions + session guard (libpg-query); MySQL/MariaDB uses `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement; SQLite uses OS-level SQLITE_OPEN_READONLY; DuckDB uses `-readonly` CLI flag (engine-level, like SQLite); Snowflake uses keyword allowlist + `MULTI_STATEMENT_COUNT=1`; MSSQL uses keyword-based read-only guard (server-side `db_datareader` role recommended)
+- **Defense in depth**: PG/CockroachDB uses read-only transactions + keyword guard; MySQL/MariaDB uses `START TRANSACTION READ ONLY` + single-statement enforcement; SQLite uses OS-level `SQLITE_OPEN_READONLY`; DuckDB uses `-readonly` CLI flag; Snowflake uses keyword allowlist + `MULTI_STATEMENT_COUNT=1`; MSSQL uses keyword-based guard (server-side `db_datareader` role recommended)
 - **Result cap**: `query.maxRows` (default 10,000)
 - **Timeout**: `query.timeout` (default 30s), override per-command with `--timeout <ms>`
 

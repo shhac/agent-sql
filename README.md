@@ -17,10 +17,17 @@ brew install shhac/tap/agent-sql
 
 ### Other options
 
-Download a binary from [GitHub releases](https://github.com/shhac/agent-sql/releases), or build from source:
+Download a binary from [GitHub releases](https://github.com/shhac/agent-sql/releases), or install via `go install`:
 
 ```bash
-go install github.com/shhac/agent-sql@latest
+go install github.com/shhac/agent-sql/cmd/agent-sql@latest
+```
+
+This installs a binary with version set to `dev`. For a version-stamped build, clone and build with ldflags:
+
+```bash
+# Requires Go 1.22+
+# Binary is placed in $GOPATH/bin (or $GOBIN if set)
 ```
 
 Or clone and build with goreleaser:

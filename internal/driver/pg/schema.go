@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
@@ -228,6 +229,58 @@ func (c *pgConn) GetConstraints(ctx context.Context, table string) ([]driver.Con
 		constraints = append(constraints, ci)
 	}
 	return constraints, rows.Err()
+}
+
+func (c *pgConn) GetDDL(ctx context.Context, table string) (string, error) {
+	schema, tbl := splitSchemaTable(table)
+
+	columns, err := c.DescribeTable(ctx, table)
+	if err != nil {
+		return "", err
+	}
+	if len(columns) == 0 {
+		return "", fmt.Errorf("table %q not found", table)
+	}
+
+	var b strings.Builder
+	qualifiedName := schema + "." + tbl
+	if schema == "public" {
+		qualifiedName = tbl
+	}
+	fmt.Fprintf(&b, "CREATE TABLE %s (\n", c.QuoteIdent(qualifiedName))
+
+	for i, col := range columns {
+		fmt.Fprintf(&b, "  %s %s", c.QuoteIdent(col.Name), col.Type)
+		if !col.Nullable {
+			b.WriteString(" NOT NULL")
+		}
+		if col.DefaultValue != "" {
+			fmt.Fprintf(&b, " DEFAULT %s", col.DefaultValue)
+		}
+		if i < len(columns)-1 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('\n')
+	}
+
+	// Add primary key constraint
+	var pkCols []string
+	for _, col := range columns {
+		if col.PrimaryKey {
+			pkCols = append(pkCols, c.QuoteIdent(col.Name))
+		}
+	}
+	if len(pkCols) > 0 {
+		// Remove trailing newline, add comma
+		s := b.String()
+		s = strings.TrimRight(s, "\n") + ",\n"
+		b.Reset()
+		b.WriteString(s)
+		fmt.Fprintf(&b, "  PRIMARY KEY (%s)\n", strings.Join(pkCols, ", "))
+	}
+
+	b.WriteString(");")
+	return b.String(), nil
 }
 
 func (c *pgConn) SearchSchema(ctx context.Context, pattern string) (*driver.SearchResult, error) {

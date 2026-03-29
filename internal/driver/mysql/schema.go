@@ -185,6 +185,18 @@ func (c *mysqlConn) GetConstraints(ctx context.Context, table string) ([]driver.
 	return constraints, rows.Err()
 }
 
+func (c *mysqlConn) GetDDL(ctx context.Context, table string) (string, error) {
+	var tblName, ddl string
+	err := c.db.QueryRowContext(ctx, "SHOW CREATE TABLE "+c.QuoteIdent(table)).Scan(&tblName, &ddl)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(strings.TrimSpace(ddl), ";") {
+		ddl = ddl + ";"
+	}
+	return ddl, nil
+}
+
 func (c *mysqlConn) SearchSchema(ctx context.Context, pattern string) (*driver.SearchResult, error) {
 	likePattern := "%" + pattern + "%"
 

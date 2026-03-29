@@ -39,9 +39,14 @@ func connGlobals() (string, int) {
 	return flagConnection, flagTimeout
 }
 
-// schemaGlobals returns connection, timeout, and format for schema commands.
-func schemaGlobals() (string, int, string) {
-	return flagConnection, flagTimeout, flagFormat
+// schemaGlobals returns global flags for schema commands.
+func schemaGlobals() schema.SchemaGlobals {
+	return schema.SchemaGlobals{
+		Connection: flagConnection,
+		Timeout:    flagTimeout,
+		Format:     flagFormat,
+		Compact:    flagCompact,
+	}
 }
 
 func newRootCmd(version string) *cobra.Command {
@@ -55,7 +60,7 @@ func newRootCmd(version string) *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVarP(&flagConnection, "connection", "c", "", "Connection alias, file path, or URL")
-	root.PersistentFlags().StringVar(&flagFormat, "format", "", "Output format: jsonl, json, yaml, csv")
+	root.PersistentFlags().StringVar(&flagFormat, "format", "", "Output format: jsonl, json, yaml, csv, sql")
 	root.PersistentFlags().StringVar(&flagExpand, "expand", "", "Expand specific truncated fields (comma-separated)")
 	root.PersistentFlags().BoolVar(&flagFull, "full", false, "Expand all truncated fields")
 	root.PersistentFlags().IntVar(&flagTimeout, "timeout", 0, "Query timeout in milliseconds")

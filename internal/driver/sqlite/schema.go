@@ -274,6 +274,20 @@ func (c *sqliteConn) SearchSchema(ctx context.Context, pattern string) (*driver.
 	return &driver.SearchResult{Tables: tables, Columns: columns}, nil
 }
 
+func (c *sqliteConn) GetDDL(ctx context.Context, table string) (string, error) {
+	var sql string
+	err := c.db.QueryRowContext(ctx,
+		"SELECT sql FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?", table,
+	).Scan(&sql)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(strings.TrimSpace(sql), ";") {
+		sql = sql + ";"
+	}
+	return sql, nil
+}
+
 func (c *sqliteConn) tablesToScan(ctx context.Context, table string) ([]string, error) {
 	if table != "" {
 		return []string{table}, nil

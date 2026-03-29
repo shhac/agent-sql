@@ -359,15 +359,16 @@ func registerList(parent *cobra.Command) {
 			items := make([]map[string]any, 0, len(conns))
 			for alias, conn := range conns {
 				items = append(items, map[string]any{
-					"alias":      alias,
-					"driver":     conn.Driver,
-					"host":       conn.Host,
-					"port":       conn.Port,
-					"database":   conn.Database,
-					"path":       conn.Path,
-					"url":        conn.URL,
-					"credential": conn.Credential,
-					"default":    alias == defaultAlias,
+					"alias":       alias,
+					"driver":      conn.Driver,
+					"display_url": conn.DisplayURL(),
+					"host":        conn.Host,
+					"port":        conn.Port,
+					"database":    conn.Database,
+					"path":        conn.Path,
+					"url":         conn.URL,
+					"credential":  conn.Credential,
+					"default":     alias == defaultAlias,
 				})
 			}
 

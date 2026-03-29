@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -40,6 +41,7 @@ Search:
 Dump full schema:
   agent-sql schema dump                            DDL-style dump of all tables
   agent-sql schema dump --tables users,orders      Dump specific tables only
+  agent-sql schema dump --format sql               CREATE TABLE statements (driver-dependent)
   agent-sql schema dump --include-system           Include system tables
 
 OPTIONS
@@ -48,9 +50,12 @@ OPTIONS
   --include-system            Include system/internal tables (tables, dump)
   --type <type>               Filter constraint type: pk, fk, unique, check
   --tables <list>             Comma-separated table names (dump only)
+  --compact                   Typed NDJSON output for schema commands
 
 OUTPUT FORMAT
   All commands return JSON to stdout.
+  --compact: {"type":"tables","values":{...}}
+  --format sql: CREATE TABLE statements (schema dump only)
   Errors: { "error": "...", "fixable_by": "agent"|"human" } to stderr.
 
 WORKFLOW
@@ -61,9 +66,23 @@ WORKFLOW
   5. schema search <pattern>     Find tables/columns by name
 `
 
+// SchemaGlobals holds the global flags relevant to schema commands.
+type SchemaGlobals struct {
+	Connection string
+	Timeout    int
+	Format     string
+	Compact    bool
+}
+
 // printResult outputs data in the appropriate format based on the format flag.
-func printResult(data any, formatFlag string, prune bool) {
-	format := output.ResolveFormat(formatFlag)
+// When compact is true, the data is wrapped in a typed NDJSON message using the
+// provided schemaType (e.g. "tables", "describe", "indexes").
+func printResult(data any, g SchemaGlobals, prune bool, schemaType string) {
+	if g.Compact {
+		printCompact(data, schemaType)
+		return
+	}
+	format := output.ResolveFormat(g.Format)
 	switch format {
 	case output.FormatYAML:
 		output.PrintYAML(os.Stdout, data)
@@ -72,8 +91,18 @@ func printResult(data any, formatFlag string, prune bool) {
 	}
 }
 
+// printCompact writes a single typed NDJSON line for schema output.
+func printCompact(data any, schemaType string) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	enc.Encode(struct {
+		Type   string `json:"type"`
+		Values any    `json:"values"`
+	}{Type: schemaType, Values: data})
+}
+
 // Register adds the schema command group to root.
-func Register(root *cobra.Command, globals func() (string, int, string)) {
+func Register(root *cobra.Command, globals func() SchemaGlobals) {
 	schema := &cobra.Command{
 		Use:   "schema",
 		Short: "Explore database schema",
@@ -97,7 +126,7 @@ func Register(root *cobra.Command, globals func() (string, int, string)) {
 	root.AddCommand(schema)
 }
 
-func registerTables(parent *cobra.Command, globals func() (string, int, string)) {
+func registerTables(parent *cobra.Command, globals func() SchemaGlobals) {
 	var includeSystem bool
 
 	tables := &cobra.Command{
@@ -105,13 +134,13 @@ func registerTables(parent *cobra.Command, globals func() (string, int, string))
 		Short: "List all tables",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, timeout, formatFlag := globals()
-			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
 				result, err := drv.GetTables(ctx, includeSystem)
 				if err != nil {
 					return err
 				}
-				printResult(map[string]any{"tables": result}, formatFlag, true)
+				printResult(map[string]any{"tables": result}, g, true, "tables")
 				return nil
 			})
 		},
@@ -120,7 +149,7 @@ func registerTables(parent *cobra.Command, globals func() (string, int, string))
 	parent.AddCommand(tables)
 }
 
-func registerDescribe(parent *cobra.Command, globals func() (string, int, string)) {
+func registerDescribe(parent *cobra.Command, globals func() SchemaGlobals) {
 	var detailed bool
 
 	describe := &cobra.Command{
@@ -128,8 +157,8 @@ func registerDescribe(parent *cobra.Command, globals func() (string, int, string
 		Short: "Describe a table's columns, types, and constraints",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, timeout, formatFlag := globals()
-			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
 				table := args[0]
 				columns, err := drv.DescribeTable(ctx, table)
 				if err != nil {
@@ -151,7 +180,7 @@ func registerDescribe(parent *cobra.Command, globals func() (string, int, string
 					result["indexes"] = indexes
 				}
 
-				printResult(result, formatFlag, true)
+				printResult(result, g, true, "describe")
 				return nil
 			})
 		},
@@ -160,14 +189,14 @@ func registerDescribe(parent *cobra.Command, globals func() (string, int, string
 	parent.AddCommand(describe)
 }
 
-func registerIndexes(parent *cobra.Command, globals func() (string, int, string)) {
+func registerIndexes(parent *cobra.Command, globals func() SchemaGlobals) {
 	indexes := &cobra.Command{
 		Use:   "indexes [table]",
 		Short: "Show indexes for a table or all tables",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, timeout, formatFlag := globals()
-			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
 				table := ""
 				if len(args) > 0 {
 					table = args[0]
@@ -176,7 +205,7 @@ func registerIndexes(parent *cobra.Command, globals func() (string, int, string)
 				if err != nil {
 					return err
 				}
-				printResult(map[string]any{"indexes": result}, formatFlag, true)
+				printResult(map[string]any{"indexes": result}, g, true, "indexes")
 				return nil
 			})
 		},
@@ -184,7 +213,7 @@ func registerIndexes(parent *cobra.Command, globals func() (string, int, string)
 	parent.AddCommand(indexes)
 }
 
-func registerConstraints(parent *cobra.Command, globals func() (string, int, string)) {
+func registerConstraints(parent *cobra.Command, globals func() SchemaGlobals) {
 	var constraintType string
 
 	typeMap := map[string]driver.ConstraintType{
@@ -208,8 +237,8 @@ func registerConstraints(parent *cobra.Command, globals func() (string, int, str
 				}
 			}
 
-			conn, timeout, formatFlag := globals()
-			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
 				table := ""
 				if len(args) > 0 {
 					table = args[0]
@@ -231,7 +260,7 @@ func registerConstraints(parent *cobra.Command, globals func() (string, int, str
 					result = filtered
 				}
 
-				printResult(map[string]any{"constraints": result}, formatFlag, true)
+				printResult(map[string]any{"constraints": result}, g, true, "constraints")
 				return nil
 			})
 		},
@@ -240,19 +269,19 @@ func registerConstraints(parent *cobra.Command, globals func() (string, int, str
 	parent.AddCommand(constraints)
 }
 
-func registerSearch(parent *cobra.Command, globals func() (string, int, string)) {
+func registerSearch(parent *cobra.Command, globals func() SchemaGlobals) {
 	search := &cobra.Command{
 		Use:   "search <pattern>",
 		Short: "Search table and column names by pattern",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, timeout, formatFlag := globals()
-			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
 				result, err := drv.SearchSchema(ctx, args[0])
 				if err != nil {
 					return err
 				}
-				printResult(result, formatFlag, true)
+				printResult(result, g, true, "search")
 				return nil
 			})
 		},
@@ -260,7 +289,7 @@ func registerSearch(parent *cobra.Command, globals func() (string, int, string))
 	parent.AddCommand(search)
 }
 
-func registerDump(parent *cobra.Command, globals func() (string, int, string)) {
+func registerDump(parent *cobra.Command, globals func() SchemaGlobals) {
 	var tables string
 	var includeSystem bool
 
@@ -269,8 +298,13 @@ func registerDump(parent *cobra.Command, globals func() (string, int, string)) {
 		Short: "Dump full schema (tables, columns, indexes, constraints)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, timeout, formatFlag := globals()
-			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+				// Handle --format sql via DDLDumper interface
+				if g.Format == "sql" {
+					return dumpSQL(ctx, drv, tables, includeSystem)
+				}
+
 				allTables, err := drv.GetTables(ctx, includeSystem)
 				if err != nil {
 					return err
@@ -288,11 +322,11 @@ func registerDump(parent *cobra.Command, globals func() (string, int, string)) {
 				}
 
 				type tableDump struct {
-					Name        string                  `json:"name"`
-					Schema      string                  `json:"schema,omitempty"`
-					Columns     []driver.ColumnInfo      `json:"columns"`
-					Indexes     []driver.IndexInfo       `json:"indexes"`
-					Constraints []driver.ConstraintInfo  `json:"constraints"`
+					Name        string                 `json:"name"`
+					Schema      string                 `json:"schema,omitempty"`
+					Columns     []driver.ColumnInfo     `json:"columns"`
+					Indexes     []driver.IndexInfo      `json:"indexes"`
+					Constraints []driver.ConstraintInfo `json:"constraints"`
 				}
 
 				result := make([]tableDump, 0, len(filtered))
@@ -319,7 +353,7 @@ func registerDump(parent *cobra.Command, globals func() (string, int, string)) {
 					})
 				}
 
-				printResult(map[string]any{"tables": result}, formatFlag, true)
+				printResult(map[string]any{"tables": result}, g, true, "dump")
 				return nil
 			})
 		},
@@ -327,6 +361,43 @@ func registerDump(parent *cobra.Command, globals func() (string, int, string)) {
 	dump.Flags().StringVar(&tables, "tables", "", "Comma-separated table filter")
 	dump.Flags().BoolVar(&includeSystem, "include-system", false, "Include system tables")
 	parent.AddCommand(dump)
+}
+
+// dumpSQL outputs CREATE TABLE statements using the DDLDumper interface.
+func dumpSQL(ctx context.Context, drv driver.Connection, tableFilter string, includeSystem bool) error {
+	dumper, ok := drv.(driver.DDLDumper)
+	if !ok {
+		return fmt.Errorf("--format sql is not supported by this driver")
+	}
+
+	allTables, err := drv.GetTables(ctx, includeSystem)
+	if err != nil {
+		return err
+	}
+
+	filtered := allTables
+	if tableFilter != "" {
+		filterSet := parseTableFilter(tableFilter)
+		filtered = make([]driver.TableInfo, 0)
+		for _, t := range allTables {
+			if matchesFilter(t, filterSet) {
+				filtered = append(filtered, t)
+			}
+		}
+	}
+
+	for i, t := range filtered {
+		name := qualifiedName(t)
+		ddl, err := dumper.GetDDL(ctx, name)
+		if err != nil {
+			return err
+		}
+		if i > 0 {
+			fmt.Fprintln(os.Stdout)
+		}
+		fmt.Fprintln(os.Stdout, ddl)
+	}
+	return nil
 }
 
 // helpers

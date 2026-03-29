@@ -169,6 +169,12 @@ type StreamingQuerier interface {
 	QueryStream(ctx context.Context, sql string, opts QueryOpts) (*StreamingResult, error)
 }
 
+// DDLDumper is an optional interface for drivers that can produce CREATE TABLE DDL.
+// Used by `schema dump --format sql`.
+type DDLDumper interface {
+	GetDDL(ctx context.Context, table string) (string, error)
+}
+
 // SliceIterator wraps a pre-collected slice as a RowIterator (for non-streaming drivers).
 func SliceIterator(columns []string, rows []map[string]any) *RowIterator {
 	idx := -1
