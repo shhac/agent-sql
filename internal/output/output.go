@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 )
@@ -25,12 +26,21 @@ type ResultWriter interface {
 
 // PrintJSON writes a JSON object to stdout (for admin/schema output).
 func PrintJSON(data any, prune bool) {
+	// Marshal first to get normalized JSON, then fix nil arrays
+	raw, _ := json.Marshal(data)
+	// Replace ":null" that should be "[]" for known array fields
+	s := string(raw)
+	for _, field := range []string{"tables", "columns", "indexes", "constraints", "keys", "connections"} {
+		s = strings.Replace(s, `"`+field+`":null`, `"`+field+`":[]`, 1)
+	}
+	var normalized any
+	json.Unmarshal([]byte(s), &normalized)
 	if prune {
-		data = pruneNulls(data)
+		normalized = pruneNulls(normalized)
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(data)
+	enc.Encode(normalized)
 }
 
 // PrintError writes a classified error to stderr as JSON.

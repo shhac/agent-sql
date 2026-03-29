@@ -58,7 +58,8 @@ func registerRunCommand(root *cobra.Command) {
 			}
 
 			effectiveSQL := sql
-			if !write && !runSQLHasLimit.MatchString(sql) {
+			isSelectLike := !write && driver.DetectCommand(sql, driver.WriteCommands) == ""
+			if isSelectLike && !runSQLHasLimit.MatchString(sql) {
 				effectiveSQL = strings.TrimRight(strings.TrimRight(sql, " \t\n"), ";") + fmt.Sprintf(" LIMIT %d", effectiveLimit+1)
 			}
 

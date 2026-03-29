@@ -282,7 +282,7 @@ func (c *pgConn) GetConstraints(ctx context.Context, table string) ([]driver.Con
 		       tc.constraint_type,
 		       array_agg(DISTINCT kcu.column_name ORDER BY kcu.column_name) AS columns,
 		       ccu.table_schema AS ref_schema, ccu.table_name AS ref_table,
-		       array_agg(DISTINCT ccu2.column_name ORDER BY ccu2.column_name) AS ref_columns,
+		       COALESCE(array_agg(DISTINCT ccu2.column_name ORDER BY ccu2.column_name) FILTER (WHERE ccu2.column_name IS NOT NULL), ARRAY[]::text[]) AS ref_columns,
 		       cc.check_clause
 		FROM information_schema.table_constraints tc
 		JOIN information_schema.key_column_usage kcu
