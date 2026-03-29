@@ -1,6 +1,6 @@
 {
   "name": "agent-sql",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "SQL CLI for AI agents",
   "license": "MIT",
   "type": "module",
