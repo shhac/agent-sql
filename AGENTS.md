@@ -91,8 +91,8 @@ internal/
 
 ## Releasing
 
-Defer Homebrew updates until Go implementation reaches full parity.
-The Bun implementation lives in `agent-sql-bun/` during migration.
+Use `/release <patch|minor|major>` to build, tag, and publish.
+The Homebrew tap lives at `../homebrew-tap`. Always `cd` back after updating it.
 
 ## After making changes
 
@@ -132,10 +132,3 @@ Every file below must be updated. Use the existing drivers as a model.
 - [ ] `internal/driver/detect_test.go` — URL detection, file extension detection
 - [ ] `internal/driver/resolve_test.go` — write permission check
 
-## Legacy Bun implementation
-
-The TypeScript/Bun implementation lives in `agent-sql-bun/` during migration. Both tools share the same config files at `~/.config/agent-sql/`. To run the Bun version:
-
-```bash
-cd agent-sql-bun && bun run dev -- <args>
-```

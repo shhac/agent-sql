@@ -1,10 +1,6 @@
 .DS_Store
-node_modules
 .env
 .env.*
-
-# bun
-bun.lockb
 
 # go
 /agent-sql
@@ -13,18 +9,11 @@ vendor/
 # build
 dist
 release
-*.bun-build
 
 # local
 .cache
 .tmp
 .ai-cache
-
-# npm artifacts/logs
-*.tgz
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # claude
 .claude/*.local.json
