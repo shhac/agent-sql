@@ -110,7 +110,8 @@ export const resolveAdHocConnection = async (
     if (pgLike) {
       return trackDriver(await connectPg(connectOpts));
     }
-    return trackDriver(await connectMysql(connectOpts));
+    const mysqlVariant = driver === "mariadb" ? "mariadb" : "mysql";
+    return trackDriver(await connectMysql({ ...connectOpts, variant: mysqlVariant }));
   }
 
   // File path check — SQLite or DuckDB file

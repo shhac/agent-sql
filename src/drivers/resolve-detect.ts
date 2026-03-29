@@ -5,7 +5,7 @@ import type { Driver } from "./types";
 export const DRIVER_URL_PATTERNS: [RegExp, Driver][] = [
   [/^postgres(ql)?:\/\//, "pg"],
   [/^mysql:\/\//, "mysql"],
-  [/^mariadb:\/\//, "mysql"],
+  [/^mariadb:\/\//, "mariadb"],
   [/^sqlite:\/\//, "sqlite"],
   [/^snowflake:\/\//, "snowflake"],
   [/^cockroachdb:\/\//, "cockroachdb"],

@@ -44,7 +44,7 @@ const resolveDriver = (opts: AddOpts): Driver => {
     return "sqlite";
   }
   throw new Error(
-    "Cannot determine driver. Use --driver pg|cockroachdb|sqlite|duckdb|mysql|snowflake, a connection URL, or a file path for SQLite.",
+    "Cannot determine driver. Use --driver pg|cockroachdb|sqlite|duckdb|mysql|mariadb|snowflake, a connection URL, or a file path for SQLite.",
   );
 };
 
@@ -64,7 +64,7 @@ const parseConnectionString = (connStr: string, opts: AddOpts): void => {
   const driver = detectDriverFromUrl(connStr);
   if (!driver) {
     throw new Error(
-      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, cockroachdb://, duckdb://, mysql://, snowflake://) or a file path (.db, .sqlite, .duckdb).`,
+      `Cannot parse connection string: "${connStr}". Expected a URL (postgres://, cockroachdb://, duckdb://, mysql://, mariadb://, snowflake://) or a file path (.db, .sqlite, .duckdb).`,
     );
   }
 
@@ -165,7 +165,7 @@ export function registerAdd(connection: Command): void {
     .argument("[connection-string]", "Connection URL or file path (auto-detects driver)")
     .option(
       "--driver <driver>",
-      "Database driver: pg, cockroachdb, sqlite, duckdb, mysql, or snowflake",
+      "Database driver: pg, cockroachdb, sqlite, duckdb, mysql, mariadb, or snowflake",
     )
     .option("--host <host>", "Database host")
     .option("--port <port>", "Database port")

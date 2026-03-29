@@ -64,7 +64,7 @@ const resolveDriverType = (conn: Connection): Driver => {
   }
 
   throw new Error(
-    "Cannot determine driver type. Set the 'driver' field on the connection or use a URL with a recognizable scheme (postgres://, cockroachdb://, sqlite://, duckdb://, mysql://).",
+    "Cannot determine driver type. Set the 'driver' field on the connection or use a URL with a recognizable scheme (postgres://, cockroachdb://, sqlite://, duckdb://, mysql://, mariadb://).",
   );
 };
 
@@ -94,6 +94,7 @@ const checkWritePermission = (opts: {
     (opts.driver === "pg" ||
       opts.driver === "cockroachdb" ||
       opts.driver === "mysql" ||
+      opts.driver === "mariadb" ||
       opts.driver === "snowflake") &&
     !opts.credential
   ) {
@@ -101,6 +102,7 @@ const checkWritePermission = (opts: {
       pg: "PostgreSQL",
       cockroachdb: "CockroachDB",
       mysql: "MySQL",
+      mariadb: "MariaDB",
       snowflake: "Snowflake",
     };
     const driverName = driverNames[opts.driver] ?? opts.driver;
@@ -178,11 +180,14 @@ const connectSqliteFromConfig = async (opts: ConfigConnectOpts): Promise<DriverC
   return connectSqlite({ path, readonly: opts.readonly });
 };
 
-const connectMysqlFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
+const connectMysqlLike = async (
+  opts: ConfigConnectOpts,
+  defaults: { label: string; variant: "mysql" | "mariadb" },
+): Promise<DriverConnection> => {
   if (!opts.credential?.username || !opts.credential?.password) {
     throw Object.assign(
       new Error(
-        `MySQL connection '${opts.alias}' requires a credential with username and password.`,
+        `${defaults.label} connection '${opts.alias}' requires a credential with username and password.`,
       ),
       {
         hint: "Add a credential with: agent-sql credential add <name> --username <user> --password <pass>",
@@ -198,8 +203,15 @@ const connectMysqlFromConfig = async (opts: ConfigConnectOpts): Promise<DriverCo
     username: opts.credential.username,
     password: opts.credential.password,
     readonly: opts.readonly,
+    variant: defaults.variant,
   });
 };
+
+const connectMysqlFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> =>
+  connectMysqlLike(opts, { label: "MySQL", variant: "mysql" });
+
+const connectMariaDbFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> =>
+  connectMysqlLike(opts, { label: "MariaDB", variant: "mariadb" });
 
 const connectSnowflakeFromConfig = async (opts: ConfigConnectOpts): Promise<DriverConnection> => {
   if (!opts.credential?.password) {
@@ -245,6 +257,7 @@ const configConnectBuilders: Record<
   sqlite: connectSqliteFromConfig,
   duckdb: connectDuckDbFromConfig,
   mysql: connectMysqlFromConfig,
+  mariadb: connectMariaDbFromConfig,
   snowflake: connectSnowflakeFromConfig,
 };
 
@@ -283,7 +296,7 @@ export const resolveDriver = async (opts?: ResolveOpts): Promise<DriverConnectio
   const builder = configConnectBuilders[driver];
   if (!builder) {
     throw new Error(
-      `Unknown driver '${driver}'. Supported drivers: pg, cockroachdb, sqlite, duckdb, mysql, snowflake.`,
+      `Unknown driver '${driver}'. Supported drivers: pg, cockroachdb, sqlite, duckdb, mysql, mariadb, snowflake.`,
     );
   }
   return trackDriver(await builder({ conn, credential, readonly, alias }));

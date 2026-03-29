@@ -2,13 +2,14 @@ import type { Command } from "commander";
 
 const USAGE_TEXT = `agent-sql — Read-only-by-default SQL CLI for AI agents (JSONL output)
 
-Supports PostgreSQL, CockroachDB, MySQL, SQLite, DuckDB, and Snowflake. Output formats: JSONL (default), JSON, YAML, CSV.
+Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, and Snowflake. Output formats: JSONL (default), JSON, YAML, CSV.
 
 AD-HOC USAGE (zero setup):
   agent-sql run -c ./data.db "SELECT * FROM users"                     # SQLite file path
   agent-sql run -c postgres://user:pass@host/db "SELECT 1"            # PostgreSQL URL
   agent-sql run -c cockroachdb://user:pass@host:26257/db "SELECT 1"   # CockroachDB URL
   agent-sql run -c mysql://user:pass@host/db "SELECT 1"               # MySQL URL
+  agent-sql run -c mariadb://user:pass@host/db "SELECT 1"            # MariaDB URL
   agent-sql run -c snowflake://acct/db/schema?warehouse=WH "SELECT 1" # Snowflake URL (needs AGENT_SQL_SNOWFLAKE_TOKEN)
   agent-sql run -c ./data.duckdb "SELECT * FROM users"                 # DuckDB file path
   agent-sql run -c duckdb:// "SELECT * FROM 'data/*.parquet'"          # DuckDB in-memory (query files directly)
@@ -40,8 +41,8 @@ COMMANDS:
 GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
-  -c accepts connection aliases, file paths (./data.db, ./data.duckdb), or URLs (postgres://..., cockroachdb://..., mysql://..., duckdb://..., snowflake://...).
-  PG, MySQL, and Snowflake require a stored credential for named connections. SQLite and DuckDB use file path (credential optional).
+  -c accepts connection aliases, file paths (./data.db, ./data.duckdb), or URLs (postgres://..., cockroachdb://..., mysql://..., mariadb://..., duckdb://..., snowflake://...).
+  PG, MySQL/MariaDB, and Snowflake require a stored credential for named connections. SQLite and DuckDB use file path (credential optional).
   DuckDB: requires duckdb CLI installed separately (brew install duckdb). Set AGENT_SQL_DUCKDB_PATH for custom location. duckdb:// with no path for in-memory mode (query Parquet/CSV/JSON files directly).
   Snowflake ad-hoc URLs: snowflake://account/database/schema?warehouse=WH&role=ROLE (requires AGENT_SQL_SNOWFLAKE_TOKEN env var).
 

@@ -13,7 +13,7 @@ Design docs live in `design-docs/` (gitignored, local-only). If present:
 ## Runtime
 
 - **Bun** — runtime, test runner, and compiler (`bun build --compile` for standalone binaries)
-- **Bun.SQL** — native PostgreSQL and MySQL driver via `import { SQL } from "bun"` with `sql.unsafe()` for raw SQL execution
+- **Bun.SQL** — native PostgreSQL, MySQL, and MariaDB driver via `import { SQL } from "bun"` with `sql.unsafe()` for raw SQL execution
 - **bun:sqlite** — native SQLite driver via `import { Database } from "bun:sqlite"`
 - **DuckDB** — subprocess driver, spawns `duckdb` CLI with NDJSON output (requires CLI installed separately)
 - No npm packages needed for database access (except `libpg-query` for PG read-only guard)
@@ -25,7 +25,7 @@ See design docs (if present) for full rationale on each.
 - **Read-only by default** — credentials (username, password, writePermission) stored in macOS Keychain, not in config file. Config has zero sensitive data.
 - **PG/CockroachDB session guard** — `libpg-query` (PG's actual parser, WASM) with an allowlist of permitted statement types. CockroachDB uses PG wire protocol; guard fails closed for CRDB-specific syntax.
 - **SQLite readonly** — `SQLITE_OPEN_READONLY` is OS-level, cannot be bypassed by SQL. No guard needed.
-- **MySQL readonly** — `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement. No parser needed.
+- **MySQL/MariaDB readonly** — `START TRANSACTION READ ONLY` per query + protocol-level single-statement enforcement. No parser needed. MariaDB uses `max_statement_time` for timeout (vs MySQL's `MAX_EXECUTION_TIME`).
 - **DuckDB readonly** — `-readonly` CLI flag, engine-level enforcement (like SQLite). No guard needed.
 - **Snowflake readonly** — client-side keyword allowlist + `MULTI_STATEMENT_COUNT=1`.
 - **Subprocess drivers** — pattern for databases without native Bun drivers. Spawns CLI tool with structured output (NDJSON), parses results. See `design-docs/subprocess-drivers.md`.
@@ -69,7 +69,7 @@ src/
     types.ts                  # DriverConnection interface, QueryResult, schema types
     pg/                       # PostgreSQL (Bun.SQL) — also used by CockroachDB
     sqlite.ts                 # SQLite (bun:sqlite)
-    mysql/                    # MySQL (Bun.SQL with mysql adapter)
+    mysql/                    # MySQL (Bun.SQL with mysql adapter) — also used by MariaDB
     duckdb/                   # DuckDB (subprocess — spawns duckdb CLI with NDJSON output)
     snowflake/                # Snowflake (REST API with PAT auth)
     resolve.ts                # Driver resolution from connection config
@@ -81,7 +81,7 @@ src/
 
 - **Command registration**: Each `cli/*/index.ts` exports `registerXyzCommand({ program })` called from `index.ts`
 - **Output**: Query results through `printJson()` / `printPaginated()` / `printCompact()`. Errors through `printError()` with `fixable_by` classification. Admin output prunes nulls; query output preserves them.
-- **Connection resolution**: `-c` accepts aliases, file paths (SQLite `.db`, DuckDB `.duckdb`), or connection URLs (postgres://, cockroachdb://, mysql://, duckdb://, snowflake://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections
+- **Connection resolution**: `-c` accepts aliases, file paths (SQLite `.db`, DuckDB `.duckdb`), or connection URLs (postgres://, cockroachdb://, mysql://, mariadb://, duckdb://, snowflake://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections
 - **Driver abstraction**: Shared `DriverConnection` interface, each driver implements schema discovery with its own native queries, returns shared types
 - **Error messages**: Always include valid alternatives for LLM self-correction and `fixable_by` (`"agent"` / `"human"` / `"retry"`)
 - **Truncation**: Strings over `truncation.maxLength` truncated with `...`, per-row `@truncated: { "column": originalLength }` metadata. Compact mode uses top-level parallel arrays.

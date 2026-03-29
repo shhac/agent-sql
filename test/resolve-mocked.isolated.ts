@@ -77,8 +77,8 @@ describe("detectDriverFromUrl", () => {
     expect(detectDriverFromUrl("mysql://localhost/db")).toBe("mysql");
   });
 
-  test("detects mariadb:// URLs as mysql", () => {
-    expect(detectDriverFromUrl("mariadb://localhost/db")).toBe("mysql");
+  test("detects mariadb:// URLs", () => {
+    expect(detectDriverFromUrl("mariadb://localhost/db")).toBe("mariadb");
   });
 
   test("detects sqlite:// URLs", () => {
@@ -205,6 +205,15 @@ describe("write permission checks", () => {
     };
     await expect(resolveDriver({ connection: "myconn", write: true })).rejects.toThrow(
       /CockroachDB.*requires a credential with writePermission/,
+    );
+  });
+
+  test("MariaDB without credential rejects write", async () => {
+    mockConnections = {
+      myconn: { driver: "mariadb", host: "localhost", database: "test" },
+    };
+    await expect(resolveDriver({ connection: "myconn", write: true })).rejects.toThrow(
+      /MariaDB.*requires a credential with writePermission/,
     );
   });
 

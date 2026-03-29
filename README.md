@@ -6,7 +6,7 @@ Read-only-by-default SQL CLI for AI agents.
 - **LLM-optimized** -- `agent-sql usage` prints concise docs for agent consumption
 - **Read-only by default** -- write access requires explicit opt-in per credential and per query
 - **Defense in depth** -- driver-level, parser-level, and credential-level enforcement layers
-- **PostgreSQL, CockroachDB, MySQL, SQLite, DuckDB, and Snowflake** -- six drivers, one interface
+- **PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, and Snowflake** -- seven drivers, one interface
 - **Single binary** -- standalone compiled binary via `bun build --compile` (DuckDB requires `duckdb` CLI installed separately)
 
 ## Installation
@@ -48,6 +48,7 @@ agent-sql run -c ./data.db 'SELECT * FROM users'
 agent-sql run -c postgres://user:pass@localhost/myapp 'SELECT * FROM users'
 agent-sql run -c cockroachdb://user:pass@localhost:26257/myapp 'SELECT * FROM users'
 agent-sql run -c mysql://user:pass@localhost/myapp 'SELECT * FROM orders'
+agent-sql run -c mariadb://user:pass@localhost/myapp 'SELECT * FROM orders'
 
 # DuckDB — file path or in-memory (requires duckdb CLI: brew install duckdb)
 agent-sql run -c ./analytics.duckdb 'SELECT * FROM events'
@@ -68,6 +69,10 @@ agent-sql connection add mydb postgres://localhost:5432/myapp --credential pg-cr
 # MySQL
 agent-sql credential add mysql-cred --username app --password secret
 agent-sql connection add mydb mysql://localhost/myapp --credential mysql-cred
+
+# MariaDB
+agent-sql credential add mariadb-cred --username app --password secret
+agent-sql connection add mydb mariadb://localhost/myapp --credential mariadb-cred
 
 # SQLite — just a file path, no credential needed
 agent-sql connection add local ./data.db
@@ -153,7 +158,7 @@ Each command group has a `usage` subcommand for detailed, LLM-friendly documenta
 
 agent-sql is read-only by default with defense in depth:
 
-| Layer | PostgreSQL / CockroachDB | MySQL | SQLite | DuckDB | Snowflake |
+| Layer | PostgreSQL / CockroachDB | MySQL / MariaDB | SQLite | DuckDB | Snowflake |
 | --- | --- | --- | --- | --- | --- |
 | **Credential** | `--write` flag on `credential add` grants write permission | Same | Credential-less connections are read-only by default | Same as SQLite | Same as PG/MySQL |
 | **Query flag** | `--write` required on each write query | Same | Same | Same | Same |
@@ -205,7 +210,7 @@ agent-sql config reset               # reset all to defaults
 
 ## Connection resolution
 
-Resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag accepts saved aliases, file paths (e.g. `./data.db`, `./data.duckdb`), and connection URLs (e.g. `postgres://user:pass@host/db`, `duckdb://`).
+Resolution order: `-c` flag > `AGENT_SQL_CONNECTION` env > config default. The `-c` flag accepts saved aliases, file paths (e.g. `./data.db`, `./data.duckdb`), and connection URLs (e.g. `postgres://user:pass@host/db`, `mariadb://user:pass@host/db`, `duckdb://`).
 
 ## Environment variables
 

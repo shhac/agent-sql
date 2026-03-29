@@ -15,6 +15,7 @@ type MysqlOpts = {
   username: string;
   password: string;
   readonly?: boolean;
+  variant?: "mysql" | "mariadb";
 };
 
 const WRITE_COMMANDS: ReadonlySet<string> = new Set([
@@ -44,7 +45,8 @@ export const connectMysql = async (opts: MysqlOpts): Promise<DriverConnection> =
   try {
     if (readonly) {
       await withConnectTimeout(db.unsafe(`SET SESSION TRANSACTION READ ONLY`));
-      await db.unsafe(`SET SESSION MAX_EXECUTION_TIME = ${getTimeout()}`);
+      const timeoutVar = opts.variant === "mariadb" ? "max_statement_time" : "MAX_EXECUTION_TIME";
+      await db.unsafe(`SET SESSION ${timeoutVar} = ${getTimeout()}`);
     }
   } catch (err) {
     await db.close().catch(() => {});

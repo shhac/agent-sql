@@ -1,4 +1,4 @@
-export type Driver = "pg" | "sqlite" | "mysql" | "snowflake" | "cockroachdb" | "duckdb";
+export type Driver = "pg" | "sqlite" | "mysql" | "mariadb" | "snowflake" | "cockroachdb" | "duckdb";
 
 export type QueryResult = {
   columns: string[];
