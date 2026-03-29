@@ -487,7 +487,6 @@ func parseConnectionString(connStr string, driverFlag, host, port, database, pat
 		return
 	}
 
-	// URL detection
 	detected := driver.DetectDriverFromURL(connStr)
 	if detected == "" {
 		return
@@ -499,77 +498,83 @@ func parseConnectionString(connStr string, driverFlag, host, port, database, pat
 	case driver.DriverDuckDB:
 		*path = strings.TrimPrefix(connStr, "duckdb://")
 	case driver.DriverSnowflake:
-		*url = connStr
-		// Parse snowflake-specific fields from the URL
-		// snowflake://account/database/schema?warehouse=WH&role=ROLE
-		trimmed := strings.TrimPrefix(connStr, "snowflake://")
-		parts := strings.SplitN(trimmed, "?", 2)
-		pathParts := strings.Split(parts[0], "/")
-		if *account == "" && len(pathParts) > 0 {
-			*account = pathParts[0]
-		}
-		if *database == "" && len(pathParts) > 1 {
-			*database = pathParts[1]
-		}
-		if *schema == "" && len(pathParts) > 2 {
-			*schema = pathParts[2]
-		}
-		if len(parts) > 1 {
-			for _, param := range strings.Split(parts[1], "&") {
-				kv := strings.SplitN(param, "=", 2)
-				if len(kv) != 2 {
-					continue
-				}
-				switch strings.ToLower(kv[0]) {
-				case "warehouse":
-					if *warehouse == "" {
-						*warehouse = kv[1]
-					}
-				case "role":
-					if *role == "" {
-						*role = kv[1]
-					}
-				}
-			}
-		}
+		parseSnowflakeURL(connStr, url, account, database, schema, warehouse, role)
 	default:
-		*url = connStr
-		// Parse host/port/database from standard URLs
-		trimmed := connStr
-		for _, prefix := range []string{"postgres://", "postgresql://", "cockroachdb://", "mysql://", "mariadb://", "mssql://", "sqlserver://"} {
-			trimmed = strings.TrimPrefix(trimmed, prefix)
-		}
-		// After removing scheme: [user:pass@]host[:port]/database
-		atIdx := strings.LastIndex(trimmed, "@")
-		hostPart := trimmed
-		if atIdx >= 0 {
-			hostPart = trimmed[atIdx+1:]
-		}
-		slashIdx := strings.Index(hostPart, "/")
-		if slashIdx >= 0 {
-			if *database == "" {
-				db := hostPart[slashIdx+1:]
-				if qIdx := strings.Index(db, "?"); qIdx >= 0 {
-					db = db[:qIdx]
+		parseGenericURL(connStr, url, host, port, database)
+	}
+}
+
+func parseSnowflakeURL(connStr string, url, account, database, schema, warehouse, role *string) {
+	*url = connStr
+	// snowflake://account/database/schema?warehouse=WH&role=ROLE
+	trimmed := strings.TrimPrefix(connStr, "snowflake://")
+	parts := strings.SplitN(trimmed, "?", 2)
+	pathParts := strings.Split(parts[0], "/")
+	if *account == "" && len(pathParts) > 0 {
+		*account = pathParts[0]
+	}
+	if *database == "" && len(pathParts) > 1 {
+		*database = pathParts[1]
+	}
+	if *schema == "" && len(pathParts) > 2 {
+		*schema = pathParts[2]
+	}
+	if len(parts) > 1 {
+		for _, param := range strings.Split(parts[1], "&") {
+			kv := strings.SplitN(param, "=", 2)
+			if len(kv) != 2 {
+				continue
+			}
+			switch strings.ToLower(kv[0]) {
+			case "warehouse":
+				if *warehouse == "" {
+					*warehouse = kv[1]
 				}
-				if db != "" {
-					*database = db
+			case "role":
+				if *role == "" {
+					*role = kv[1]
 				}
 			}
-			hostPart = hostPart[:slashIdx]
 		}
-		colonIdx := strings.LastIndex(hostPart, ":")
-		if colonIdx >= 0 {
-			if *host == "" {
-				*host = hostPart[:colonIdx]
+	}
+}
+
+func parseGenericURL(connStr string, url, host, port, database *string) {
+	*url = connStr
+	// Strip scheme: [user:pass@]host[:port]/database
+	trimmed := connStr
+	for _, prefix := range []string{"postgres://", "postgresql://", "cockroachdb://", "mysql://", "mariadb://", "mssql://", "sqlserver://"} {
+		trimmed = strings.TrimPrefix(trimmed, prefix)
+	}
+	atIdx := strings.LastIndex(trimmed, "@")
+	hostPart := trimmed
+	if atIdx >= 0 {
+		hostPart = trimmed[atIdx+1:]
+	}
+	slashIdx := strings.Index(hostPart, "/")
+	if slashIdx >= 0 {
+		if *database == "" {
+			db := hostPart[slashIdx+1:]
+			if qIdx := strings.Index(db, "?"); qIdx >= 0 {
+				db = db[:qIdx]
 			}
-			if *port == "" {
-				*port = hostPart[colonIdx+1:]
+			if db != "" {
+				*database = db
 			}
-		} else {
-			if *host == "" && hostPart != "" {
-				*host = hostPart
-			}
+		}
+		hostPart = hostPart[:slashIdx]
+	}
+	colonIdx := strings.LastIndex(hostPart, ":")
+	if colonIdx >= 0 {
+		if *host == "" {
+			*host = hostPart[:colonIdx]
+		}
+		if *port == "" {
+			*port = hostPart[colonIdx+1:]
+		}
+	} else {
+		if *host == "" && hostPart != "" {
+			*host = hostPart
 		}
 	}
 }

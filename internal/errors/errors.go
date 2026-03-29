@@ -1,7 +1,10 @@
 // Package errors provides error classification for database errors.
 package errors
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // FixableBy indicates who can fix an error.
 type FixableBy string
@@ -92,13 +95,7 @@ var classifiers []Classifier
 func NotFound(alias string, available []string) *QueryError {
 	listing := "(none configured)"
 	if len(available) > 0 {
-		listing = ""
-		for i, a := range available {
-			if i > 0 {
-				listing += ", "
-			}
-			listing += a
-		}
+		listing = strings.Join(available, ", ")
 	}
 	return New(
 		fmt.Sprintf("Unknown connection '%s'. Available connections: %s. Tip: -c also accepts file paths (e.g. ./data.db) and connection URLs (e.g. postgres://user:pass@host/db).", alias, listing),

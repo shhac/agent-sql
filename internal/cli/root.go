@@ -9,6 +9,7 @@ import (
 	clicredential "github.com/shhac/agent-sql/internal/cli/credential"
 	"github.com/shhac/agent-sql/internal/cli/query"
 	"github.com/shhac/agent-sql/internal/cli/schema"
+	"github.com/shhac/agent-sql/internal/cli/shared"
 )
 
 // Global flags accessible to all commands.
@@ -21,9 +22,16 @@ var (
 	flagCompact    bool
 )
 
-// allGlobals returns all 6 global flag values for query commands.
-func allGlobals() (string, string, string, bool, int, bool) {
-	return flagConnection, flagFormat, flagExpand, flagFull, flagTimeout, flagCompact
+// allGlobals returns all global flag values for query commands.
+func allGlobals() *shared.GlobalFlags {
+	return &shared.GlobalFlags{
+		Connection: flagConnection,
+		Format:     flagFormat,
+		Expand:     flagExpand,
+		Full:       flagFull,
+		Timeout:    flagTimeout,
+		Compact:    flagCompact,
+	}
 }
 
 // connGlobals returns the connection and timeout global flags for schema/connection commands.

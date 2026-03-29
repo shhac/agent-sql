@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/driver"
-	"github.com/shhac/agent-sql/internal/resolve"
 	"github.com/shhac/agent-sql/internal/output"
 )
 
@@ -96,22 +95,14 @@ func registerTables(parent *cobra.Command, globals func() (string, int)) {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conn, timeout := globals()
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
+			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+				result, err := drv.GetTables(ctx, includeSystem)
+				if err != nil {
+					return err
+				}
+				output.PrintJSON(map[string]any{"tables": result}, true)
 				return nil
-			}
-			defer drv.Close()
-
-			result, err := drv.GetTables(ctx, includeSystem)
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-
-			output.PrintJSON(map[string]any{"tables": result}, true)
-			return nil
+			})
 		},
 	}
 	tables.Flags().BoolVar(&includeSystem, "include-system", false, "Include system tables")
@@ -127,40 +118,31 @@ func registerDescribe(parent *cobra.Command, globals func() (string, int)) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conn, timeout := globals()
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-			defer drv.Close()
-
-			table := args[0]
-			columns, err := drv.DescribeTable(ctx, table)
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-
-			result := map[string]any{"table": table, "columns": columns}
-
-			if detailed {
-				constraints, cErr := drv.GetConstraints(ctx, table)
-				if cErr != nil {
-					output.WriteError(os.Stderr, cErr)
-					return nil
+			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+				table := args[0]
+				columns, err := drv.DescribeTable(ctx, table)
+				if err != nil {
+					return err
 				}
-				indexes, iErr := drv.GetIndexes(ctx, table)
-				if iErr != nil {
-					output.WriteError(os.Stderr, iErr)
-					return nil
-				}
-				result["constraints"] = constraints
-				result["indexes"] = indexes
-			}
 
-			output.PrintJSON(result, true)
-			return nil
+				result := map[string]any{"table": table, "columns": columns}
+
+				if detailed {
+					constraints, cErr := drv.GetConstraints(ctx, table)
+					if cErr != nil {
+						return cErr
+					}
+					indexes, iErr := drv.GetIndexes(ctx, table)
+					if iErr != nil {
+						return iErr
+					}
+					result["constraints"] = constraints
+					result["indexes"] = indexes
+				}
+
+				output.PrintJSON(result, true)
+				return nil
+			})
 		},
 	}
 	describe.Flags().BoolVar(&detailed, "detailed", false, "Include constraints, indexes, and comments")
@@ -174,27 +156,18 @@ func registerIndexes(parent *cobra.Command, globals func() (string, int)) {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conn, timeout := globals()
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
+			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+				table := ""
+				if len(args) > 0 {
+					table = args[0]
+				}
+				result, err := drv.GetIndexes(ctx, table)
+				if err != nil {
+					return err
+				}
+				output.PrintJSON(map[string]any{"indexes": result}, true)
 				return nil
-			}
-			defer drv.Close()
-
-			table := ""
-			if len(args) > 0 {
-				table = args[0]
-			}
-
-			result, err := drv.GetIndexes(ctx, table)
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-
-			output.PrintJSON(map[string]any{"indexes": result}, true)
-			return nil
+			})
 		},
 	}
 	parent.AddCommand(indexes)
@@ -225,38 +198,31 @@ func registerConstraints(parent *cobra.Command, globals func() (string, int)) {
 			}
 
 			conn, timeout := globals()
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-			defer drv.Close()
-
-			table := ""
-			if len(args) > 0 {
-				table = args[0]
-			}
-
-			result, err := drv.GetConstraints(ctx, table)
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-
-			if constraintType != "" {
-				filtered := make([]driver.ConstraintInfo, 0, len(result))
-				target := typeMap[constraintType]
-				for _, c := range result {
-					if c.Type == target {
-						filtered = append(filtered, c)
-					}
+			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+				table := ""
+				if len(args) > 0 {
+					table = args[0]
 				}
-				result = filtered
-			}
 
-			output.PrintJSON(map[string]any{"constraints": result}, true)
-			return nil
+				result, err := drv.GetConstraints(ctx, table)
+				if err != nil {
+					return err
+				}
+
+				if constraintType != "" {
+					filtered := make([]driver.ConstraintInfo, 0, len(result))
+					target := typeMap[constraintType]
+					for _, c := range result {
+						if c.Type == target {
+							filtered = append(filtered, c)
+						}
+					}
+					result = filtered
+				}
+
+				output.PrintJSON(map[string]any{"constraints": result}, true)
+				return nil
+			})
 		},
 	}
 	constraints.Flags().StringVar(&constraintType, "type", "", "Filter by type: pk, fk, unique, check")
@@ -270,22 +236,14 @@ func registerSearch(parent *cobra.Command, globals func() (string, int)) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conn, timeout := globals()
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
+			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+				result, err := drv.SearchSchema(ctx, args[0])
+				if err != nil {
+					return err
+				}
+				output.PrintJSON(result, true)
 				return nil
-			}
-			defer drv.Close()
-
-			result, err := drv.SearchSchema(ctx, args[0])
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-
-			output.PrintJSON(result, true)
-			return nil
+			})
 		},
 	}
 	parent.AddCommand(search)
@@ -301,68 +259,58 @@ func registerDump(parent *cobra.Command, globals func() (string, int)) {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conn, timeout := globals()
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-			defer drv.Close()
+			return shared.WithConnection(conn, timeout, func(ctx context.Context, drv driver.Connection) error {
+				allTables, err := drv.GetTables(ctx, includeSystem)
+				if err != nil {
+					return err
+				}
 
-			allTables, err := drv.GetTables(ctx, includeSystem)
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return nil
-			}
-
-			filtered := allTables
-			if tables != "" {
-				filterSet := parseTableFilter(tables)
-				filtered = make([]driver.TableInfo, 0)
-				for _, t := range allTables {
-					if matchesFilter(t, filterSet) {
-						filtered = append(filtered, t)
+				filtered := allTables
+				if tables != "" {
+					filterSet := parseTableFilter(tables)
+					filtered = make([]driver.TableInfo, 0)
+					for _, t := range allTables {
+						if matchesFilter(t, filterSet) {
+							filtered = append(filtered, t)
+						}
 					}
 				}
-			}
 
-			type tableDump struct {
-				Name        string                `json:"name"`
-				Schema      string                `json:"schema,omitempty"`
-				Columns     []driver.ColumnInfo    `json:"columns"`
-				Indexes     []driver.IndexInfo     `json:"indexes"`
-				Constraints []driver.ConstraintInfo `json:"constraints"`
-			}
+				type tableDump struct {
+					Name        string                  `json:"name"`
+					Schema      string                  `json:"schema,omitempty"`
+					Columns     []driver.ColumnInfo      `json:"columns"`
+					Indexes     []driver.IndexInfo       `json:"indexes"`
+					Constraints []driver.ConstraintInfo  `json:"constraints"`
+				}
 
-			result := make([]tableDump, 0, len(filtered))
-			for _, t := range filtered {
-				name := qualifiedName(t)
-				columns, cErr := drv.DescribeTable(ctx, name)
-				if cErr != nil {
-					output.WriteError(os.Stderr, cErr)
-					return nil
+				result := make([]tableDump, 0, len(filtered))
+				for _, t := range filtered {
+					name := qualifiedName(t)
+					columns, cErr := drv.DescribeTable(ctx, name)
+					if cErr != nil {
+						return cErr
+					}
+					indexes, iErr := drv.GetIndexes(ctx, name)
+					if iErr != nil {
+						return iErr
+					}
+					constraints, kErr := drv.GetConstraints(ctx, name)
+					if kErr != nil {
+						return kErr
+					}
+					result = append(result, tableDump{
+						Name:        t.Name,
+						Schema:      t.Schema,
+						Columns:     columns,
+						Indexes:     indexes,
+						Constraints: constraints,
+					})
 				}
-				indexes, iErr := drv.GetIndexes(ctx, name)
-				if iErr != nil {
-					output.WriteError(os.Stderr, iErr)
-					return nil
-				}
-				constraints, kErr := drv.GetConstraints(ctx, name)
-				if kErr != nil {
-					output.WriteError(os.Stderr, kErr)
-					return nil
-				}
-				result = append(result, tableDump{
-					Name:        t.Name,
-					Schema:      t.Schema,
-					Columns:     columns,
-					Indexes:     indexes,
-					Constraints: constraints,
-				})
-			}
 
-			output.PrintJSON(map[string]any{"tables": result}, true)
-			return nil
+				output.PrintJSON(map[string]any{"tables": result}, true)
+				return nil
+			})
 		},
 	}
 	dump.Flags().StringVar(&tables, "tables", "", "Comma-separated table filter")
@@ -371,16 +319,6 @@ func registerDump(parent *cobra.Command, globals func() (string, int)) {
 }
 
 // helpers
-
-func makeContext(timeoutMs int) context.Context {
-	ctx := context.Background()
-	if timeoutMs > 0 {
-				var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
-				defer cancel()
-	}
-	return ctx
-}
 
 func parseTableFilter(raw string) map[string]bool {
 	set := make(map[string]bool)

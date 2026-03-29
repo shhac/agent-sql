@@ -1,7 +1,10 @@
 // Package driver defines the shared interface that all database drivers implement.
 package driver
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Driver identifies a database driver type.
 type Driver string
@@ -126,26 +129,19 @@ type Connection interface {
 // DetectCommand checks if SQL starts with a known write command.
 // Returns the matched command (e.g. "INSERT") or empty string.
 func DetectCommand(sql string, commands []string) string {
-	trimmed := sql
-	for len(trimmed) > 0 && (trimmed[0] == ' ' || trimmed[0] == '\t' || trimmed[0] == '\n' || trimmed[0] == '\r') {
-		trimmed = trimmed[1:]
+	trimmed := strings.TrimSpace(sql)
+	if trimmed == "" {
+		return ""
 	}
+	end := strings.IndexAny(trimmed, " \t\n\r(")
+	firstWord := trimmed
+	if end >= 0 {
+		firstWord = trimmed[:end]
+	}
+	firstWord = strings.ToUpper(firstWord)
 	for _, cmd := range commands {
-		if len(trimmed) >= len(cmd) {
-			match := true
-			for i := range len(cmd) {
-				c := trimmed[i]
-				if c >= 'a' && c <= 'z' {
-					c -= 32
-				}
-				if c != cmd[i] {
-					match = false
-					break
-				}
-			}
-			if match && (len(trimmed) == len(cmd) || trimmed[len(cmd)] == ' ' || trimmed[len(cmd)] == '\t' || trimmed[len(cmd)] == '\n' || trimmed[len(cmd)] == '(') {
-				return cmd
-			}
+		if firstWord == cmd {
+			return cmd
 		}
 	}
 	return ""

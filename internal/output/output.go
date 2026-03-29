@@ -26,9 +26,12 @@ type ResultWriter interface {
 
 // PrintJSON writes a JSON object to stdout (for admin/schema output).
 func PrintJSON(data any, prune bool) {
-	// Marshal first to get normalized JSON, then fix nil arrays
+	// Marshal then fix nil Go slices that serialize as JSON null.
+	// After a json round-trip, nil slices and nil scalars both become null,
+	// so we can't distinguish them structurally. Instead, we list the known
+	// top-level fields that are always arrays and replace their nulls with [].
+	// Keep this list in sync with any new array fields added to output maps.
 	raw, _ := json.Marshal(data)
-	// Replace ":null" that should be "[]" for known array fields
 	s := string(raw)
 	for _, field := range []string{"tables", "columns", "indexes", "constraints", "keys", "connections"} {
 		s = strings.Replace(s, `"`+field+`":null`, `"`+field+`":[]`, 1)

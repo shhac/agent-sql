@@ -6,14 +6,14 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/driver"
-	"github.com/shhac/agent-sql/internal/resolve"
 	"github.com/shhac/agent-sql/internal/output"
+	"github.com/shhac/agent-sql/internal/resolve"
 	"github.com/shhac/agent-sql/internal/truncation"
 )
 
@@ -69,7 +69,7 @@ var sqlHasLimit = regexp.MustCompile(`(?i)\bLIMIT\s+\d+`)
 var writePattern = regexp.MustCompile(`(?i)^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)\b`)
 
 // Register adds the query command group to root.
-func Register(root *cobra.Command, globals func() (string, string, string, bool, int, bool)) {
+func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	query := &cobra.Command{
 		Use:   "query",
 		Short: "Run and inspect SQL queries",
@@ -91,7 +91,7 @@ func Register(root *cobra.Command, globals func() (string, string, string, bool,
 	root.AddCommand(query)
 }
 
-func registerRun(parent *cobra.Command, globals func() (string, string, string, bool, int, bool)) {
+func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var limit int
 	var write bool
 
@@ -100,7 +100,17 @@ func registerRun(parent *cobra.Command, globals func() (string, string, string, 
 		Short: "Execute a SQL query",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return executeRun(args[0], limit, write, globals)
+			g := globals()
+			ctx, cancel := shared.MakeContext(g.Timeout)
+			defer cancel()
+			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Write: write, Timeout: g.Timeout})
+			if err != nil {
+				output.WriteError(os.Stderr, err)
+				return nil
+			}
+			defer drv.Close()
+
+			return ExecuteRun(ctx, drv, args[0], limit, write, g.Expand, g.Full, g.Compact)
 		},
 	}
 	run.Flags().IntVarP(&limit, "limit", "l", 0, "Maximum rows to return")
@@ -108,18 +118,9 @@ func registerRun(parent *cobra.Command, globals func() (string, string, string, 
 	parent.AddCommand(run)
 }
 
-func executeRun(sql string, limitFlag int, write bool, globals func() (string, string, string, bool, int, bool)) error {
-	conn, expand, full, timeout := flagConnection(globals), flagExpand(globals), flagFull(globals), flagTimeout(globals)
-	compact := flagCompact(globals)
-
-	ctx := makeContext(timeout)
-	drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Write: write, Timeout: timeout})
-	if err != nil {
-		output.WriteError(os.Stderr, err)
-		return nil
-	}
-	defer drv.Close()
-
+// ExecuteRun runs a SQL query on an already-resolved connection and writes results.
+// Handles limit resolution, automatic LIMIT injection, write result detection, and output.
+func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, expand string, full bool, compact bool) error {
 	pageSize := resolveLimit(limitFlag)
 	maxRows := resolveMaxRows()
 	effectiveLimit := pageSize
@@ -157,7 +158,7 @@ func executeRun(sql string, limitFlag int, write bool, globals func() (string, s
 	return nil
 }
 
-func registerSample(parent *cobra.Command, globals func() (string, string, string, bool, int, bool)) {
+func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var limit int
 	var where string
 
@@ -166,11 +167,11 @@ func registerSample(parent *cobra.Command, globals func() (string, string, strin
 		Short: "Return sample rows from a table",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, expand, full, timeout := flagConnection(globals), flagExpand(globals), flagFull(globals), flagTimeout(globals)
-			compact := flagCompact(globals)
+			g := globals()
 
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
+			ctx, cancel := shared.MakeContext(g.Timeout)
+			defer cancel()
+			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
 				return nil
@@ -195,7 +196,7 @@ func registerSample(parent *cobra.Command, globals func() (string, string, strin
 				return nil
 			}
 
-			writeQueryResults(result.Rows, false, expand, full, compact)
+			writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact)
 			return nil
 		},
 	}
@@ -204,7 +205,7 @@ func registerSample(parent *cobra.Command, globals func() (string, string, strin
 	parent.AddCommand(sample)
 }
 
-func registerExplain(parent *cobra.Command, globals func() (string, string, string, bool, int, bool)) {
+func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var analyze bool
 
 	explain := &cobra.Command{
@@ -212,7 +213,7 @@ func registerExplain(parent *cobra.Command, globals func() (string, string, stri
 		Short: "Show the execution plan for a SQL query",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, _, _, timeout := flagConnection(globals), flagExpand(globals), flagFull(globals), flagTimeout(globals)
+			g := globals()
 
 			if analyze {
 				if m := writePattern.FindStringSubmatch(args[0]); len(m) > 1 {
@@ -230,8 +231,9 @@ func registerExplain(parent *cobra.Command, globals func() (string, string, stri
 			}
 			sql := prefix + " " + args[0]
 
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
+			ctx, cancel := shared.MakeContext(g.Timeout)
+			defer cancel()
+			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
 				return nil
@@ -252,7 +254,7 @@ func registerExplain(parent *cobra.Command, globals func() (string, string, stri
 	parent.AddCommand(explain)
 }
 
-func registerCount(parent *cobra.Command, globals func() (string, string, string, bool, int, bool)) {
+func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var where string
 
 	count := &cobra.Command{
@@ -260,10 +262,11 @@ func registerCount(parent *cobra.Command, globals func() (string, string, string
 		Short: "Count rows in a table",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, _, _, timeout := flagConnection(globals), flagExpand(globals), flagFull(globals), flagTimeout(globals)
+			g := globals()
 
-			ctx := makeContext(timeout)
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
+			ctx, cancel := shared.MakeContext(g.Timeout)
+			defer cancel()
+			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
 				return nil
@@ -306,41 +309,6 @@ func registerCount(parent *cobra.Command, globals func() (string, string, string
 }
 
 // helpers
-
-func flagConnection(globals func() (string, string, string, bool, int, bool)) string {
-	conn, _, _, _, _, _ := globals()
-	return conn
-}
-
-func flagExpand(globals func() (string, string, string, bool, int, bool)) string {
-	_, _, expand, _, _, _ := globals()
-	return expand
-}
-
-func flagFull(globals func() (string, string, string, bool, int, bool)) bool {
-	_, _, _, full, _, _ := globals()
-	return full
-}
-
-func flagTimeout(globals func() (string, string, string, bool, int, bool)) int {
-	_, _, _, _, timeout, _ := globals()
-	return timeout
-}
-
-func flagCompact(globals func() (string, string, string, bool, int, bool)) bool {
-	_, _, _, _, _, compact := globals()
-	return compact
-}
-
-func makeContext(timeoutMs int) context.Context {
-	ctx := context.Background()
-	if timeoutMs > 0 {
-				var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
-				defer cancel()
-	}
-	return ctx
-}
 
 func resolveLimit(flagLimit int) int {
 	if flagLimit > 0 {

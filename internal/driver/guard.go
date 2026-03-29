@@ -15,7 +15,7 @@ func GuardReadOnly(sql string) error {
 		return errors.New(
 			"Statement blocked: "+cmd+" is not allowed in read-only mode.",
 			errors.FixableByHuman,
-		).WithHint("This connection is read-only. To enable writes, use a credential with writePermission and pass --write.")
+		).WithHint(errors.HintReadOnly)
 	}
 
 	upper := strings.ToUpper(strings.TrimSpace(sql))
