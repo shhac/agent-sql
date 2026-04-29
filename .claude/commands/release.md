@@ -19,7 +19,7 @@ You are performing a release of the `agent-sql` CLI (Go version). Follow these s
 
 1. Confirm the working tree is clean (`git st`). If not, stop and ask.
 2. Run `make test` and `go vet ./...`. If either fails, stop and fix.
-3. Determine the current version from the latest git tag (`git describe --tags --abbrev=0`) and show what bump will happen.
+3. Determine the current version from the latest git tag (`git describe --tags --abbrev=0`) and show what bump will happen. If no tag exists, start at `0.1.0`.
 
 ### Step 1: Version bump, tag, and push
 
@@ -27,7 +27,7 @@ Calculate the new version by bumping the current tag:
 
 ```bash
 # Get current version
-current=$(git describe --tags --abbrev=0 | sed 's/^v//')
+current=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
 # Split into parts and bump based on type
 IFS='.' read -r major minor patch <<< "$current"
 ```
@@ -69,6 +69,14 @@ shasum -a 256 *.tar.gz agent-sql-windows-amd64.exe > checksums-sha256.txt
 cd ..
 ```
 
+Smoke-test the native binary before proceeding (auth-free — proves the binary
+loads and the command tree wired up correctly):
+
+```bash
+./dist/agent-sql-darwin-arm64 --version
+./dist/agent-sql-darwin-arm64 usage
+```
+
 ### Step 3: Create GitHub release
 
 If goreleaser handled it, skip this step. Otherwise:
@@ -93,7 +101,7 @@ The Homebrew formula lives in `../homebrew-tap` relative to this repo's root.
 ls ../homebrew-tap/Formula/agent-sql.rb
 ```
 
-**If it doesn't exist:** Skip and tell the user.
+**If it doesn't exist:** This shouldn't happen — `agent-sql.rb` is the seed formula other repos copy from. Stop and tell the user; investigate before continuing.
 
 **If it exists:** Read checksums from `dist/checksums-sha256.txt` and update the formula:
 
@@ -118,4 +126,5 @@ Show the user:
 - New version number
 - GitHub release URL
 - Homebrew tap commit (if applicable)
-- `brew upgrade shhac/tap/agent-sql` command for users
+- `brew install shhac/tap/agent-sql` command for new users
+- `brew upgrade shhac/tap/agent-sql` command for existing users
