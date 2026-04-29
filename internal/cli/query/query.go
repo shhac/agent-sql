@@ -101,7 +101,7 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 				output.WriteError(os.Stderr, err)
 				return nil
 			}
-			defer drv.Close()
+			defer func() { _ = drv.Close() }()
 
 			return ExecuteRun(ctx, drv, args[0], limit, write, g.Expand, g.Full, g.Compact, g.Format)
 		},
@@ -152,7 +152,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 		}, true)
 		return nil
 	}
-	defer sr.Iterator.Close()
+	defer func() { _ = sr.Iterator.Close() }()
 
 	w := makeWriter(expand, full, compact, format, sr.Iterator.Columns())
 
@@ -160,8 +160,8 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	for sr.Iterator.Next() {
 		if count >= limit {
 			// One extra row means hasMore=true
-			w.WritePagination(&output.Pagination{HasMore: true, RowCount: limit})
-			w.Flush()
+			_ = w.WritePagination(&output.Pagination{HasMore: true, RowCount: limit})
+			_ = w.Flush()
 			return nil
 		}
 		row, err := sr.Iterator.Scan()
@@ -169,14 +169,14 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 			output.WriteError(os.Stderr, err)
 			return nil
 		}
-		w.WriteRow(row)
+		_ = w.WriteRow(row)
 		count++
 	}
 	if err := sr.Iterator.Err(); err != nil {
 		output.WriteError(os.Stderr, err)
 		return nil
 	}
-	w.Flush()
+	_ = w.Flush()
 	return nil
 }
 
@@ -222,7 +222,7 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 				output.WriteError(os.Stderr, err)
 				return nil
 			}
-			defer drv.Close()
+			defer func() { _ = drv.Close() }()
 
 			effectiveLimit := limit
 			if effectiveLimit <= 0 {
@@ -264,7 +264,7 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 			if analyze {
 				if m := writePattern.FindStringSubmatch(args[0]); len(m) > 1 {
 					output.WriteError(os.Stderr, fmt.Errorf(
-						"EXPLAIN ANALYZE is not allowed for write queries (detected %s). EXPLAIN ANALYZE actually executes the query, which would modify data. Use EXPLAIN without --analyze for write queries.",
+						"EXPLAIN ANALYZE is not allowed for write queries (detected %s); EXPLAIN ANALYZE actually executes the query, which would modify data. Use EXPLAIN without --analyze for write queries",
 						strings.ToUpper(m[1]),
 					))
 					return nil
@@ -284,7 +284,7 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 				output.WriteError(os.Stderr, err)
 				return nil
 			}
-			defer drv.Close()
+			defer func() { _ = drv.Close() }()
 
 			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
 			if err != nil {
@@ -317,7 +317,7 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 				output.WriteError(os.Stderr, err)
 				return nil
 			}
-			defer drv.Close()
+			defer func() { _ = drv.Close() }()
 
 			quoted := drv.QuoteIdent(args[0])
 			whereClause := ""
@@ -414,15 +414,15 @@ func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full 
 	w := makeWriter(expand, full, compact, format, columns)
 
 	for _, row := range rows {
-		w.WriteRow(row)
+		_ = w.WriteRow(row)
 	}
 
 	if hasMore {
-		w.WritePagination(&output.Pagination{
+		_ = w.WritePagination(&output.Pagination{
 			HasMore:  true,
 			RowCount: len(rows),
 		})
 	}
 
-	w.Flush()
+	_ = w.Flush()
 }

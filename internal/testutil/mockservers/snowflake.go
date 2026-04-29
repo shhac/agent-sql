@@ -62,7 +62,7 @@ func (s *SnowflakeServer) handleStatements(w http.ResponseWriter, r *http.Reques
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Bearer ") {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(SnowflakeResponse{
+		_ = json.NewEncoder(w).Encode(SnowflakeResponse{
 			Code:    "390100",
 			Message: "Authentication failed",
 		})
@@ -89,7 +89,7 @@ func (s *SnowflakeServer) handleStatements(w http.ResponseWriter, r *http.Reques
 		resp, status := handler(sql)
 		if resp != nil {
 			w.WriteHeader(status)
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 			return
 		}
 	}
@@ -97,7 +97,7 @@ func (s *SnowflakeServer) handleStatements(w http.ResponseWriter, r *http.Reques
 	// Default responses based on SQL
 	resp := s.defaultResponse(sql)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *SnowflakeServer) defaultResponse(sql string) *SnowflakeResponse {

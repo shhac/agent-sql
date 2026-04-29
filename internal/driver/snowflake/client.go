@@ -134,7 +134,7 @@ func (c *snowflakeConn) doWithRetry(ctx context.Context, method, url string, bod
 		}
 
 		respBody, err := io.ReadAll(httpResp.Body)
-		httpResp.Body.Close()
+		_ = httpResp.Body.Close()
 		if err != nil {
 			lastErr = err
 			continue

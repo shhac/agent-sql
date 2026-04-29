@@ -85,7 +85,7 @@ func printResult(data any, g SchemaGlobals, prune bool, schemaType string) {
 	format := output.ResolveFormat(g.Format)
 	switch format {
 	case output.FormatYAML:
-		output.PrintYAML(os.Stdout, data)
+		_ = output.PrintYAML(os.Stdout, data)
 	default:
 		output.PrintJSON(data, prune)
 	}
@@ -95,7 +95,7 @@ func printResult(data any, g SchemaGlobals, prune bool, schemaType string) {
 func printCompact(data any, schemaType string) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
-	enc.Encode(struct {
+	_ = enc.Encode(struct {
 		Type   string `json:"type"`
 		Values any    `json:"values"`
 	}{Type: schemaType, Values: data})
@@ -225,7 +225,7 @@ func registerConstraints(parent *cobra.Command, globals func() SchemaGlobals) {
 			if constraintType != "" {
 				if _, ok := typeMap[constraintType]; !ok {
 					output.WriteError(os.Stderr, fmt.Errorf(
-						"Invalid constraint type: %q. Valid types: pk, fk, unique, check", constraintType,
+						"invalid constraint type: %q; valid types: pk, fk, unique, check", constraintType,
 					))
 					return nil
 				}
@@ -387,9 +387,9 @@ func dumpSQL(ctx context.Context, drv driver.Connection, tableFilter string, inc
 			return err
 		}
 		if i > 0 {
-			fmt.Fprintln(os.Stdout)
+			_, _ = fmt.Fprintln(os.Stdout)
 		}
-		fmt.Fprintln(os.Stdout, ddl)
+		_, _ = fmt.Fprintln(os.Stdout, ddl)
 	}
 	return nil
 }

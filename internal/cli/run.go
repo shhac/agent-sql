@@ -36,7 +36,7 @@ func registerRunCommand(root *cobra.Command) {
 				output.WriteError(os.Stderr, err)
 				return nil
 			}
-			defer drv.Close()
+			defer func() { _ = drv.Close() }()
 
 			return query.ExecuteRun(ctx, drv, sql, limit, write, flagExpand, flagFull, flagCompact, flagFormat)
 		},

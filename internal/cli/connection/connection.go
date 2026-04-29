@@ -135,7 +135,7 @@ func registerAdd(parent *cobra.Command) {
 						listing = strings.Join(names, ", ")
 					}
 					output.WriteError(os.Stderr, fmt.Errorf(
-						"Credential %q not found. Available: %s. Run: agent-sql credential add <alias> --username <user> --password <pass>",
+						"credential %q not found. Available: %s. Run: agent-sql credential add <alias> --username <user> --password <pass>",
 						credName, listing,
 					))
 					return nil
@@ -145,7 +145,7 @@ func registerAdd(parent *cobra.Command) {
 			resolvedDriver := resolveDriver(driverFlag, url, path)
 			if resolvedDriver == "" {
 				output.WriteError(os.Stderr, fmt.Errorf(
-					"Cannot determine driver. Use --driver pg|cockroachdb|sqlite|duckdb|mysql|mariadb|snowflake|mssql, a connection URL, or a file path for SQLite",
+					"cannot determine driver. Use --driver pg|cockroachdb|sqlite|duckdb|mysql|mariadb|snowflake|mssql, a connection URL, or a file path for SQLite",
 				))
 				return nil
 			}
@@ -165,7 +165,7 @@ func registerAdd(parent *cobra.Command) {
 				var err error
 				portNum, err = strconv.Atoi(port)
 				if err != nil {
-					output.WriteError(os.Stderr, fmt.Errorf("Invalid port: %s", port))
+					output.WriteError(os.Stderr, fmt.Errorf("invalid port: %s", port))
 					return nil
 				}
 			}
@@ -190,7 +190,7 @@ func registerAdd(parent *cobra.Command) {
 			}
 
 			if setDefault {
-				config.SetDefault(alias)
+				_ = config.SetDefault(alias)
 			}
 
 			output.PrintJSON(map[string]any{
@@ -247,7 +247,7 @@ func registerUpdate(parent *cobra.Command) {
 			alias := args[0]
 			existing := config.GetConnection(alias)
 			if existing == nil {
-				output.WriteError(os.Stderr, fmt.Errorf("Connection %q not found", alias))
+				output.WriteError(os.Stderr, fmt.Errorf("connection %q not found", alias))
 				return nil
 			}
 
@@ -260,7 +260,7 @@ func registerUpdate(parent *cobra.Command) {
 						listing = strings.Join(names, ", ")
 					}
 					output.WriteError(os.Stderr, fmt.Errorf(
-						"Credential %q not found. Available: %s", credName, listing,
+						"credential %q not found. Available: %s", credName, listing,
 					))
 					return nil
 				}
@@ -278,7 +278,7 @@ func registerUpdate(parent *cobra.Command) {
 			if cmd.Flags().Changed("port") {
 				n, err := strconv.Atoi(port)
 				if err != nil {
-					output.WriteError(os.Stderr, fmt.Errorf("Invalid port: %s", port))
+					output.WriteError(os.Stderr, fmt.Errorf("invalid port: %s", port))
 					return nil
 				}
 				existing.Port = n
@@ -398,7 +398,7 @@ func registerTest(parent *cobra.Command, globals func() (string, int)) {
 				output.WriteError(os.Stderr, err)
 				return nil
 			}
-			defer drv.Close()
+			defer func() { _ = drv.Close() }()
 
 			result, err := drv.Query(ctx, "SELECT 1", driver.QueryOpts{})
 			if err != nil {

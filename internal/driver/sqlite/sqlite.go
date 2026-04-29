@@ -38,7 +38,7 @@ func Connect(opts Opts) (driver.Connection, error) {
 
 	// Verify the connection works
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 

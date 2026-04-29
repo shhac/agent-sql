@@ -267,7 +267,7 @@ func connectionAliases(cfg *Config) []string {
 func settingsToMap(s Settings) map[string]any {
 	data, _ := json.Marshal(s)
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	_ = json.Unmarshal(data, &m)
 	if m == nil {
 		m = make(map[string]any)
 	}
@@ -277,7 +277,7 @@ func settingsToMap(s Settings) map[string]any {
 func mapToSettings(m map[string]any) Settings {
 	data, _ := json.Marshal(m)
 	var s Settings
-	json.Unmarshal(data, &s)
+	_ = json.Unmarshal(data, &s)
 	return s
 }
 

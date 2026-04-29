@@ -54,7 +54,7 @@ func (y *YAMLWriter) Flush() error {
 
 	enc := yaml.NewEncoder(y.w)
 	enc.SetIndent(2)
-	defer enc.Close()
+	defer func() { _ = enc.Close() }()
 	return enc.Encode(envelope)
 }
 
@@ -62,6 +62,6 @@ func (y *YAMLWriter) Flush() error {
 func PrintYAML(w io.Writer, data any) error {
 	enc := yaml.NewEncoder(w)
 	enc.SetIndent(2)
-	defer enc.Close()
+	defer func() { _ = enc.Close() }()
 	return enc.Encode(data)
 }

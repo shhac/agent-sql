@@ -44,7 +44,7 @@ func Connect(ctx context.Context, opts Opts) (driver.Connection, error) {
 
 	if opts.Readonly {
 		if _, err := conn.Exec(ctx, "SET default_transaction_read_only = on"); err != nil {
-			conn.Close(ctx)
+			_ = conn.Close(ctx)
 			return nil, classifyError(err)
 		}
 	}
@@ -61,7 +61,7 @@ func ConnectURL(ctx context.Context, url string, readonly bool) (driver.Connecti
 
 	if readonly {
 		if _, err := conn.Exec(ctx, "SET default_transaction_read_only = on"); err != nil {
-			conn.Close(ctx)
+			_ = conn.Close(ctx)
 			return nil, classifyError(err)
 		}
 	}
@@ -104,7 +104,7 @@ func (c *pgConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts
 		}
 		defer func() {
 			// Always rollback — we're only reading
-			c.conn.Exec(ctx, "ROLLBACK")
+			_, _ = c.conn.Exec(ctx, "ROLLBACK")
 		}()
 	}
 
@@ -163,7 +163,7 @@ func (c *pgConn) QueryStream(ctx context.Context, sqlStr string, opts driver.Que
 	rows, err := c.conn.Query(ctx, sqlStr)
 	if err != nil {
 		if c.readonly {
-			c.conn.Exec(ctx, "ROLLBACK")
+			_, _ = c.conn.Exec(ctx, "ROLLBACK")
 		}
 		return nil, classifyError(err)
 	}
@@ -190,7 +190,7 @@ func (c *pgConn) QueryStream(ctx context.Context, sqlStr string, opts driver.Que
 		func() error {
 			rows.Close()
 			if needsRollback {
-				conn.Exec(ctx, "ROLLBACK")
+				_, _ = conn.Exec(ctx, "ROLLBACK")
 			}
 			return nil
 		},

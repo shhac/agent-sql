@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      # Cobra's MarkFlagRequired returns an error that's safe to ignore at
+      # command-registration time — it only fails if the flag doesn't exist,
+      # which is a compile-time-shaped programmer error caught by reviewers.
+      exclude-functions:
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+  exclusions:
+    rules:
+      # Test files do lots of _ = thing.Close() / _ = Write(...) on purpose.
+      - linters:
+          - errcheck
+        path: _test\.go

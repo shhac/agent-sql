@@ -95,7 +95,7 @@ func registerGet(parent *cobra.Command) {
 			key := args[0]
 			def := findKey(key)
 			if def == nil {
-				output.WriteError(os.Stderr, fmt.Errorf("Unknown key: %q. Valid keys: %s", key, validKeyNames()))
+				output.WriteError(os.Stderr, fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames()))
 				return nil
 			}
 
@@ -116,7 +116,7 @@ func registerSet(parent *cobra.Command) {
 			key, rawValue := args[0], args[1]
 			def := findKey(key)
 			if def == nil {
-				output.WriteError(os.Stderr, fmt.Errorf("Unknown key: %q. Valid keys: %s", key, validKeyNames()))
+				output.WriteError(os.Stderr, fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames()))
 				return nil
 			}
 

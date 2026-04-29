@@ -22,10 +22,6 @@ type Credential struct {
 	KeychainManaged bool   `json:"keychainManaged,omitempty"`
 }
 
-type credentialIndex struct {
-	entries map[string]credentialEntry
-}
-
 type credentialEntry struct {
 	Username        string `json:"username,omitempty"`
 	Password        string `json:"password,omitempty"`
@@ -168,13 +164,13 @@ func writeKeychain(name string, cred *Credential) error {
 		return err
 	}
 	// Delete existing entry first (ignore errors)
-	exec.Command("security", "delete-generic-password",
+	_ = exec.Command("security", "delete-generic-password",
 		"-s", keychainService, "-a", name).Run()
 	return exec.Command("security", "add-generic-password",
 		"-s", keychainService, "-a", name, "-w", string(data)).Run()
 }
 
 func deleteKeychain(name string) {
-	exec.Command("security", "delete-generic-password",
+	_ = exec.Command("security", "delete-generic-password",
 		"-s", keychainService, "-a", name).Run()
 }

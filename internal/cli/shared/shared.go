@@ -42,7 +42,7 @@ func WithConnection(conn string, timeout int, fn func(ctx context.Context, drv d
 		output.WriteError(os.Stderr, err)
 		return nil
 	}
-	defer drv.Close()
+	defer func() { _ = drv.Close() }()
 
 	if err := fn(ctx, drv); err != nil {
 		output.WriteError(os.Stderr, err)

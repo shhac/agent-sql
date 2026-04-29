@@ -189,7 +189,7 @@ func SliceIterator(columns []string, rows []map[string]any) *RowIterator {
 
 // Collect drains a RowIterator into a QueryResult.
 func Collect(iter *RowIterator) (*QueryResult, error) {
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	var rows []map[string]any
 	for iter.Next() {
 		row, err := iter.Scan()

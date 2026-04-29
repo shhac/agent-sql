@@ -38,13 +38,13 @@ func PrintJSON(data any, prune bool) {
 		s = strings.Replace(s, `"`+field+`":null`, `"`+field+`":[]`, 1)
 	}
 	var normalized any
-	json.Unmarshal([]byte(s), &normalized)
+	_ = json.Unmarshal([]byte(s), &normalized)
 	if prune {
 		normalized = pruneNulls(normalized)
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(normalized)
+	_ = enc.Encode(normalized)
 }
 
 // WriteError writes an error to stderr as JSON.
@@ -61,7 +61,7 @@ func WriteError(w io.Writer, err error) {
 	if qerr.Hint != "" {
 		payload["hint"] = qerr.Hint
 	}
-	json.NewEncoder(w).Encode(payload)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func pruneNulls(data any) any {

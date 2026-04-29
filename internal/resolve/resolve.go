@@ -379,7 +379,7 @@ func parsePort(s string, def int) int {
 		return def
 	}
 	var p int
-	fmt.Sscanf(s, "%d", &p)
+	_, _ = fmt.Sscanf(s, "%d", &p)
 	if p == 0 {
 		return def
 	}

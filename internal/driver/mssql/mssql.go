@@ -54,7 +54,7 @@ func Connect(opts Opts) (driver.Connection, error) {
 	}
 
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, classifyError(err)
 	}
 

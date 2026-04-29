@@ -47,13 +47,13 @@ func Connect(opts Opts) (driver.Connection, error) {
 	}
 
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, classifyError(err)
 	}
 
 	if opts.Readonly {
 		if _, err := db.Exec("SET SESSION TRANSACTION READ ONLY"); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, classifyError(err)
 		}
 	}
@@ -103,14 +103,14 @@ func (c *mysqlConn) queryReadonly(ctx context.Context, sqlStr string) (*driver.Q
 
 	rows, err := tx.QueryContext(ctx, sqlStr)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, classifyError(err)
 	}
 
 	result, err := scanRows(rows)
-	rows.Close()
+	_ = rows.Close()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, err
 	}
 
@@ -126,7 +126,7 @@ func (c *mysqlConn) queryRows(ctx context.Context, sqlStr string) (*driver.Query
 	if err != nil {
 		return nil, classifyError(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanRows(rows)
 }
@@ -155,13 +155,13 @@ func (c *mysqlConn) QueryStream(ctx context.Context, sqlStr string, opts driver.
 
 		rows, err := tx.QueryContext(ctx, sqlStr)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return nil, classifyError(err)
 		}
 
 		iter, err := driver.SQLRowsIterator(rows, driver.NormalizeValue)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return nil, classifyError(err)
 		}
 
@@ -174,7 +174,7 @@ func (c *mysqlConn) QueryStream(ctx context.Context, sqlStr string, opts driver.
 			iter.Err,
 			func() error {
 				closeErr := origClose()
-				tx.Commit()
+				_ = tx.Commit()
 				return closeErr
 			},
 		)

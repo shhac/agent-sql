@@ -19,7 +19,7 @@ func (c *mysqlConn) GetTables(ctx context.Context, includeSystem bool) ([]driver
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []driver.TableInfo
 	for rows.Next() {
@@ -53,7 +53,7 @@ func (c *mysqlConn) DescribeTable(ctx context.Context, table string) ([]driver.C
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []driver.ColumnInfo
 	for rows.Next() {
@@ -99,7 +99,7 @@ func (c *mysqlConn) GetIndexes(ctx context.Context, table string) ([]driver.Inde
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var indexes []driver.IndexInfo
 	for rows.Next() {
@@ -148,7 +148,7 @@ func (c *mysqlConn) GetConstraints(ctx context.Context, table string) ([]driver.
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	constraintTypeMap := map[string]driver.ConstraintType{
 		"PRIMARY KEY": driver.ConstraintPrimaryKey,
@@ -209,7 +209,7 @@ func (c *mysqlConn) SearchSchema(ctx context.Context, pattern string) (*driver.S
 	if err != nil {
 		return nil, err
 	}
-	defer tableRows.Close()
+	defer func() { _ = tableRows.Close() }()
 
 	var tables []driver.TableInfo
 	for tableRows.Next() {
@@ -229,7 +229,7 @@ func (c *mysqlConn) SearchSchema(ctx context.Context, pattern string) (*driver.S
 	if err != nil {
 		return nil, err
 	}
-	defer colRows.Close()
+	defer func() { _ = colRows.Close() }()
 
 	var columns []driver.ColumnMatch
 	for colRows.Next() {

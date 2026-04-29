@@ -10,7 +10,7 @@ func ScanAllRows(rows *sql.Rows, normalize func(any) any) (*QueryResult, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []map[string]any
 	values := make([]any, len(columns))
@@ -47,7 +47,7 @@ func ScanAllRows(rows *sql.Rows, normalize func(any) any) (*QueryResult, error) 
 func SQLRowsIterator(rows *sql.Rows, normalize func(any) any) (*RowIterator, error) {
 	columns, err := rows.Columns()
 	if err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return nil, err
 	}
 

@@ -14,7 +14,7 @@ func (c *sqliteConn) GetTables(ctx context.Context, includeSystem bool) ([]drive
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []driver.TableInfo
 	for rows.Next() {
@@ -39,7 +39,7 @@ func (c *sqliteConn) DescribeTable(ctx context.Context, table string) ([]driver.
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []driver.ColumnInfo
 	for rows.Next() {
@@ -87,12 +87,12 @@ func (c *sqliteConn) GetIndexes(ctx context.Context, table string) ([]driver.Ind
 			var name, origin string
 			var unique, partial int
 			if err := idxRows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
-				idxRows.Close()
+				_ = idxRows.Close()
 				return nil, err
 			}
 			entries = append(entries, idxEntry{name: name, unique: unique == 1})
 		}
-		idxRows.Close()
+		_ = idxRows.Close()
 
 		for _, entry := range entries {
 			colRows, err := c.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_info(%s)", c.QuoteIdent(entry.name)))
@@ -104,12 +104,12 @@ func (c *sqliteConn) GetIndexes(ctx context.Context, table string) ([]driver.Ind
 				var seqno, cid int
 				var colName string
 				if err := colRows.Scan(&seqno, &cid, &colName); err != nil {
-					colRows.Close()
+					_ = colRows.Close()
 					return nil, err
 				}
 				cols = append(cols, colName)
 			}
-			colRows.Close()
+			_ = colRows.Close()
 
 			indexes = append(indexes, driver.IndexInfo{
 				Name:    entry.name,
@@ -154,7 +154,7 @@ func (c *sqliteConn) GetConstraints(ctx context.Context, table string) ([]driver
 			var id, seq int
 			var refTable, from, to, onUpdate, onDelete, match string
 			if err := fkRows.Scan(&id, &seq, &refTable, &from, &to, &onUpdate, &onDelete, &match); err != nil {
-				fkRows.Close()
+				_ = fkRows.Close()
 				return nil, err
 			}
 			constraints = append(constraints, driver.ConstraintInfo{
@@ -166,7 +166,7 @@ func (c *sqliteConn) GetConstraints(ctx context.Context, table string) ([]driver
 				ReferencedColumns: []string{to},
 			})
 		}
-		fkRows.Close()
+		_ = fkRows.Close()
 
 		// Unique constraints (from indexes)
 		idxRows, err := c.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(%s)", c.QuoteIdent(tbl)))
@@ -183,12 +183,12 @@ func (c *sqliteConn) GetConstraints(ctx context.Context, table string) ([]driver
 			var e idxEntry
 			var seq, partial int
 			if err := idxRows.Scan(&seq, &e.name, &e.unique, &e.origin, &partial); err != nil {
-				idxRows.Close()
+				_ = idxRows.Close()
 				return nil, err
 			}
 			entries = append(entries, e)
 		}
-		idxRows.Close()
+		_ = idxRows.Close()
 
 		for _, e := range entries {
 			if e.unique == 0 || e.origin == "pk" {
@@ -203,12 +203,12 @@ func (c *sqliteConn) GetConstraints(ctx context.Context, table string) ([]driver
 				var seqno, cid int
 				var colName string
 				if err := colRows.Scan(&seqno, &cid, &colName); err != nil {
-					colRows.Close()
+					_ = colRows.Close()
 					return nil, err
 				}
 				cols = append(cols, colName)
 			}
-			colRows.Close()
+			_ = colRows.Close()
 
 			constraints = append(constraints, driver.ConstraintInfo{
 				Name:    e.name,
@@ -231,7 +231,7 @@ func (c *sqliteConn) SearchSchema(ctx context.Context, pattern string) (*driver.
 	if err != nil {
 		return nil, err
 	}
-	defer tableRows.Close()
+	defer func() { _ = tableRows.Close() }()
 
 	var tables []driver.TableInfo
 	for tableRows.Next() {
@@ -261,14 +261,14 @@ func (c *sqliteConn) SearchSchema(ctx context.Context, pattern string) (*driver.
 			var notnull, pk int
 			var dflt *string
 			if err := colRows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
-				colRows.Close()
+				_ = colRows.Close()
 				return nil, err
 			}
 			if strings.Contains(strings.ToLower(name), lowerPattern) {
 				columns = append(columns, driver.ColumnMatch{Table: tbl, Column: name})
 			}
 		}
-		colRows.Close()
+		_ = colRows.Close()
 	}
 
 	return &driver.SearchResult{Tables: tables, Columns: columns}, nil
@@ -301,7 +301,7 @@ func (c *sqliteConn) userTableNames(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var names []string
 	for rows.Next() {
@@ -319,7 +319,7 @@ func (c *sqliteConn) primaryKeyCols(ctx context.Context, table string) ([]string
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type pkCol struct {
 		name string

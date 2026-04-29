@@ -16,7 +16,7 @@ func (c *mssqlConn) GetTables(ctx context.Context, includeSystem bool) ([]driver
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []driver.TableInfo
 	for rows.Next() {
@@ -63,7 +63,7 @@ func (c *mssqlConn) DescribeTable(ctx context.Context, table string) ([]driver.C
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []driver.ColumnInfo
 	for rows.Next() {
@@ -114,7 +114,7 @@ func (c *mssqlConn) GetIndexes(ctx context.Context, table string) ([]driver.Inde
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type indexKey struct {
 		name   string
@@ -180,7 +180,7 @@ func (c *mssqlConn) GetConstraints(ctx context.Context, table string) ([]driver.
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	constraintMap := make(map[string]*constraintKey)
 	constraintCols := make(map[string][]string)
@@ -255,7 +255,7 @@ func (c *mssqlConn) GetConstraints(ctx context.Context, table string) ([]driver.
 	if err != nil {
 		return constraints, nil // non-fatal
 	}
-	defer checkRows.Close()
+	defer func() { _ = checkRows.Close() }()
 
 	for checkRows.Next() {
 		var name, schema, tableName, definition string
@@ -287,7 +287,7 @@ func (c *mssqlConn) SearchSchema(ctx context.Context, pattern string) (*driver.S
 	if err != nil {
 		return nil, err
 	}
-	defer tableRows.Close()
+	defer func() { _ = tableRows.Close() }()
 
 	var tables []driver.TableInfo
 	for tableRows.Next() {
@@ -312,7 +312,7 @@ func (c *mssqlConn) SearchSchema(ctx context.Context, pattern string) (*driver.S
 	if err != nil {
 		return nil, err
 	}
-	defer colRows.Close()
+	defer func() { _ = colRows.Close() }()
 
 	var columns []driver.ColumnMatch
 	for colRows.Next() {
@@ -356,7 +356,7 @@ func (c *mssqlConn) fetchFKReferences(ctx context.Context, table string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	refs := make(map[string]fkRef)
 	for rows.Next() {
