@@ -60,11 +60,11 @@ func newRootCmd(version string) *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVarP(&flagConnection, "connection", "c", "", "Connection alias, file path, or URL")
-	root.PersistentFlags().StringVar(&flagFormat, "format", "", "Output format: jsonl, json, yaml, csv, sql")
-	root.PersistentFlags().StringVar(&flagExpand, "expand", "", "Expand specific truncated fields (comma-separated)")
-	root.PersistentFlags().BoolVar(&flagFull, "full", false, "Expand all truncated fields")
-	root.PersistentFlags().IntVar(&flagTimeout, "timeout", 0, "Query timeout in milliseconds")
-	root.PersistentFlags().BoolVar(&flagCompact, "compact", false, "Compact output (typed NDJSON: columns once, then row arrays)")
+	root.PersistentFlags().StringVarP(&flagFormat, "format", "f", "", "Output format: jsonl, json, yaml, csv, sql")
+	root.PersistentFlags().StringVarP(&flagExpand, "expand", "e", "", "Expand specific truncated fields (comma-separated)")
+	root.PersistentFlags().BoolVarP(&flagFull, "full", "F", false, "Expand all truncated fields")
+	root.PersistentFlags().IntVarP(&flagTimeout, "timeout", "t", 0, "Query timeout in milliseconds")
+	root.PersistentFlags().BoolVarP(&flagCompact, "compact", "C", false, "Compact output (typed NDJSON: columns once, then row arrays)")
 
 	// Register command groups
 	registerRunCommand(root)
