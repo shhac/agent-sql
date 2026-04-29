@@ -11,11 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/driver"
-	"github.com/shhac/agent-sql/internal/resolve"
 	"github.com/shhac/agent-sql/internal/output"
+	"github.com/shhac/agent-sql/internal/resolve"
 )
 
 const usageText = `connection — Manage SQL database connections
@@ -93,31 +94,25 @@ func Register(root *cobra.Command, globals func() (string, int)) {
 	registerTest(connection, globals)
 	registerSetDefault(connection)
 
-	connection.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "Print connection command documentation (LLM-optimized)",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(usageText)
-		},
-	})
+	shared.RegisterUsage(connection, "connection", usageText)
 
 	root.AddCommand(connection)
 }
 
 func registerAdd(parent *cobra.Command) {
 	var (
-		driverFlag  string
-		host        string
-		port        string
-		database    string
-		path        string
-		url         string
-		credName    string
-		account     string
-		warehouse   string
-		role        string
-		schema      string
-		setDefault  bool
+		driverFlag string
+		host       string
+		port       string
+		database   string
+		path       string
+		url        string
+		credName   string
+		account    string
+		warehouse  string
+		role       string
+		schema     string
+		setDefault bool
 	)
 
 	add := &cobra.Command{
@@ -176,17 +171,17 @@ func registerAdd(parent *cobra.Command) {
 			}
 
 			conn := config.Connection{
-				Driver:    resolvedDriver,
-				Host:      host,
-				Port:      portNum,
-				Database:  database,
-				Path:      absPath,
-				URL:       url,
+				Driver:     resolvedDriver,
+				Host:       host,
+				Port:       portNum,
+				Database:   database,
+				Path:       absPath,
+				URL:        url,
 				Credential: credName,
-				Account:   account,
-				Warehouse: warehouse,
-				Role:      role,
-				Schema:    schema,
+				Account:    account,
+				Warehouse:  warehouse,
+				Role:       role,
+				Schema:     schema,
 			}
 
 			if err := config.StoreConnection(alias, conn); err != nil {
@@ -199,21 +194,21 @@ func registerAdd(parent *cobra.Command) {
 			}
 
 			output.PrintJSON(map[string]any{
-				"ok":        true,
-				"alias":     alias,
-				"driver":    conn.Driver,
-				"host":      conn.Host,
-				"port":      conn.Port,
-				"database":  conn.Database,
-				"path":      conn.Path,
-				"url":       conn.URL,
+				"ok":         true,
+				"alias":      alias,
+				"driver":     conn.Driver,
+				"host":       conn.Host,
+				"port":       conn.Port,
+				"database":   conn.Database,
+				"path":       conn.Path,
+				"url":        conn.URL,
 				"credential": conn.Credential,
-				"account":   conn.Account,
-				"warehouse": conn.Warehouse,
-				"role":      conn.Role,
-				"schema":    conn.Schema,
-				"isDefault": setDefault,
-				"hint":      "Test with: agent-sql connection test",
+				"account":    conn.Account,
+				"warehouse":  conn.Warehouse,
+				"role":       conn.Role,
+				"schema":     conn.Schema,
+				"isDefault":  setDefault,
+				"hint":       "Test with: agent-sql connection test",
 			}, true)
 			return nil
 		},
@@ -394,7 +389,7 @@ func registerTest(parent *cobra.Command, globals func() (string, int)) {
 			ctx := context.Background()
 			if timeout > 0 {
 				var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+				ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
 				defer cancel()
 			}
 
@@ -442,4 +437,3 @@ func registerSetDefault(parent *cobra.Command) {
 	}
 	parent.AddCommand(setDefault)
 }
-

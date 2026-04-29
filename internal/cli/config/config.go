@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
 )
@@ -80,13 +81,7 @@ func Register(root *cobra.Command) {
 	registerReset(cfg)
 	registerListKeys(cfg)
 
-	cfg.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "Print config command documentation (LLM-optimized)",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(usageText)
-		},
-	})
+	shared.RegisterUsage(cfg, "config", usageText)
 
 	root.AddCommand(cfg)
 }

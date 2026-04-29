@@ -115,13 +115,7 @@ func Register(root *cobra.Command, globals func() SchemaGlobals) {
 	registerSearch(schema, globals)
 	registerDump(schema, globals)
 
-	schema.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "Print schema command reference (LLM-optimized)",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(usageText)
-		},
-	})
+	shared.RegisterUsage(schema, "schema", usageText)
 
 	root.AddCommand(schema)
 }
@@ -322,8 +316,8 @@ func registerDump(parent *cobra.Command, globals func() SchemaGlobals) {
 				}
 
 				type tableDump struct {
-					Name        string                 `json:"name"`
-					Schema      string                 `json:"schema,omitempty"`
+					Name        string                  `json:"name"`
+					Schema      string                  `json:"schema,omitempty"`
 					Columns     []driver.ColumnInfo     `json:"columns"`
 					Indexes     []driver.IndexInfo      `json:"indexes"`
 					Constraints []driver.ConstraintInfo `json:"constraints"`

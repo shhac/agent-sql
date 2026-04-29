@@ -79,13 +79,7 @@ func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	registerExplain(query, globals)
 	registerCount(query, globals)
 
-	query.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "Show LLM-optimized query command reference",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(usageText)
-		},
-	})
+	shared.RegisterUsage(query, "query", usageText)
 
 	root.AddCommand(query)
 }

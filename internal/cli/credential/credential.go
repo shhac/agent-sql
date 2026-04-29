@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/output"
 )
@@ -65,13 +66,7 @@ func Register(root *cobra.Command) {
 	registerRemove(cred)
 	registerList(cred)
 
-	cred.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "Print credential command documentation (LLM-optimized)",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(usageText)
-		},
-	})
+	shared.RegisterUsage(cred, "credential", usageText)
 
 	root.AddCommand(cred)
 }
@@ -106,11 +101,11 @@ func registerAdd(parent *cobra.Command) {
 
 			output.PrintJSON(map[string]any{
 				"ok":              true,
-				"credential":     name,
-				"username":       username,
+				"credential":      name,
+				"username":        username,
 				"writePermission": write,
-				"storage":        storage,
-				"hint":           fmt.Sprintf("Use with: agent-sql connection add <alias> --driver <pg|cockroachdb|sqlite|duckdb|mysql|mariadb|snowflake|mssql> --credential %s", name),
+				"storage":         storage,
+				"hint":            fmt.Sprintf("Use with: agent-sql connection add <alias> --driver <pg|cockroachdb|sqlite|duckdb|mysql|mariadb|snowflake|mssql> --credential %s", name),
 			}, true)
 			return nil
 		},
