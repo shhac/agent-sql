@@ -629,7 +629,7 @@ func TestParseNDJSON(t *testing.T) {
 
 func TestErrorClassification(t *testing.T) {
 	tests := []struct {
-		message  string
+		message   string
 		fixableBy errors.FixableBy
 	}{
 		{"Catalog Error: Table with name 'foo' does not exist", errors.FixableByAgent},

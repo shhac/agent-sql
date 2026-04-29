@@ -402,4 +402,3 @@ type fkRef struct {
 	table   string
 	columns []string
 }
-

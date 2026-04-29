@@ -14,7 +14,7 @@ func TestGuardReadOnlyAllowsReadStatements(t *testing.T) {
 		"show databases",
 		"WITH cte AS (SELECT 1) SELECT * FROM cte",
 		"  SELECT 1",         // leading whitespace
-		"\t\nSELECT 1",      // leading tabs/newlines
+		"\t\nSELECT 1",       // leading tabs/newlines
 		"SELECT 1 FROM dual", // simple select
 	}
 

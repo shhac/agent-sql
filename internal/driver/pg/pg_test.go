@@ -54,9 +54,9 @@ func TestSplitSchemaTable(t *testing.T) {
 
 func TestClassifyPgError(t *testing.T) {
 	tests := []struct {
-		code      string
-		message   string
-		wantFix   errors.FixableBy
+		code       string
+		message    string
+		wantFix    errors.FixableBy
 		wantInHint string
 	}{
 		{"42P01", "relation \"foo\" does not exist", errors.FixableByAgent, "Table not found"},
@@ -93,10 +93,10 @@ func TestClassifyPgErrorByClass(t *testing.T) {
 		code    string
 		wantFix errors.FixableBy
 	}{
-		{"08999", errors.FixableByHuman},  // connection class
-		{"28999", errors.FixableByHuman},  // auth class
-		{"42999", errors.FixableByAgent},  // syntax/access class
-		{"53000", errors.FixableByRetry},  // resource class
+		{"08999", errors.FixableByHuman}, // connection class
+		{"28999", errors.FixableByHuman}, // auth class
+		{"42999", errors.FixableByAgent}, // syntax/access class
+		{"53000", errors.FixableByRetry}, // resource class
 	}
 
 	for _, tt := range tests {

@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"strings"
 
+	_ "github.com/microsoft/go-mssqldb"
 	"github.com/shhac/agent-sql/internal/driver"
 	"github.com/shhac/agent-sql/internal/errors"
-	_ "github.com/microsoft/go-mssqldb"
 )
 
 // Opts holds MSSQL connection options.
