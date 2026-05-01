@@ -33,6 +33,13 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 - `agent-sql connection list` — list all saved connections with driver, display URL, host/path, credential, and default status. The `display_url` field shows a human-readable connection target (never includes credentials).
 - `agent-sql connection test [-c <alias>]` — test connectivity (no alias = test default connection)
 
+## Credential (human-only mutation)
+
+- `agent-sql credential add <name> --username <u> --password <p> [--write]` — store a credential with values from flags. Use this when secrets are already in the user's shell (e.g. environment variables) and not pasted into chat.
+- `agent-sql credential add <name> [--username <u>] [--write] --form` — opt-in flag that pops a native OS dialog (macOS osascript, Linux zenity/kdialog, Windows Win32) so the user types secrets directly into the operating system. The LLM driving the CLI never sees the secret value — only a redacted JSON receipt is emitted on stdout. Fails cleanly with `fixable_by="human"` if the host is headless or SSH'd.
+- `agent-sql credential remove <name>` — delete a stored credential.
+- `agent-sql credential list` — list stored credential names (passwords always masked).
+
 ## Usage
 
 - `agent-sql usage` — LLM-optimized top-level docs

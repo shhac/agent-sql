@@ -112,6 +112,23 @@ agent-sql connection test
 
 Flags (`--driver`, `--host`, `--port`, etc.) still work for explicit setup and override anything parsed from the connection string.
 
+### Secure credential entry (LLM-safe)
+
+When an LLM is helping a non-technical user set up a credential, secrets pasted into chat end up in the model's context window. To avoid that, run `credential add` with `--form`:
+
+```bash
+agent-sql credential add pg-cred --username app --form
+agent-sql credential add sf-cred --form              # Snowflake PAT
+```
+
+A native popup appears (macOS osascript, Linux zenity/kdialog, Windows Win32 dialog). The user types the secret directly into the OS — the LLM only sees a redacted JSON receipt:
+
+```json
+{"ok":true,"credential":"pg-cred","username":"app","writePermission":false,"storage":"keychain","hint":"..."}
+```
+
+If `--form` cannot run (SSH, headless CI), the CLI fails with `fixable_by="human"` and a hint pointing to the non-interactive `--password <secret>` flow for users who can run it locally.
+
 ### 2. Explore schema
 
 ```bash

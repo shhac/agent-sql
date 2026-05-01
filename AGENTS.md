@@ -8,6 +8,7 @@ Design docs live in `design-docs/` (gitignored, local-only). If present:
 
 - `design-docs/go-rewrite.md` — Go rewrite plan with phased migration strategy
 - `design-docs/subprocess-drivers.md` — subprocess driver pattern design
+- `design-docs/credential-form.md` — `credential add --form` LLM-safe secret entry via native OS dialogs
 - `design-docs/TASKS.md` — implementation task tracker
 
 ## Runtime
@@ -19,6 +20,7 @@ Design docs live in `design-docs/` (gitignored, local-only). If present:
 - **go-mssqldb** — native MSSQL driver (pure Go, SQL auth only — no Azure SDK)
 - **DuckDB** — subprocess driver, spawns `duckdb` CLI with NDJSON output (requires CLI installed separately)
 - **Snowflake** — HTTP REST API v2 with PAT authentication (lightweight, no gosnowflake)
+- **ncruces/zenity** — pure-Go cross-platform native dialog library (Win32, osascript, zenity/kdialog) for `credential add --form`
 
 ## Key design decisions
 
@@ -33,6 +35,7 @@ Design docs live in `design-docs/` (gitignored, local-only). If present:
 - **Streaming output** — NDJSON written row-by-row via `ResultWriter` interface. Never buffers full result sets for streaming formats.
 - **Output** — NDJSON to stdout (default), errors to stderr as JSON. NULLs preserved. `@truncated` per row. `fixable_by` on errors.
 - **Skill boundary** — query, schema, config, connection list/test, usage exposed to LLMs. Credential and connection mutation are human-only.
+- **LLM-safe credential entry** — `credential add --form` opens a native OS dialog. The user types secrets directly into the OS; the LLM driving the CLI sees only a redacted JSON receipt on stdout. Headless detection emits `fixable_by="human"` with a hint to the non-interactive fallback. See `design-docs/credential-form.md`.
 - **Pure Go** — no CGo dependencies. Keyword guard instead of `pg_query_go`. Cross-compilation is trivial.
 
 ## Dev tools
@@ -74,6 +77,8 @@ internal/
     mssql/                    # MSSQL (go-mssqldb)
   config/                     # Config file I/O (connections + settings)
   credential/                 # Credential storage (Keychain on macOS, file fallback)
+  dialog/                     # Native OS dialog wrapper (ncruces/zenity); Default Prompter overridable for tests
+    dialogtest/               # Recording fake Prompter for tests
   output/                     # ResultWriter interface, NDJSON/JSON/YAML/CSV formatters
   truncation/                 # @truncated decorator (ResultWriter wrapper)
   errors/                     # QueryError type, per-driver error classification

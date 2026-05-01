@@ -129,6 +129,25 @@ agent-sql connection test -c prod                    # test specific connection
 
 Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (`.db`, `.duckdb`), or URLs (`postgres://`, `cockroachdb://`, `mysql://`, `mariadb://`, `duckdb://`, `snowflake://`, `mssql://`, `sqlserver://`). DuckDB requires the `duckdb` CLI (`brew install duckdb`); `duckdb://` with no path for in-memory mode (query Parquet/CSV/JSON files). Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var.
 
+## Credential entry — never paste secrets
+
+If a user pastes a database password, PAT, or other secret into chat, **do not** put it into `--password`. The secret would land in your context window, transcripts, and any downstream telemetry. Instead, instruct the user to run the credential setup themselves so the secret stays out of the LLM:
+
+```bash
+# User runs this in their own terminal — a native OS popup appears for them to type into.
+agent-sql credential add <name> [--username <u>] [--write] --form
+```
+
+`--form` opens a native dialog (macOS osascript, Linux zenity/kdialog, Windows Win32). The user types directly into the OS; the LLM only sees a redacted JSON receipt:
+
+```json
+{"ok":true,"credential":"acme","username":"deploy","writePermission":false,"storage":"keychain","hint":"..."}
+```
+
+If `--form` cannot run (e.g. the user is SSH'd into a remote machine, or the host is headless), the CLI errors with `fixable_by="human"` and a hint pointing at the non-interactive fallback. Do not retry; surface the hint to the user.
+
+The agent may set `--username` and `--write` on the user's behalf, but secret values must always come through `--form` or be typed by the user directly into their own terminal.
+
 ## Safety
 
 - **Read-only by default**: writes require `--write` flag AND a credential with write permission
