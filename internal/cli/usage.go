@@ -25,6 +25,7 @@ AD-HOC USAGE (zero setup):
 
 NAMED CONNECTIONS (human-only setup):
   credential add <alias> --username <u> --password <p> [--write]
+  credential add <alias> [--username <u>] [--write] --form    # native popup, LLM never sees secret
   connection add <alias> [connection-string] [--credential <name>] [--driver --host --port --database --path --url]
   connection test [alias]
 
@@ -54,6 +55,10 @@ CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
   SQLite and DuckDB use file paths (credential optional).
 
 SAFETY: Read-only by default. Use --write to opt in to writes.
+
+LLM SECRET SAFETY: Never put a user-pasted password into --password. Instruct the
+  user to run "credential add <name> [--username <u>] --form" themselves — a native
+  OS dialog pops up on their screen and the secret never enters the LLM context.
 
 OUTPUT: NDJSON to stdout (default) — one JSON object per line, no envelope.
   Each row: {"col": val, ..., "@truncated": null}. Last line when more rows: {"@pagination": {...}}.

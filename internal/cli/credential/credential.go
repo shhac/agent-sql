@@ -15,11 +15,16 @@ import (
 const usageText = `credential — Manage stored credentials for SQL database authentication
 
 COMMANDS:
-  credential add <name> [--username <user>] [--password <pass>] [--write]
+  credential add <name> [--username <user>] [--password <pass>] [--write] [--form]
     Store a named credential. Overwrites if name already exists.
     SQLite credentials may omit username/password (only writePermission matters).
     Snowflake uses a PAT (Personal Access Token) as the password.
     --write grants permission for INSERT/UPDATE/DELETE/DDL operations.
+    --form pops a native OS dialog so the user can type secrets directly
+           into the operating system. The LLM driving the CLI never sees
+           the typed values — only a redacted JSON receipt is returned on
+           stdout. Requires a graphical desktop session; fails cleanly
+           with fixable_by="human" if no GUI is available (SSH, headless).
 
   credential remove <name>
     Remove a stored credential.
@@ -34,6 +39,13 @@ WORKFLOW:
                          agent-sql connection add staging --driver pg --credential acme
   3. Rotate password:    agent-sql credential add acme --username deploy --password new-secret --write
      All connections referencing "acme" pick up the new password automatically.
+
+LLM SAFETY:
+  When configuring credentials on behalf of a non-technical user, never put
+  pasted secrets into --password. Instead, run:
+    agent-sql credential add <name> [--username <u>] [--write] --form
+  The user will see a native popup on their screen and type the secret
+  directly into the OS. The CLI returns only a redacted JSON receipt.
 
 SQLITE NOTE:
   SQLite credentials typically only need --write to enable write mode.
@@ -76,6 +88,7 @@ func registerAdd(parent *cobra.Command) {
 		username string
 		password string
 		write    bool
+		form     bool
 	)
 
 	add := &cobra.Command{
@@ -84,6 +97,16 @@ func registerAdd(parent *cobra.Command) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+
+			if form {
+				filledUser, filledPass, err := promptMissingViaDialog(cmd.Context(), name, username, password)
+				if err != nil {
+					output.WriteError(os.Stderr, err)
+					return nil
+				}
+				username = filledUser
+				password = filledPass
+			}
 
 			storage, err := credential.Store(name, credential.Credential{
 				Username:        username,
@@ -113,6 +136,7 @@ func registerAdd(parent *cobra.Command) {
 	add.Flags().StringVar(&username, "username", "", "Database username")
 	add.Flags().StringVar(&password, "password", "", "Database password")
 	add.Flags().BoolVar(&write, "write", false, "Allow write operations")
+	add.Flags().BoolVar(&form, "form", false, "Prompt for missing secrets via a native OS dialog (LLM never sees the input)")
 	parent.AddCommand(add)
 }
 
