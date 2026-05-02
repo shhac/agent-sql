@@ -1,10 +1,15 @@
 package resolve
 
 import (
+	"context"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/driver"
+	"github.com/shhac/agent-sql/internal/errors"
 )
 
 func TestCheckWritePermission(t *testing.T) {
@@ -94,6 +99,127 @@ func TestCheckWritePermission(t *testing.T) {
 				t.Errorf("checkWritePermission() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestResolveAdHocRejectsWrite confirms that ad-hoc URL connections
+// can never be opened in write mode -- write requires a stored
+// connection with an explicit credential WritePermission flag.
+func TestResolveAdHocRejectsWrite(t *testing.T) {
+	config.SetConfigDir(t.TempDir())
+	_, err := Resolve(context.Background(), Opts{
+		Connection: "postgres://u:p@h/d",
+		Write:      true,
+	})
+	if err == nil {
+		t.Fatal("expected rejection; ad-hoc URLs cannot opt into write mode")
+	}
+	var qerr *errors.QueryError
+	if !errors.As(err, &qerr) {
+		t.Fatalf("expected *QueryError, got %T", err)
+	}
+	if qerr.FixableBy != errors.FixableByHuman {
+		t.Errorf("FixableBy = %s, want human", qerr.FixableBy)
+	}
+}
+
+// TestResolveSnowflakeURLRequiresEnvToken confirms ad-hoc snowflake://
+// URLs require AGENT_SQL_SNOWFLAKE_TOKEN -- the URL itself has no
+// userinfo slot for the PAT.
+func TestResolveSnowflakeURLRequiresEnvToken(t *testing.T) {
+	config.SetConfigDir(t.TempDir())
+	t.Setenv("AGENT_SQL_SNOWFLAKE_TOKEN", "") // explicitly clear
+	_, err := Resolve(context.Background(), Opts{
+		Connection: "snowflake://acct/MYDB",
+	})
+	if err == nil {
+		t.Fatal("expected rejection without AGENT_SQL_SNOWFLAKE_TOKEN")
+	}
+	if !strings.Contains(err.Error(), "AGENT_SQL_SNOWFLAKE_TOKEN") {
+		t.Errorf("err should mention env var; got %v", err)
+	}
+}
+
+// TestResolveAdHocUnknownFileExt confirms unknown file extensions are
+// rejected rather than silently treated as sqlite (the previous bug:
+// `-c ./README.md` would try to open the README as a SQLite database).
+// IsFilePath requires the file to exist (it stats), so we create a
+// real file with no recognized DB extension.
+func TestResolveAdHocUnknownFileExt(t *testing.T) {
+	dir := t.TempDir()
+	config.SetConfigDir(dir)
+	weirdFile := dir + "/weird.txt"
+	if err := os.WriteFile(weirdFile, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Resolve(context.Background(), Opts{Connection: weirdFile})
+	if err == nil {
+		t.Fatal("expected rejection of unknown file extension")
+	}
+	if !strings.Contains(err.Error(), "Recognized extensions") {
+		t.Errorf("err should explain extensions; got %v", err)
+	}
+}
+
+// TestResolveNoConnection covers the error path when no connection is
+// specified and no default is configured.
+func TestResolveNoConnection(t *testing.T) {
+	config.SetConfigDir(t.TempDir())
+	t.Setenv("AGENT_SQL_CONNECTION", "")
+	_, err := Resolve(context.Background(), Opts{})
+	if err == nil {
+		t.Fatal("expected error when no connection specified and no default")
+	}
+}
+
+// TestResolveFilePathPrefersPathOverURL confirms a stored sqlite
+// connection that has both Path and URL set uses Path (URL is the
+// fallback for older configs).
+func TestResolveFilePathPrefersPathOverURL(t *testing.T) {
+	cases := []struct {
+		name string
+		conn config.Connection
+		want string
+	}{
+		{
+			"path wins when set",
+			config.Connection{Driver: "sqlite", Path: "/explicit", URL: "sqlite:///fallback"},
+			"/explicit",
+		},
+		{
+			"url fallback when path empty",
+			config.Connection{Driver: "sqlite", URL: "sqlite:///fallback"},
+			"/fallback",
+		},
+		{
+			"empty when both empty",
+			config.Connection{Driver: "sqlite"},
+			"",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveFilePath(&tc.conn, "sqlite://")
+			if got != tc.want {
+				t.Errorf("resolveFilePath = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseGenericURLLocalhostFallback confirms a URL with no host
+// (e.g. postgres:///mydb) gets host="localhost" -- this is necessary
+// for backward compatibility with libpq-style URLs.
+func TestParseGenericURLLocalhostFallback(t *testing.T) {
+	u, err := parseGenericURL("postgres:///mydb")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if u.Host != "localhost" {
+		t.Errorf("Host = %q, want localhost (fallback)", u.Host)
+	}
+	if u.Database != "mydb" {
+		t.Errorf("Database = %q, want mydb", u.Database)
 	}
 }
 
