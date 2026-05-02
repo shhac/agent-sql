@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/shhac/agent-sql/internal/driver"
 )
 
 // DisplayURL builds a human-readable connection URL from config fields.
@@ -25,29 +27,16 @@ func (c Connection) DisplayURL() string {
 	return base
 }
 
-// hostPortDriverInfo holds per-driver display info for host:port-style
-// drivers (pg, cockroachdb, mysql, mariadb, mssql). The scheme is what
-// appears before :// in display URLs (note pg → "postgres"). DefaultPort
-// mirrors the connect-time default applied in resolve.connectFromConfig.
-type hostPortDriverInfo struct {
-	Scheme      string
-	DefaultPort int
-}
-
-// hostPortDrivers is the single source of truth for which drivers use
-// host:port wire format and what their display scheme + default port are.
-// Adding a new host:port driver: add one entry here. Adding a non-host
-// driver (file, account, etc.) requires a new arm in displayBase below.
-var hostPortDrivers = map[string]hostPortDriverInfo{
-	"pg":          {Scheme: "postgres", DefaultPort: 5432},
-	"cockroachdb": {Scheme: "cockroachdb", DefaultPort: 26257},
-	"mysql":       {Scheme: "mysql", DefaultPort: 3306},
-	"mariadb":     {Scheme: "mariadb", DefaultPort: 3306},
-	"mssql":       {Scheme: "mssql", DefaultPort: 1433},
+// driverInfo returns the driver registry entry for c.Driver. Returns
+// the zero Info if the stored driver string is unknown -- DisplayURL
+// degrades gracefully to "<driver>://" rather than panicking.
+func (c Connection) driverInfo() driver.Info {
+	return driver.Lookup(driver.Driver(c.Driver))
 }
 
 func (c Connection) displayBase() string {
-	if info, ok := hostPortDrivers[c.Driver]; ok {
+	info := c.driverInfo()
+	if info.HostPort {
 		host, port, db := effectiveHostPortDB(c, c.Driver)
 		return hostPortDBURL(info.Scheme, host, port, db)
 	}
@@ -98,12 +87,9 @@ func optionsQueryString(opts map[string]string) string {
 }
 
 // defaultPort returns the connect-time default port for a host:port-style
-// driver. Reads from the hostPortDrivers registry (single source of truth).
-func defaultPort(driver string) int {
-	if info, ok := hostPortDrivers[driver]; ok {
-		return info.DefaultPort
-	}
-	return 0
+// driver. Reads from the driver registry (single source of truth).
+func defaultPort(d string) int {
+	return driver.Lookup(driver.Driver(d)).DefaultPort
 }
 
 // parseURLFallback extracts host/port/database from a URL string, returning
@@ -153,7 +139,7 @@ func effectiveHostPortDB(c Connection, driver string) (string, int, string) {
 // "host" doesn't apply (sqlite, duckdb), returns "". For snowflake, returns
 // the account identifier.
 func (c Connection) EffectiveHost() string {
-	if _, ok := hostPortDrivers[c.Driver]; ok {
+	if c.driverInfo().HostPort {
 		host, _, _ := effectiveHostPortDB(c, c.Driver)
 		return host
 	}
@@ -167,7 +153,7 @@ func (c Connection) EffectiveHost() string {
 // Port, then parsed from URL, then the per-driver default. Returns 0 for
 // drivers without a port (sqlite, duckdb, snowflake).
 func (c Connection) EffectivePort() int {
-	if _, ok := hostPortDrivers[c.Driver]; ok {
+	if c.driverInfo().HostPort {
 		_, port, _ := effectiveHostPortDB(c, c.Driver)
 		return port
 	}

@@ -138,15 +138,6 @@ func credFor(conn *config.Connection) *credential.Credential {
 	return credential.Get(conn.Credential)
 }
 
-var credentialRequired = map[driver.Driver]string{
-	driver.DriverPG:          "PostgreSQL",
-	driver.DriverCockroachDB: "CockroachDB",
-	driver.DriverMySQL:       "MySQL",
-	driver.DriverMariaDB:     "MariaDB",
-	driver.DriverSnowflake:   "Snowflake",
-	driver.DriverMSSQL:       "MSSQL",
-}
-
 func checkWritePermission(d driver.Driver, cred *credential.Credential, alias string) error {
 	if cred != nil && !cred.WritePermission {
 		return errors.New(
@@ -155,9 +146,10 @@ func checkWritePermission(d driver.Driver, cred *credential.Credential, alias st
 		)
 	}
 
-	if name, ok := credentialRequired[d]; ok && cred == nil {
+	info := driver.Lookup(d)
+	if info.Credential != driver.CredentialNone && cred == nil {
 		return errors.New(
-			fmt.Sprintf("Write mode requested but %s connection '%s' has no credential.", name, alias),
+			fmt.Sprintf("Write mode requested but %s connection '%s' has no credential.", info.DisplayLabel, alias),
 			errors.FixableByHuman,
 		)
 	}
@@ -258,20 +250,13 @@ func requirePassword(cred *credential.Credential, message string) error {
 }
 
 func connectPgLikeConfig(ctx context.Context, d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	label := "PostgreSQL"
-	if d == driver.DriverCockroachDB {
-		label = "CockroachDB"
-	}
-	if err := requireUserPass(cred, label); err != nil {
+	info := driver.Lookup(d)
+	if err := requireUserPass(cred, info.DisplayLabel); err != nil {
 		return nil, err
 	}
-	defaultPort, defaultDB := 5432, "postgres"
-	if d == driver.DriverCockroachDB {
-		defaultPort, defaultDB = 26257, "defaultdb"
-	}
 	return pg.Connect(ctx, pg.Opts{
-		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, defaultPort),
-		Database: orStr(conn.Database, defaultDB),
+		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, info.DefaultPort),
+		Database: orStr(conn.Database, info.DefaultDB),
 		Username: cred.Username, Password: cred.Password, Readonly: readonly,
 		Options: conn.Options,
 	})
@@ -287,23 +272,24 @@ func connectMysqlLikeURL(d driver.Driver, connStr string) (driver.Connection, er
 		variant = "mariadb"
 	}
 	return mysql.Connect(mysql.Opts{
-		Host: u.Host, Port: parsePort(u.Port, 3306), Database: u.Database,
+		Host: u.Host, Port: parsePort(u.Port, driver.Lookup(d).DefaultPort), Database: u.Database,
 		Username: u.Username, Password: u.Password, Readonly: true, Variant: variant,
 		Options: u.Options,
 	})
 }
 
 func connectMysqlLikeConfig(d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	label, variant := "MySQL", "mysql"
+	info := driver.Lookup(d)
+	variant := "mysql"
 	if d == driver.DriverMariaDB {
-		label, variant = "MariaDB", "mariadb"
+		variant = "mariadb"
 	}
-	if err := requireUserPass(cred, label); err != nil {
+	if err := requireUserPass(cred, info.DisplayLabel); err != nil {
 		return nil, err
 	}
 	return mysql.Connect(mysql.Opts{
-		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, 3306),
-		Database: orStr(conn.Database, "mysql"),
+		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, info.DefaultPort),
+		Database: orStr(conn.Database, info.DefaultDB),
 		Username: cred.Username, Password: cred.Password,
 		Readonly: readonly, Variant: variant,
 		Options: conn.Options,
@@ -345,18 +331,19 @@ func connectMssqlURL(connStr string) (driver.Connection, error) {
 		return nil, err
 	}
 	return mssql.Connect(mssql.Opts{
-		Host: u.Host, Port: parsePort(u.Port, 1433), Database: u.Database,
+		Host: u.Host, Port: parsePort(u.Port, driver.Lookup(driver.DriverMSSQL).DefaultPort), Database: u.Database,
 		Username: u.Username, Password: u.Password, Readonly: true,
 		Options: u.Options,
 	})
 }
 
 func connectMssqlConfig(conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	if err := requireUserPass(cred, "MSSQL"); err != nil {
+	info := driver.Lookup(driver.DriverMSSQL)
+	if err := requireUserPass(cred, info.DisplayLabel); err != nil {
 		return nil, err
 	}
 	return mssql.Connect(mssql.Opts{
-		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, 1433),
+		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, info.DefaultPort),
 		Database: conn.Database, Username: cred.Username, Password: cred.Password,
 		Readonly: readonly,
 		Options:  conn.Options,
