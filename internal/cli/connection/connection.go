@@ -359,25 +359,17 @@ func validateCredentialRef(credName string) error {
 // renderConnection builds the per-row map for `connection list`. Keeps only
 // the fields a human/agent needs to identify a connection; raw storage fields
 // (path/url) are intentionally omitted -- display_url is the canonical view.
-// Defensive: a panic while rendering one row reduces to a minimal entry so
-// the rest of the list still prints.
-func renderConnection(alias string, conn config.Connection, isDefault bool) (out map[string]any) {
-	out = map[string]any{
-		"alias":   alias,
-		"driver":  conn.Driver,
-		"default": isDefault,
+// Resilience to bad stored data is handled inside DisplayURL et al. (they
+// return graceful zeros on parse failure); no panic recovery is needed
+// here because none of the called methods can panic on JSON-roundtrippable
+// data.
+func renderConnection(alias string, conn config.Connection, isDefault bool) map[string]any {
+	out := map[string]any{
+		"alias":       alias,
+		"driver":      conn.Driver,
+		"default":     isDefault,
+		"display_url": conn.DisplayURL(),
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			out = map[string]any{
-				"alias":   alias,
-				"driver":  conn.Driver,
-				"default": isDefault,
-				"error":   fmt.Sprintf("failed to render: %v", r),
-			}
-		}
-	}()
-	out["display_url"] = conn.DisplayURL()
 	if host := conn.EffectiveHost(); host != "" {
 		out["host"] = host
 	}
