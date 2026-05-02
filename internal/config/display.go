@@ -34,6 +34,37 @@ func (c Connection) driverInfo() driver.Info {
 	return driver.Lookup(driver.Driver(c.Driver))
 }
 
+// AsReceipt renders the curated public view of this connection for
+// CLI output (used by `connection add`, `connection update`, and
+// `connection list`). Raw storage fields (path, url) are intentionally
+// omitted -- display_url is the canonical view and includes effective
+// host:port + appended options. Empty strings, zero ints, and empty
+// maps are dropped so the emitted JSON has no "host: \"\"" noise.
+func (c Connection) AsReceipt(alias string, isDefault bool) map[string]any {
+	out := map[string]any{
+		"alias":       alias,
+		"driver":      c.Driver,
+		"default":     isDefault,
+		"display_url": c.DisplayURL(),
+	}
+	if host := c.EffectiveHost(); host != "" {
+		out["host"] = host
+	}
+	if port := c.EffectivePort(); port != 0 {
+		out["port"] = port
+	}
+	if c.Database != "" {
+		out["database"] = c.Database
+	}
+	if c.Credential != "" {
+		out["credential"] = c.Credential
+	}
+	if len(c.Options) > 0 {
+		out["options"] = c.Options
+	}
+	return out
+}
+
 func (c Connection) displayBase() string {
 	info := c.driverInfo()
 	if info.HostPort {

@@ -66,24 +66,10 @@ func registerAdd(parent *cobra.Command) {
 				_ = config.SetDefault(alias)
 			}
 
-			output.PrintJSON(map[string]any{
-				"ok":         true,
-				"alias":      alias,
-				"driver":     conn.Driver,
-				"host":       conn.Host,
-				"port":       conn.Port,
-				"database":   conn.Database,
-				"path":       conn.Path,
-				"url":        conn.URL,
-				"credential": conn.Credential,
-				"account":    conn.Account,
-				"warehouse":  conn.Warehouse,
-				"role":       conn.Role,
-				"schema":     conn.Schema,
-				"options":    conn.Options,
-				"isDefault":  setDefault,
-				"hint":       "Test with: agent-sql connection test",
-			}, true)
+			receipt := conn.AsReceipt(alias, setDefault)
+			receipt["ok"] = true
+			receipt["hint"] = "Test with: agent-sql connection test"
+			output.PrintJSON(receipt, true)
 			return nil
 		},
 	}
