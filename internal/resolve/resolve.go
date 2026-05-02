@@ -1,25 +1,29 @@
 // Package resolve maps connection aliases, URLs, and file paths to
 // concrete driver connections. Separated from the driver package to
 // avoid import cycles.
+//
+// File layout:
+//   - resolve.go: top-level Resolve dispatch (alias / ad-hoc / config).
+//   - policy.go: write permission, credential validation helpers.
+//   - urlparse.go: generic host:port URL parser used by ad-hoc paths.
+//   - connect_pg.go / connect_mysql.go / connect_snowflake.go /
+//     connect_mssql.go / connect_file.go: per-driver Connect wiring.
+//
+// Adding a new driver: add an entry to driver.Registry and a new
+// connect_<driver>.go here.
 package resolve
 
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/config"
-	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/driver"
 	"github.com/shhac/agent-sql/internal/driver/cockroachdb"
 	"github.com/shhac/agent-sql/internal/driver/duckdb"
-	"github.com/shhac/agent-sql/internal/driver/mssql"
-	"github.com/shhac/agent-sql/internal/driver/mysql"
 	"github.com/shhac/agent-sql/internal/driver/pg"
-	"github.com/shhac/agent-sql/internal/driver/snowflake"
 	"github.com/shhac/agent-sql/internal/driver/sqlite"
 	"github.com/shhac/agent-sql/internal/errors"
 )
@@ -127,35 +131,7 @@ func resolveFromConfig(ctx context.Context, alias string, write bool) (driver.Co
 	return connectFromConfig(ctx, d, conn, !write)
 }
 
-func rejectAdHocWrite() *errors.QueryError {
-	return errors.New("Write mode is not available for ad-hoc connections.", errors.FixableByHuman)
-}
-
-func credFor(conn *config.Connection) *credential.Credential {
-	if conn.Credential == "" {
-		return nil
-	}
-	return credential.Get(conn.Credential)
-}
-
-func checkWritePermission(d driver.Driver, cred *credential.Credential, alias string) error {
-	if cred != nil && !cred.WritePermission {
-		return errors.New(
-			fmt.Sprintf("Write mode requested but credential for connection '%s' has writePermission disabled.", alias),
-			errors.FixableByHuman,
-		)
-	}
-
-	info := driver.Lookup(d)
-	if info.Credential != driver.CredentialNone && cred == nil {
-		return errors.New(
-			fmt.Sprintf("Write mode requested but %s connection '%s' has no credential.", info.DisplayLabel, alias),
-			errors.FixableByHuman,
-		)
-	}
-	return nil
-}
-
+// connectFromURL dispatches an ad-hoc URL to the right driver.
 func connectFromURL(ctx context.Context, d driver.Driver, connStr string) (driver.Connection, error) {
 	switch d {
 	case driver.DriverSQLite:
@@ -176,6 +152,7 @@ func connectFromURL(ctx context.Context, d driver.Driver, connStr string) (drive
 	return nil, errors.New(fmt.Sprintf("Unsupported driver: %s", d), errors.FixableByAgent)
 }
 
+// connectFromConfig dispatches a stored connection to the right driver.
 func connectFromConfig(ctx context.Context, d driver.Driver, conn *config.Connection, readonly bool) (driver.Connection, error) {
 	cred := credFor(conn)
 	switch d {
@@ -203,153 +180,8 @@ func connectFromConfig(ctx context.Context, d driver.Driver, conn *config.Connec
 	return nil, errors.New(fmt.Sprintf("Unknown driver '%s'.", d), errors.FixableByAgent)
 }
 
-func connectSqliteAdHoc(_ context.Context, path string, write bool) (driver.Connection, error) {
-	absP, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	if !write {
-		if _, err := os.Stat(absP); os.IsNotExist(err) {
-			return nil, errors.New(fmt.Sprintf("SQLite database not found: %s", path), errors.FixableByAgent).
-				WithHint("Check the file path, or use --write to create a new database.")
-		}
-	}
-	return sqlite.Connect(sqlite.Opts{Path: absP, Readonly: !write, Create: write})
-}
-
-func connectDuckDbAdHoc(ctx context.Context, path string) (driver.Connection, error) {
-	var dbPath string
-	if path != "" {
-		p, err := filepath.Abs(path)
-		if err != nil {
-			return nil, err
-		}
-		dbPath = p
-	}
-	return duckdb.Connect(ctx, duckdb.Opts{Path: dbPath, Readonly: true})
-}
-
-// requireUserPass returns a FixableByHuman error if cred is missing
-// either username or password. Used by host:port drivers that auth via
-// user/pass (pg, cockroachdb, mysql, mariadb, mssql).
-func requireUserPass(cred *credential.Credential, label string) error {
-	if cred == nil || cred.Username == "" || cred.Password == "" {
-		return errors.New(label+" requires a credential.", errors.FixableByHuman)
-	}
-	return nil
-}
-
-// requirePassword returns a FixableByHuman error if cred has no
-// password component. Used by token-only drivers (snowflake PAT). The
-// caller supplies the full message because token wording varies.
-func requirePassword(cred *credential.Credential, message string) error {
-	if cred == nil || cred.Password == "" {
-		return errors.New(message, errors.FixableByHuman)
-	}
-	return nil
-}
-
-func connectPgLikeConfig(ctx context.Context, d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	info := driver.Lookup(d)
-	if err := requireUserPass(cred, info.DisplayLabel); err != nil {
-		return nil, err
-	}
-	return pg.Connect(ctx, pg.Opts{
-		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, info.DefaultPort),
-		Database: orStr(conn.Database, info.DefaultDB),
-		Username: cred.Username, Password: cred.Password, Readonly: readonly,
-		Options: conn.Options,
-	})
-}
-
-func connectMysqlLikeURL(d driver.Driver, connStr string) (driver.Connection, error) {
-	u, err := parseGenericURL(connStr)
-	if err != nil {
-		return nil, err
-	}
-	variant := "mysql"
-	if d == driver.DriverMariaDB {
-		variant = "mariadb"
-	}
-	return mysql.Connect(mysql.Opts{
-		Host: u.Host, Port: parsePort(u.Port, driver.Lookup(d).DefaultPort), Database: u.Database,
-		Username: u.Username, Password: u.Password, Readonly: true, Variant: variant,
-		Options: u.Options,
-	})
-}
-
-func connectMysqlLikeConfig(d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	info := driver.Lookup(d)
-	variant := "mysql"
-	if d == driver.DriverMariaDB {
-		variant = "mariadb"
-	}
-	if err := requireUserPass(cred, info.DisplayLabel); err != nil {
-		return nil, err
-	}
-	return mysql.Connect(mysql.Opts{
-		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, info.DefaultPort),
-		Database: orStr(conn.Database, info.DefaultDB),
-		Username: cred.Username, Password: cred.Password,
-		Readonly: readonly, Variant: variant,
-		Options: conn.Options,
-	})
-}
-
-func connectSnowflakeURL(connStr string) (driver.Connection, error) {
-	token := os.Getenv("AGENT_SQL_SNOWFLAKE_TOKEN")
-	if token == "" {
-		return nil, errors.New("Ad-hoc Snowflake connections require AGENT_SQL_SNOWFLAKE_TOKEN.", errors.FixableByHuman)
-	}
-	parsed, err := snowflake.ParseURL(connStr)
-	if err != nil {
-		return nil, err
-	}
-	return snowflake.Connect(snowflake.Opts{
-		Account: parsed.Account, Database: parsed.Database, Schema: parsed.Schema,
-		Warehouse: parsed.Warehouse, Role: parsed.Role,
-		Token: token, Readonly: true,
-		Options: parsed.Options,
-	})
-}
-
-func connectSnowflakeConfig(conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	if err := requirePassword(cred, "Snowflake requires a PAT credential."); err != nil {
-		return nil, err
-	}
-	return snowflake.Connect(snowflake.Opts{
-		Account: conn.Account, Database: conn.Database, Schema: conn.Schema,
-		Warehouse: conn.Warehouse, Role: conn.Role,
-		Token: cred.Password, Readonly: readonly,
-		Options: conn.Options,
-	})
-}
-
-func connectMssqlURL(connStr string) (driver.Connection, error) {
-	u, err := parseGenericURL(connStr)
-	if err != nil {
-		return nil, err
-	}
-	return mssql.Connect(mssql.Opts{
-		Host: u.Host, Port: parsePort(u.Port, driver.Lookup(driver.DriverMSSQL).DefaultPort), Database: u.Database,
-		Username: u.Username, Password: u.Password, Readonly: true,
-		Options: u.Options,
-	})
-}
-
-func connectMssqlConfig(conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	info := driver.Lookup(driver.DriverMSSQL)
-	if err := requireUserPass(cred, info.DisplayLabel); err != nil {
-		return nil, err
-	}
-	return mssql.Connect(mssql.Opts{
-		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, info.DefaultPort),
-		Database: conn.Database, Username: cred.Username, Password: cred.Password,
-		Readonly: readonly,
-		Options:  conn.Options,
-	})
-}
-
+// listAliases returns the saved connection aliases as a comma-separated
+// string for error messages, or "(none configured)" if empty.
 func listAliases() string {
 	a := configAliases()
 	if len(a) == 0 {
@@ -367,65 +199,9 @@ func configAliases() []string {
 	return out
 }
 
-// genericURL is the structured form of a host:port:database connection
-// URL (postgres, mysql, mariadb, mssql, sqlserver). Userinfo is preserved
-// because ad-hoc URL connections legitimately carry credentials -- only
-// stored connections reject them. Options carries any query-string
-// parameters for pass-through to the driver.
-type genericURL struct {
-	Host     string
-	Port     string
-	Database string
-	Username string
-	Password string
-	Options  map[string]string
-}
-
-// parseGenericURL parses a host-style connection URL. Returns a
-// FixableByHuman error if the URL is malformed -- the previous
-// behavior of silently swallowing parse errors and falling back to
-// localhost:default-port was a footgun.
-func parseGenericURL(connStr string) (genericURL, error) {
-	u, err := url.Parse(connStr)
-	if err != nil {
-		return genericURL{}, errors.New(
-			fmt.Sprintf("Invalid connection URL %q: %v", connStr, err),
-			errors.FixableByHuman,
-		)
-	}
-	out := genericURL{
-		Host:     u.Hostname(),
-		Port:     u.Port(),
-		Database: strings.TrimPrefix(u.Path, "/"),
-		Username: u.User.Username(),
-	}
-	if out.Host == "" {
-		out.Host = "localhost"
-	}
-	out.Password, _ = u.User.Password()
-	if q := u.Query(); len(q) > 0 {
-		out.Options = make(map[string]string, len(q))
-		for k, vs := range q {
-			if len(vs) > 0 {
-				out.Options[k] = vs[0]
-			}
-		}
-	}
-	return out, nil
-}
-
-func parsePort(s string, def int) int {
-	if s == "" {
-		return def
-	}
-	var p int
-	_, _ = fmt.Sscanf(s, "%d", &p)
-	if p == 0 {
-		return def
-	}
-	return p
-}
-
+// resolveFilePath returns the file path for a SQLite or DuckDB stored
+// connection, preferring the Path field but falling back to URL with
+// the scheme stripped (urlPrefix is "sqlite://" or "duckdb://").
 func resolveFilePath(conn *config.Connection, urlPrefix string) string {
 	if conn.Path != "" {
 		return conn.Path
