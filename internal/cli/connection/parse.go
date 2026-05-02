@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
+	agenterrors "github.com/shhac/agent-sql/internal/errors"
 )
 
 // parseOptionFlags converts repeated "key=value" CLI flag values into a map.
@@ -25,6 +26,40 @@ func parseOptionFlags(flags []string) (map[string]string, error) {
 		out[raw[:eq]] = raw[eq+1:]
 	}
 	return out, nil
+}
+
+// rejectEmbeddedCreds is the shared "secrets must not land in plaintext
+// config" gate for `connection add` and `connection update --url`.
+//
+// Returns (cleaned, warning, nil) when:
+//   - the URL has no embedded user:pass@ (warning is empty), OR
+//   - the URL has embedded creds AND a credential reference is present
+//     (effectiveCred != ""), in which case the userinfo is stripped and
+//     a warning string is returned for the caller to print.
+//
+// Returns (raw, "", err) when the URL has embedded creds and no credential
+// is available -- the error is FixableByHuman and names the user so the
+// caller can show a recovery command.
+//
+// `field` is included in the error message ("connection string" for add,
+// "--url" for update). `effectiveCred` is the credential name that will
+// actually be associated with the connection after the operation
+// completes -- which for update may come from existing.Credential rather
+// than the --credential flag.
+func rejectEmbeddedCreds(rawURL, alias, effectiveCred, field string) (cleaned, warning string, err error) {
+	cleaned, hadCreds, embeddedUser := stripURLCredentials(rawURL)
+	if !hadCreds {
+		return cleaned, "", nil
+	}
+	if effectiveCred == "" {
+		return rawURL, "", agenterrors.New(fmt.Sprintf(
+			"%s contains embedded credentials (user %q). Config is plaintext on disk -- credentials must live in the OS keychain. "+
+				"Run: agent-sql credential add %s --username %s --password <pass>; "+
+				"then re-run with --credential %s",
+			field, embeddedUser, alias, embeddedUser, alias,
+		), agenterrors.FixableByHuman)
+	}
+	return cleaned, fmt.Sprintf("warning: stripped embedded credentials from %s; using --credential %s\n", field, effectiveCred), nil
 }
 
 // stripURLCredentials returns the URL with any embedded user:pass@ removed.
