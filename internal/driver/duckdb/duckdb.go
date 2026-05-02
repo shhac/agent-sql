@@ -81,26 +81,38 @@ func buildOptionsPrelude(opts map[string]string) string {
 	for _, k := range keys {
 		v := opts[k]
 		if k == "extensions" {
-			for _, ext := range strings.Split(v, ",") {
-				e := strings.TrimSpace(ext)
-				if e == "" {
-					continue
-				}
-				sb.WriteString("INSTALL ")
-				sb.WriteString(e)
-				sb.WriteString("; LOAD ")
-				sb.WriteString(e)
-				sb.WriteString("; ")
-			}
+			writeExtensions(&sb, v)
 			continue
 		}
-		sb.WriteString("SET ")
-		sb.WriteString(k)
-		sb.WriteString("='")
-		sb.WriteString(strings.ReplaceAll(v, "'", "''"))
-		sb.WriteString("'; ")
+		writeSetStmt(&sb, k, v)
 	}
 	return sb.String()
+}
+
+// writeExtensions appends `INSTALL <ext>; LOAD <ext>; ` for each
+// comma-separated extension name in csv. Empty entries are skipped.
+func writeExtensions(sb *strings.Builder, csv string) {
+	for _, ext := range strings.Split(csv, ",") {
+		e := strings.TrimSpace(ext)
+		if e == "" {
+			continue
+		}
+		sb.WriteString("INSTALL ")
+		sb.WriteString(e)
+		sb.WriteString("; LOAD ")
+		sb.WriteString(e)
+		sb.WriteString("; ")
+	}
+}
+
+// writeSetStmt appends `SET key='value'; ` with single quotes in value
+// doubled for SQL string escaping.
+func writeSetStmt(sb *strings.Builder, key, value string) {
+	sb.WriteString("SET ")
+	sb.WriteString(key)
+	sb.WriteString("='")
+	sb.WriteString(strings.ReplaceAll(value, "'", "''"))
+	sb.WriteString("'; ")
 }
 
 func findBin() string {
