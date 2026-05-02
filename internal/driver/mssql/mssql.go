@@ -39,23 +39,7 @@ func Connect(opts Opts) (driver.Connection, error) {
 		opts.Port = 1433
 	}
 
-	q := url.Values{}
-	if opts.Database != "" {
-		q.Set("database", opts.Database)
-	}
-	q.Set("app name", "agent-sql")
-	for k, v := range opts.Options {
-		q.Set(k, v)
-	}
-
-	u := &url.URL{
-		Scheme:   "sqlserver",
-		User:     url.UserPassword(opts.Username, opts.Password),
-		Host:     fmt.Sprintf("%s:%d", opts.Host, opts.Port),
-		RawQuery: q.Encode(),
-	}
-
-	db, err := sql.Open("sqlserver", u.String())
+	db, err := sql.Open("sqlserver", buildMssqlURL(opts))
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +50,36 @@ func Connect(opts Opts) (driver.Connection, error) {
 	}
 
 	return &mssqlConn{db: db, readonly: opts.Readonly}, nil
+}
+
+// buildMssqlURL constructs the sqlserver:// URL handed to go-mssqldb.
+//
+// Collision policy:
+//   - User options are applied first (pass-through to go-mssqldb).
+//   - "app name" defaults to "agent-sql" only if the user didn't supply one.
+//   - "database" always uses opts.Database -- a user --option database=foo
+//     cannot override the connection target.
+//
+// Other unknown keys pass through verbatim; go-mssqldb decides which
+// are valid at connect time.
+func buildMssqlURL(opts Opts) string {
+	q := url.Values{}
+	for k, v := range opts.Options {
+		q.Set(k, v)
+	}
+	if q.Get("app name") == "" {
+		q.Set("app name", "agent-sql")
+	}
+	if opts.Database != "" {
+		q.Set("database", opts.Database) // connection target wins
+	}
+	u := &url.URL{
+		Scheme:   "sqlserver",
+		User:     url.UserPassword(opts.Username, opts.Password),
+		Host:     fmt.Sprintf("%s:%d", opts.Host, opts.Port),
+		RawQuery: q.Encode(),
+	}
+	return u.String()
 }
 
 type mssqlConn struct {

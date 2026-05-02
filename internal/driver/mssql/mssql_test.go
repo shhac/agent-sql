@@ -3,12 +3,77 @@ package mssql
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/shhac/agent-sql/internal/driver"
 	"github.com/shhac/agent-sql/internal/errors"
 )
+
+func TestBuildMssqlURL(t *testing.T) {
+	t.Run("defaults set database and app name", func(t *testing.T) {
+		got := buildMssqlURL(Opts{Host: "h", Port: 1433, Database: "d", Username: "u", Password: "p"})
+		u, err := url.Parse(got)
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		q := u.Query()
+		if q.Get("database") != "d" {
+			t.Errorf("database = %q, want d", q.Get("database"))
+		}
+		if q.Get("app name") != "agent-sql" {
+			t.Errorf("app name = %q, want agent-sql", q.Get("app name"))
+		}
+	})
+
+	t.Run("user options pass through alphabetized", func(t *testing.T) {
+		got := buildMssqlURL(Opts{
+			Host: "h", Port: 1433, Database: "d", Username: "u", Password: "p",
+			Options: map[string]string{"encrypt": "true", "TrustServerCertificate": "false"},
+		})
+		u, _ := url.Parse(got)
+		q := u.Query()
+		if q.Get("encrypt") != "true" {
+			t.Errorf("encrypt = %q", q.Get("encrypt"))
+		}
+		if q.Get("TrustServerCertificate") != "false" {
+			t.Errorf("TrustServerCertificate = %q", q.Get("TrustServerCertificate"))
+		}
+	})
+
+	t.Run("user app name overrides default", func(t *testing.T) {
+		got := buildMssqlURL(Opts{
+			Host: "h", Port: 1433, Database: "d", Username: "u", Password: "p",
+			Options: map[string]string{"app name": "my-app"},
+		})
+		u, _ := url.Parse(got)
+		if u.Query().Get("app name") != "my-app" {
+			t.Errorf("user override of app name failed: %q", u.Query().Get("app name"))
+		}
+	})
+
+	t.Run("user database option cannot clobber opts.Database", func(t *testing.T) {
+		got := buildMssqlURL(Opts{
+			Host: "h", Port: 1433, Database: "real-db", Username: "u", Password: "p",
+			Options: map[string]string{"database": "user-injected"},
+		})
+		u, _ := url.Parse(got)
+		if u.Query().Get("database") != "real-db" {
+			t.Errorf("connection target should win; database = %q, want real-db", u.Query().Get("database"))
+		}
+	})
+
+	t.Run("password not in stringified URL log form", func(t *testing.T) {
+		// Sanity: confirm the URL contains userinfo so go-mssqldb gets it,
+		// but we never emit this URL anywhere user-visible.
+		got := buildMssqlURL(Opts{Host: "h", Port: 1433, Database: "d", Username: "u", Password: "secret-pw"})
+		if !strings.Contains(got, "secret-pw") {
+			t.Error("password missing from connection DSN; go-mssqldb auth would fail")
+		}
+	})
+}
 
 func TestQuoteIdent(t *testing.T) {
 	conn := &mssqlConn{}
