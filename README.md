@@ -96,6 +96,13 @@ agent-sql connection add local ./data.db
 # DuckDB — file path, no credential needed (requires duckdb CLI)
 agent-sql connection add analytics ./analytics.duckdb
 
+# Driver-specific options: pass via URL query string or repeated --option flag.
+# Pass-through to the driver -- unknown keys surface as the driver's own error
+# at "connection test" time.
+agent-sql connection add prod 'postgres://h/d?sslmode=require' --credential pg-cred
+agent-sql connection add staging mysql://h/d --option parseTime=true --credential mysql-cred
+agent-sql connection add local ./data.db --option _journal_mode=wal
+
 # Snowflake — PAT as password, account can look like orgname-accountname or account.region
 agent-sql credential add sf-cred --password <pat_secret>
 agent-sql connection add sf-prod \
@@ -111,6 +118,8 @@ agent-sql connection test
 ```
 
 Flags (`--driver`, `--host`, `--port`, etc.) still work for explicit setup and override anything parsed from the connection string.
+
+`connection add` and `connection update` reject URLs with embedded credentials (e.g. `postgres://user:pass@host/db`) — the config file is plaintext on disk, so secrets must live in the OS keychain via `credential add` and be referenced by `--credential <name>`.
 
 ### Secure credential entry (LLM-safe)
 

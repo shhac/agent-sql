@@ -207,7 +207,7 @@ Combines tables, columns, indexes, and constraints in one response. Same structu
 
 ## Connection list (`connection list`)
 
-Each entry shows `alias`, `driver`, `display_url`, plus `host`/`port`/`database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target — it includes the per-driver default port (5432, 26257, 3306, 1433) so the URL reflects what would actually be used at connect time. `host` and `port` are the effective values (URL-backfilled if needed; default port applied for host-port drivers). Snowflake reports its account as `host` and omits `port`; SQLite/DuckDB omit both. Raw storage fields (`path`, `url`) are not emitted.
+Each entry shows `alias`, `driver`, `display_url`, plus `host`/`port`/`database`/`credential`/`options` when set, and `default: true` for the default. `display_url` is the canonical connection target — it includes the per-driver default port (5432, 26257, 3306, 1433) and any stored options as `?key=value&...`, so the URL reflects what would actually be used at connect time. `host` and `port` are the effective values (URL-backfilled if needed; default port applied for host-port drivers). Snowflake reports its account as `host` and omits `port`; SQLite/DuckDB omit both. `options` carries driver-specific knobs (sslmode, parseTime, encrypt, _journal_mode, memory_limit, query_tag, ...). Raw storage fields (`path`, `url`) are not emitted.
 
 ```json
 {

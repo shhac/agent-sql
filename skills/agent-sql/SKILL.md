@@ -124,8 +124,12 @@ agent-sql connection test                            # test default connection
 agent-sql connection test -c prod                    # test specific connection
 # Human-only setup examples:
 # connection add mydb postgres://localhost:5432/myapp --credential pg-cred
-# connection add local ./data.db
+# connection add mydb 'postgres://h/d?sslmode=require' --credential pg-cred  # URL options preserved
+# connection add mydb mysql://h/d --option parseTime=true --credential mysql-cred
+# connection add local ./data.db --option _journal_mode=wal
 ```
+
+URLs with embedded credentials (`postgres://user:pass@host/db`) are rejected at add time — secrets must live in the keychain via `credential add`, not in the plaintext config file. Driver-specific options from URL query strings or repeated `--option key=value` flags are stored on the connection and threaded into the driver at connect time. Unknown options surface as the driver's own error on `connection test`.
 
 Connection resolution: `-c` flag > `AGENT_SQL_CONNECTION` env > config default > error listing available connections. The `-c` flag accepts aliases, file paths (`.db`, `.duckdb`), or URLs (`postgres://`, `cockroachdb://`, `mysql://`, `mariadb://`, `duckdb://`, `snowflake://`, `mssql://`, `sqlserver://`). DuckDB requires the `duckdb` CLI (`brew install duckdb`); `duckdb://` with no path for in-memory mode (query Parquet/CSV/JSON files). Snowflake ad-hoc URLs use `AGENT_SQL_SNOWFLAKE_TOKEN` env var.
 

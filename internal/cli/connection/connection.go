@@ -30,13 +30,14 @@ COMMANDS:
     are parsed from the URL. Flags override anything parsed from the connection string.
     Examples:
       connection add mydb postgres://localhost:5432/myapp --credential pg-cred
-      connection add mydb mysql://localhost/myapp --credential mysql-cred
+      connection add mydb 'postgres://h/d?sslmode=require' --credential pg-cred
+      connection add mydb mysql://localhost/myapp --option parseTime=true --credential mysql-cred
       connection add mydb mariadb://localhost/myapp --credential mariadb-cred
       connection add crdb cockroachdb://localhost:26257/myapp --credential crdb-cred
-      connection add local ./data.db
+      connection add local ./data.db --option _journal_mode=wal
       connection add sf snowflake://org-acct/DB/PUBLIC?warehouse=WH --credential sf-cred
-      connection add analytics ./analytics.duckdb
-      connection add ms mssql://user:pass@host/mydb --credential mssql-cred
+      connection add analytics ./analytics.duckdb --option memory_limit=4GB
+      connection add ms 'mssql://host/mydb?encrypt=true' --credential mssql-cred
     --driver pg|cockroachdb|sqlite|mysql|mariadb|duckdb|snowflake|mssql  Database driver (auto-detected from URL/extension if omitted).
     --host <host>             Database host (pg, cockroachdb, mysql, mariadb, mssql).
     --port <port>             Database port (pg, cockroachdb, mysql, mariadb, mssql).
@@ -48,18 +49,31 @@ COMMANDS:
     --role <role>             Snowflake role.
     --schema <schema>         Snowflake schema.
     --credential <name>       Reference a stored credential for authentication.
+    --option key=value        Driver-specific knob (repeatable). Pass-through to the driver
+                              (sslmode, parseTime, encrypt, memory_limit, query_tag, ...).
+                              URL query params merge with --option flags; flag wins on conflict.
+                              Unknown keys surface as the driver's own error at "connection test".
     --default                 Set as default connection.
     First connection added automatically becomes the default.
 
+    NOTE: URLs with embedded credentials (user:pass@) are rejected -- secrets must
+    live in the OS keychain via "credential add", referenced by --credential.
+
   connection update <alias> [options]
     Update a saved connection. Only specified fields are changed.
-    Same flags as add (all optional). --no-credential removes the credential.
+    Same flags as add (all optional). --option merges into existing options;
+    --clear-options removes them all (apply before any new --option flags).
 
   connection remove <alias>
     Remove a saved connection. If it was the default, the next available becomes default.
 
   connection list
-    List all saved connections with driver, host, database, credential, and default status.
+    List saved connections. Each row: alias, driver, display_url, plus
+    host/port/database/credential/options when set, and default status.
+    display_url applies per-driver default ports (5432, 26257, 3306, 1433)
+    and appends options as ?key=value&... so it reflects the effective
+    connect-time URL. SQLite/DuckDB omit host/port; Snowflake reports its
+    account as host and omits port.
 
   connection test [alias]
     Connect and run SELECT 1 to verify connectivity. Uses default connection if alias omitted.
