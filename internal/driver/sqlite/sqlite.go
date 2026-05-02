@@ -30,13 +30,12 @@ var writeCommands = append(append([]string{}, driver.WriteCommands...), "REPLACE
 func Connect(opts Opts) (driver.Connection, error) {
 	db, err := sql.Open("sqlite", buildSqliteDSN(opts))
 	if err != nil {
-		return nil, err
+		return nil, classifyError(err)
 	}
 
-	// Verify the connection works
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
-		return nil, err
+		return nil, classifyError(err)
 	}
 
 	return &sqliteConn{db: db, readonly: opts.Readonly}, nil
