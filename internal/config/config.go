@@ -383,22 +383,40 @@ func defaultPort(driver string) int {
 	return 0
 }
 
-// effectiveHostPortDB resolves host/port/database for display: prefer stored
-// fields, fall back to parsing c.URL, then apply the driver's default port.
+// parseURLFallback extracts host/port/database from a URL string, returning
+// zero values when the URL is empty or unparseable. Used as a fallback for
+// stored connections that have only a URL field populated.
+func parseURLFallback(rawURL string) (host string, port int, db string) {
+	if rawURL == "" {
+		return "", 0, ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", 0, ""
+	}
+	host = u.Hostname()
+	if p := u.Port(); p != "" {
+		if n, parseErr := strconv.Atoi(p); parseErr == nil {
+			port = n
+		}
+	}
+	db = strings.TrimPrefix(u.Path, "/")
+	return
+}
+
+// effectiveHostPortDB resolves host/port/database for display in three
+// composable steps: stored fields → URL fallback → driver default port.
 // All in-memory; never written back.
 func effectiveHostPortDB(c Connection, driver string) (string, int, string) {
 	host, port, db := c.Host, c.Port, c.Database
-	if host == "" && c.URL != "" {
-		if u, err := url.Parse(c.URL); err == nil {
-			host = u.Hostname()
-			if p := u.Port(); p != "" && port == 0 {
-				if n, err := strconv.Atoi(p); err == nil {
-					port = n
-				}
-			}
-			if db == "" {
-				db = strings.TrimPrefix(u.Path, "/")
-			}
+	if host == "" {
+		fbHost, fbPort, fbDB := parseURLFallback(c.URL)
+		host = fbHost
+		if port == 0 {
+			port = fbPort
+		}
+		if db == "" {
+			db = fbDB
 		}
 	}
 	if port == 0 {
