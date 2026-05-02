@@ -136,63 +136,24 @@ func registerAdd(parent *cobra.Command) {
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
-
-			var options map[string]string
+			in := addInputs{
+				Alias: alias, DriverFlag: driverFlag,
+				Host: host, Port: port, Database: database,
+				Path: path, URL: url,
+				Account: account, Warehouse: warehouse, Role: role, Schema: schema,
+				CredName: credName, OptionFlags: optionFlags,
+			}
 			if len(args) > 1 {
-				parsed := parseConnectionString(args[1])
-				// Explicit flag wins over connection-string parse on conflict.
-				if driverFlag == "" {
-					driverFlag = parsed.Driver
-				}
-				if host == "" {
-					host = parsed.Host
-				}
-				if port == "" {
-					port = parsed.Port
-				}
-				if database == "" {
-					database = parsed.Database
-				}
-				if path == "" {
-					path = parsed.Path
-				}
-				if url == "" {
-					url = parsed.URL
-				}
-				if account == "" {
-					account = parsed.Account
-				}
-				if warehouse == "" {
-					warehouse = parsed.Warehouse
-				}
-				if role == "" {
-					role = parsed.Role
-				}
-				if schema == "" {
-					schema = parsed.Schema
-				}
-				options = parsed.Options
-			}
-			optsFromFlags, err := parseOptionFlags(optionFlags)
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-			for k, v := range optsFromFlags {
-				if options == nil {
-					options = make(map[string]string)
-				}
-				options[k] = v
+				in.ConnString = args[1]
 			}
 
-			cleanedURL, warning, err := rejectEmbeddedCreds(url, alias, credName, "connection string")
+			conn, warnings, err := buildConnectionFromAddArgs(in)
 			if err != nil {
 				output.WriteError(os.Stderr, err)
 				return err
 			}
-			url = cleanedURL
-			if warning != "" {
-				fmt.Fprint(os.Stderr, warning)
+			for _, w := range warnings {
+				fmt.Fprint(os.Stderr, w)
 			}
 
 			if credName != "" {
@@ -203,60 +164,18 @@ func registerAdd(parent *cobra.Command) {
 					if len(names) > 0 {
 						listing = strings.Join(names, ", ")
 					}
-					output.WriteError(os.Stderr, fmt.Errorf(
+					credErr := fmt.Errorf(
 						"credential %q not found. Available: %s. Run: agent-sql credential add <alias> --username <user> --password <pass>",
 						credName, listing,
-					))
-					return nil
+					)
+					output.WriteError(os.Stderr, credErr)
+					return credErr
 				}
-			}
-
-			resolvedDriver := resolveDriver(driverFlag, url, path)
-			if resolvedDriver == "" {
-				output.WriteError(os.Stderr, fmt.Errorf(
-					"cannot determine driver. Use --driver pg|cockroachdb|sqlite|duckdb|mysql|mariadb|snowflake|mssql, a connection URL, or a file path for SQLite",
-				))
-				return nil
-			}
-
-			absPath := path
-			if absPath != "" {
-				var err error
-				absPath, err = filepath.Abs(absPath)
-				if err != nil {
-					output.WriteError(os.Stderr, err)
-					return nil
-				}
-			}
-
-			portNum := 0
-			if port != "" {
-				var err error
-				portNum, err = strconv.Atoi(port)
-				if err != nil {
-					output.WriteError(os.Stderr, fmt.Errorf("invalid port: %s", port))
-					return nil
-				}
-			}
-
-			conn := config.Connection{
-				Driver:     resolvedDriver,
-				Host:       host,
-				Port:       portNum,
-				Database:   database,
-				Path:       absPath,
-				URL:        url,
-				Credential: credName,
-				Account:    account,
-				Warehouse:  warehouse,
-				Role:       role,
-				Schema:     schema,
-				Options:    options,
 			}
 
 			if err := config.StoreConnection(alias, conn); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			if setDefault {
