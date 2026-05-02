@@ -17,6 +17,66 @@ import (
 
 // -- Read-only guard tests ----------------------------------------------------
 
+func TestParseURL(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want ParsedURL
+	}{
+		{
+			"full URL",
+			"snowflake://acct/MYDB/PUBLIC?warehouse=COMPUTE_WH&role=ANALYST&query_tag=foo",
+			ParsedURL{Account: "acct", Database: "MYDB", Schema: "PUBLIC", Warehouse: "COMPUTE_WH", Role: "ANALYST", Options: map[string]string{"query_tag": "foo"}},
+		},
+		{
+			"minimal",
+			"snowflake://myaccount/DB",
+			ParsedURL{Account: "myaccount", Database: "DB"},
+		},
+		{
+			"account only",
+			"snowflake://acct",
+			ParsedURL{Account: "acct"},
+		},
+		{
+			"warehouse and role lifted out of options",
+			"snowflake://a/d?warehouse=W&role=R&extra=X",
+			ParsedURL{Account: "a", Database: "d", Warehouse: "W", Role: "R", Options: map[string]string{"extra": "X"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseURL(tc.in)
+			if err != nil {
+				t.Fatalf("err: %v", err)
+			}
+			if got.Account != tc.want.Account {
+				t.Errorf("Account = %q, want %q", got.Account, tc.want.Account)
+			}
+			if got.Database != tc.want.Database {
+				t.Errorf("Database = %q, want %q", got.Database, tc.want.Database)
+			}
+			if got.Schema != tc.want.Schema {
+				t.Errorf("Schema = %q, want %q", got.Schema, tc.want.Schema)
+			}
+			if got.Warehouse != tc.want.Warehouse {
+				t.Errorf("Warehouse = %q, want %q", got.Warehouse, tc.want.Warehouse)
+			}
+			if got.Role != tc.want.Role {
+				t.Errorf("Role = %q, want %q", got.Role, tc.want.Role)
+			}
+			if len(got.Options) != len(tc.want.Options) {
+				t.Errorf("Options len = %d, want %d (got %v want %v)", len(got.Options), len(tc.want.Options), got.Options, tc.want.Options)
+			}
+			for k, v := range tc.want.Options {
+				if got.Options[k] != v {
+					t.Errorf("Options[%q] = %q, want %q", k, got.Options[k], v)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateReadOnly(t *testing.T) {
 	allowed := []struct {
 		sql  string

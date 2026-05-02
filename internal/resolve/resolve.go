@@ -303,26 +303,19 @@ func connectMysqlLikeConfig(d driver.Driver, conn *config.Connection, cred *cred
 }
 
 func connectSnowflakeURL(connStr string) (driver.Connection, error) {
-	u, err := url.Parse(connStr)
-	if err != nil {
-		return nil, err
-	}
 	token := os.Getenv("AGENT_SQL_SNOWFLAKE_TOKEN")
 	if token == "" {
 		return nil, errors.New("Ad-hoc Snowflake connections require AGENT_SQL_SNOWFLAKE_TOKEN.", errors.FixableByHuman)
 	}
-	parts := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)
-	var db, schema string
-	if len(parts) > 0 {
-		db = parts[0]
-	}
-	if len(parts) > 1 {
-		schema = parts[1]
+	parsed, err := snowflake.ParseURL(connStr)
+	if err != nil {
+		return nil, err
 	}
 	return snowflake.Connect(snowflake.Opts{
-		Account: u.Hostname(), Database: db, Schema: schema,
-		Warehouse: u.Query().Get("warehouse"), Role: u.Query().Get("role"),
+		Account: parsed.Account, Database: parsed.Database, Schema: parsed.Schema,
+		Warehouse: parsed.Warehouse, Role: parsed.Role,
 		Token: token, Readonly: true,
+		Options: parsed.Options,
 	})
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
+	"github.com/shhac/agent-sql/internal/driver/snowflake"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 )
 
@@ -152,38 +153,18 @@ func parseConnectionString(connStr string) parsedConnString {
 
 func parseSnowflakeURL(connStr string) parsedConnString {
 	p := parsedConnString{URL: connStr}
-	// snowflake://account/database/schema?warehouse=WH&role=ROLE&query_tag=...
-	trimmed := strings.TrimPrefix(connStr, "snowflake://")
-	parts := strings.SplitN(trimmed, "?", 2)
-	pathParts := strings.Split(parts[0], "/")
-	if len(pathParts) > 0 {
-		p.Account = pathParts[0]
+	parsed, err := snowflake.ParseURL(connStr)
+	if err != nil {
+		// Malformed URL: fall back to URL-only storage. The driver will
+		// surface the parse error at connect time.
+		return p
 	}
-	if len(pathParts) > 1 {
-		p.Database = pathParts[1]
-	}
-	if len(pathParts) > 2 {
-		p.Schema = pathParts[2]
-	}
-	if len(parts) > 1 {
-		for _, param := range strings.Split(parts[1], "&") {
-			kv := strings.SplitN(param, "=", 2)
-			if len(kv) != 2 {
-				continue
-			}
-			switch strings.ToLower(kv[0]) {
-			case "warehouse":
-				p.Warehouse = kv[1]
-			case "role":
-				p.Role = kv[1]
-			default:
-				if p.Options == nil {
-					p.Options = make(map[string]string)
-				}
-				p.Options[kv[0]] = kv[1]
-			}
-		}
-	}
+	p.Account = parsed.Account
+	p.Database = parsed.Database
+	p.Schema = parsed.Schema
+	p.Warehouse = parsed.Warehouse
+	p.Role = parsed.Role
+	p.Options = parsed.Options
 	return p
 }
 
