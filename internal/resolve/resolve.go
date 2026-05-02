@@ -230,13 +230,33 @@ func connectDuckDbAdHoc(ctx context.Context, path string) (driver.Connection, er
 	return duckdb.Connect(ctx, duckdb.Opts{Path: dbPath, Readonly: true})
 }
 
-func connectPgLikeConfig(ctx context.Context, d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
+// requireUserPass returns a FixableByHuman error if cred is missing
+// either username or password. Used by host:port drivers that auth via
+// user/pass (pg, cockroachdb, mysql, mariadb, mssql).
+func requireUserPass(cred *credential.Credential, label string) error {
 	if cred == nil || cred.Username == "" || cred.Password == "" {
-		label := "PostgreSQL"
-		if d == driver.DriverCockroachDB {
-			label = "CockroachDB"
-		}
-		return nil, errors.New(fmt.Sprintf("%s requires a credential.", label), errors.FixableByHuman)
+		return errors.New(label+" requires a credential.", errors.FixableByHuman)
+	}
+	return nil
+}
+
+// requirePassword returns a FixableByHuman error if cred has no
+// password component. Used by token-only drivers (snowflake PAT). The
+// caller supplies the full message because token wording varies.
+func requirePassword(cred *credential.Credential, message string) error {
+	if cred == nil || cred.Password == "" {
+		return errors.New(message, errors.FixableByHuman)
+	}
+	return nil
+}
+
+func connectPgLikeConfig(ctx context.Context, d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
+	label := "PostgreSQL"
+	if d == driver.DriverCockroachDB {
+		label = "CockroachDB"
+	}
+	if err := requireUserPass(cred, label); err != nil {
+		return nil, err
 	}
 	defaultPort, defaultDB := 5432, "postgres"
 	if d == driver.DriverCockroachDB {
@@ -266,16 +286,12 @@ func connectMysqlLikeURL(d driver.Driver, connStr string) (driver.Connection, er
 }
 
 func connectMysqlLikeConfig(d driver.Driver, conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	if cred == nil || cred.Username == "" || cred.Password == "" {
-		label := "MySQL"
-		if d == driver.DriverMariaDB {
-			label = "MariaDB"
-		}
-		return nil, errors.New(fmt.Sprintf("%s requires a credential.", label), errors.FixableByHuman)
-	}
-	variant := "mysql"
+	label, variant := "MySQL", "mysql"
 	if d == driver.DriverMariaDB {
-		variant = "mariadb"
+		label, variant = "MariaDB", "mariadb"
+	}
+	if err := requireUserPass(cred, label); err != nil {
+		return nil, err
 	}
 	return mysql.Connect(mysql.Opts{
 		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, 3306),
@@ -311,8 +327,8 @@ func connectSnowflakeURL(connStr string) (driver.Connection, error) {
 }
 
 func connectSnowflakeConfig(conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	if cred == nil || cred.Password == "" {
-		return nil, errors.New("Snowflake requires a PAT credential.", errors.FixableByHuman)
+	if err := requirePassword(cred, "Snowflake requires a PAT credential."); err != nil {
+		return nil, err
 	}
 	return snowflake.Connect(snowflake.Opts{
 		Account: conn.Account, Database: conn.Database, Schema: conn.Schema,
@@ -334,8 +350,8 @@ func connectMssqlURL(connStr string) (driver.Connection, error) {
 }
 
 func connectMssqlConfig(conn *config.Connection, cred *credential.Credential, readonly bool) (driver.Connection, error) {
-	if cred == nil || cred.Username == "" || cred.Password == "" {
-		return nil, errors.New("MSSQL requires a credential.", errors.FixableByHuman)
+	if err := requireUserPass(cred, "MSSQL"); err != nil {
+		return nil, err
 	}
 	return mssql.Connect(mssql.Opts{
 		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, 1433),
