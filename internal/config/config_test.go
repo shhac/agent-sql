@@ -385,6 +385,21 @@ func TestDisplayURLAppendsOptions(t *testing.T) {
 			Connection{Driver: "pg", Host: "h", Database: "d", Options: map[string]string{"options": "-csearch_path=public"}},
 			"postgres://h:5432/d?options=-csearch_path%3Dpublic",
 		},
+		{
+			"empty-string option value renders as key=",
+			Connection{Driver: "pg", Host: "h", Database: "d", Options: map[string]string{"sslmode": ""}},
+			"postgres://h:5432/d?sslmode=",
+		},
+		{
+			"key with reserved char URL-encodes the key",
+			Connection{Driver: "pg", Host: "h", Database: "d", Options: map[string]string{"app name": "agent-sql"}},
+			"postgres://h:5432/d?app+name=agent-sql",
+		},
+		{
+			"nil options behaves like empty map",
+			Connection{Driver: "pg", Host: "h", Database: "d", Options: nil},
+			"postgres://h:5432/d",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
