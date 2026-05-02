@@ -304,6 +304,33 @@ func TestEffectiveHost(t *testing.T) {
 	}
 }
 
+func TestEffectivePort(t *testing.T) {
+	cases := []struct {
+		name string
+		conn Connection
+		want int
+	}{
+		{"pg stored port wins", Connection{Driver: "pg", Host: "h", Port: 6543}, 6543},
+		{"pg default 5432", Connection{Driver: "pg", Host: "h"}, 5432},
+		{"pg port from URL", Connection{Driver: "pg", URL: "postgres://h:7000/d"}, 7000},
+		{"pg URL no port falls back to default", Connection{Driver: "pg", URL: "postgres://h/d"}, 5432},
+		{"cockroachdb default 26257", Connection{Driver: "cockroachdb", Host: "h"}, 26257},
+		{"mysql default 3306", Connection{Driver: "mysql", Host: "h"}, 3306},
+		{"mariadb default 3306", Connection{Driver: "mariadb", Host: "h"}, 3306},
+		{"mssql default 1433", Connection{Driver: "mssql", Host: "h"}, 1433},
+		{"sqlite has no port", Connection{Driver: "sqlite", Path: "/tmp/x.db"}, 0},
+		{"duckdb has no port", Connection{Driver: "duckdb"}, 0},
+		{"snowflake has no port", Connection{Driver: "snowflake", Account: "a"}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.conn.EffectivePort(); got != tc.want {
+				t.Errorf("EffectivePort() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCorruptJSONReturnsDefaultConfig(t *testing.T) {
 	dir := t.TempDir()
 	SetConfigDir(dir)

@@ -30,7 +30,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 ## Connection (read-only for agents)
 
 - `agent-sql connection add <alias> [connection-string] [--credential <name>] [--driver --host ...]` — (human-only) save a connection. The optional connection-string positional argument (URL or file path) auto-detects driver and parses host/port/database. Flags override parsed values. Examples: `connection add mydb postgres://localhost:5432/myapp --credential pg-cred`, `connection add local ./data.db`.
-- `agent-sql connection list` — list all saved connections with `alias`, `driver`, `display_url`, `host`/`database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target (per-driver default ports applied; never includes credentials). `host` is the effective host — backfilled from a stored URL if needed; Snowflake reports its account; SQLite/DuckDB omit it. Raw storage fields (port/path/url) are not emitted.
+- `agent-sql connection list` — list all saved connections with `alias`, `driver`, `display_url`, `host`/`port`/`database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target (per-driver default ports applied; never includes credentials). `host` and `port` are the effective values (URL-backfilled if needed; default port applied for host-port drivers). Snowflake reports its account as `host` and omits `port`; SQLite/DuckDB omit both. Raw storage fields (path/url) are not emitted.
 - `agent-sql connection test [-c <alias>]` — test connectivity (no alias = test default connection)
 
 ## Credential (human-only mutation)

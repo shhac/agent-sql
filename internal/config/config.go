@@ -386,6 +386,18 @@ func (c Connection) EffectiveHost() string {
 	return ""
 }
 
+// EffectivePort returns the connect-time port for host-port drivers: stored
+// Port, then parsed from URL, then the per-driver default. Returns 0 for
+// drivers without a port (sqlite, duckdb, snowflake).
+func (c Connection) EffectivePort() int {
+	switch c.Driver {
+	case "pg", "cockroachdb", "mysql", "mariadb", "mssql":
+		_, port, _ := effectiveHostPortDB(c, c.Driver)
+		return port
+	}
+	return 0
+}
+
 func hostPortDBURL(scheme, host string, port int, database string) string {
 	u := scheme + "://"
 	if host != "" {

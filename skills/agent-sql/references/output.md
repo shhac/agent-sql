@@ -207,7 +207,7 @@ Combines tables, columns, indexes, and constraints in one response. Same structu
 
 ## Connection list (`connection list`)
 
-Each entry shows `alias`, `driver`, `display_url`, plus `host`/`database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target — it includes the per-driver default port (5432, 26257, 3306, 1433) so the URL reflects what would actually be used at connect time. `host` is the effective host (Snowflake reports its account here; SQLite/DuckDB omit it). Raw storage fields (`port`, `path`, `url`) are not emitted.
+Each entry shows `alias`, `driver`, `display_url`, plus `host`/`port`/`database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target — it includes the per-driver default port (5432, 26257, 3306, 1433) so the URL reflects what would actually be used at connect time. `host` and `port` are the effective values (URL-backfilled if needed; default port applied for host-port drivers). Snowflake reports its account as `host` and omits `port`; SQLite/DuckDB omit both. Raw storage fields (`path`, `url`) are not emitted.
 
 ```json
 {
@@ -223,6 +223,7 @@ Each entry shows `alias`, `driver`, `display_url`, plus `host`/`database`/`crede
       "driver": "pg",
       "display_url": "postgres://db.example.com:5432/myapp",
       "host": "db.example.com",
+      "port": 5432,
       "database": "myapp",
       "credential": "prod-readonly"
     },
@@ -239,6 +240,7 @@ Each entry shows `alias`, `driver`, `display_url`, plus `host`/`database`/`crede
       "driver": "mssql",
       "display_url": "mssql://sqlhost:1433/reporting",
       "host": "sqlhost",
+      "port": 1433,
       "database": "reporting",
       "credential": "mssql-readonly"
     }

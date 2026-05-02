@@ -344,9 +344,9 @@ func registerRemove(parent *cobra.Command) {
 
 // renderConnection builds the per-row map for `connection list`. Keeps only
 // the fields a human/agent needs to identify a connection; raw storage fields
-// (port/path/url) are intentionally omitted -- display_url is the canonical
-// view. Defensive: a panic while rendering one row reduces to a minimal
-// entry so the rest of the list still prints.
+// (path/url) are intentionally omitted -- display_url is the canonical view.
+// Defensive: a panic while rendering one row reduces to a minimal entry so
+// the rest of the list still prints.
 func renderConnection(alias string, conn config.Connection, isDefault bool) (out map[string]any) {
 	out = map[string]any{
 		"alias":   alias,
@@ -366,6 +366,9 @@ func renderConnection(alias string, conn config.Connection, isDefault bool) (out
 	out["display_url"] = conn.DisplayURL()
 	if host := conn.EffectiveHost(); host != "" {
 		out["host"] = host
+	}
+	if port := conn.EffectivePort(); port != 0 {
+		out["port"] = port
 	}
 	if conn.Database != "" {
 		out["database"] = conn.Database
