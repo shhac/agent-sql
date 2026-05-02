@@ -1,12 +1,24 @@
 package mssql
 
 import (
+	stderrors "errors"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/errors"
 )
 
 func classifyError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Already classified -- pass through unchanged so re-wrapping
+	// doesn't lose the original FixableBy classification.
+	var qerr *errors.QueryError
+	if stderrors.As(err, &qerr) {
+		return qerr
+	}
+
 	msg := err.Error()
 
 	// Login failed

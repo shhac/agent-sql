@@ -4,6 +4,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
 	"net/url"
 	"strings"
 
@@ -127,6 +128,17 @@ func (c *sqliteConn) Close() error {
 }
 
 func classifyError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Already classified -- pass through unchanged so re-wrapping
+	// doesn't lose the original FixableBy classification.
+	var qerr *errors.QueryError
+	if stderrors.As(err, &qerr) {
+		return qerr
+	}
+
 	msg := err.Error()
 	if strings.Contains(msg, "attempt to write a readonly database") {
 		return errors.New(msg, errors.FixableByHuman).

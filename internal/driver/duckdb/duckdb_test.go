@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -664,7 +665,7 @@ func TestErrorClassification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.message, func(t *testing.T) {
-			err := classifyError(tt.message)
+			err := classifyError(stderrors.New(tt.message))
 			var qerr *errors.QueryError
 			if !errors.As(err, &qerr) {
 				t.Fatalf("expected QueryError, got %T", err)

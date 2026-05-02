@@ -13,6 +13,13 @@ func classifyError(err error) error {
 		return nil
 	}
 
+	// Already classified -- pass through unchanged so re-wrapping
+	// doesn't lose the original FixableBy classification.
+	var qerr *errors.QueryError
+	if stderrors.As(err, &qerr) {
+		return qerr
+	}
+
 	// Check for MySQL-specific error numbers
 	var mysqlErr *gomysql.MySQLError
 	if stderrors.As(err, &mysqlErr) {

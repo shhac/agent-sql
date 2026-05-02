@@ -3,6 +3,7 @@ package duckdb
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ func (c *duckdbConn) exec(ctx context.Context, sql string) ([]map[string]any, er
 		if msg == "" {
 			msg = "DuckDB query failed"
 		}
-		return nil, classifyError(msg)
+		return nil, classifyError(stderrors.New(msg))
 	}
 
 	// Forward DuckDB warnings to os.Stderr
@@ -61,7 +62,7 @@ func (c *duckdbConn) execWrite(ctx context.Context, sql string) error {
 		if msg == "" {
 			msg = "DuckDB query failed"
 		}
-		return classifyError(msg)
+		return classifyError(stderrors.New(msg))
 	}
 	return nil
 }

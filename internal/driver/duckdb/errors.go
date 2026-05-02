@@ -1,12 +1,25 @@
 package duckdb
 
 import (
+	stderrors "errors"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/errors"
 )
 
-func classifyError(message string) error {
+func classifyError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Already classified -- pass through unchanged so re-wrapping
+	// doesn't lose the original FixableBy classification.
+	var qerr *errors.QueryError
+	if stderrors.As(err, &qerr) {
+		return qerr
+	}
+
+	message := err.Error()
 	firstLine := message
 	if idx := strings.Index(message, "\n"); idx >= 0 {
 		firstLine = message[:idx]
