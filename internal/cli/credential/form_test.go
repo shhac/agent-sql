@@ -182,7 +182,6 @@ func TestCredentialAddFormDoesNotLeakSecretToStdout(t *testing.T) {
 	defer dialog.SetDefault(rec)()
 
 	stdout, restore := captureStdout(t)
-	defer restore()
 
 	root := &cobra.Command{Use: "agent-sql"}
 	Register(root)
@@ -190,7 +189,9 @@ func TestCredentialAddFormDoesNotLeakSecretToStdout(t *testing.T) {
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 
-	if err := root.Execute(); err != nil {
+	err := root.Execute()
+	restore()
+	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	captured := stdout.String()
