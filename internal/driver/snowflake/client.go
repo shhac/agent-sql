@@ -27,16 +27,20 @@ var pollIntervals = []time.Duration{
 const maxRetries = 3
 
 func (c *snowflakeConn) executeStatement(ctx context.Context, sqlStr string, binds map[string]binding) (*apiResponse, error) {
+	params := make(map[string]string, len(c.options)+1)
+	for k, v := range c.options {
+		params[k] = v
+	}
+	params["MULTI_STATEMENT_COUNT"] = "1" // safety: always last, never user-overridable
+
 	req := statementRequest{
-		Statement: sqlStr,
-		Timeout:   45,
-		Database:  c.database,
-		Schema:    c.schema,
-		Warehouse: c.warehouse,
-		Role:      c.role,
-		Parameters: map[string]string{
-			"MULTI_STATEMENT_COUNT": "1",
-		},
+		Statement:  sqlStr,
+		Timeout:    45,
+		Database:   c.database,
+		Schema:     c.schema,
+		Warehouse:  c.warehouse,
+		Role:       c.role,
+		Parameters: params,
 	}
 	if len(binds) > 0 {
 		req.Bindings = binds

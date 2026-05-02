@@ -24,6 +24,12 @@ type Opts struct {
 	Token     string // PAT secret
 	Readonly  bool
 	BaseURL   string // override API base URL (for testing with mock servers)
+	// Options are session parameters threaded into every statement's
+	// `parameters` field on the REST v2 endpoint (e.g. QUERY_TAG,
+	// TIMEZONE, STATEMENT_TIMEOUT_IN_SECONDS). Pass-through: Snowflake
+	// rejects unknown parameters at execution time. The MULTI_STATEMENT_COUNT
+	// safety value is always forced to 1; user input cannot override it.
+	Options map[string]string
 }
 
 // Connect creates a new Snowflake connection via the SQL REST API v2.
@@ -53,6 +59,7 @@ func Connect(opts Opts) (driver.Connection, error) {
 		role:          opts.Role,
 		readonly:      opts.Readonly,
 		defaultSchema: defaultSchema,
+		options:       opts.Options,
 		client:        &http.Client{Timeout: 60 * time.Second},
 	}, nil
 }
@@ -66,6 +73,7 @@ type snowflakeConn struct {
 	role          string
 	readonly      bool
 	defaultSchema string
+	options       map[string]string
 	client        *http.Client
 }
 

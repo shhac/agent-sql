@@ -318,6 +318,7 @@ func connectSnowflakeConfig(conn *config.Connection, cred *credential.Credential
 		Account: conn.Account, Database: conn.Database, Schema: conn.Schema,
 		Warehouse: conn.Warehouse, Role: conn.Role,
 		Token: cred.Password, Readonly: readonly,
+		Options: conn.Options,
 	})
 }
 

@@ -405,6 +405,77 @@ func TestSortByKeySequence(t *testing.T) {
 	}
 }
 
+// TestExecuteStatementMergesOptions verifies that snowflakeConn.options are
+// passed through as Parameters on every request, alongside the forced
+// MULTI_STATEMENT_COUNT=1 safety value.
+func TestExecuteStatementMergesOptions(t *testing.T) {
+	scale0 := 0
+	successResp := apiResponse{
+		Code:              "090001",
+		StatementHandle:   "h",
+		ResultSetMetaData: &resultMetadata{NumRows: 0, RowType: []columnType{{Name: "X", Type: "fixed", Scale: &scale0}}},
+		Data:              [][]*string{},
+	}
+	var capturedParams map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req statementRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		capturedParams = req.Parameters
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(successResp)
+	}))
+	defer server.Close()
+
+	conn := &snowflakeConn{
+		baseURL: server.URL,
+		token:   "tok",
+		options: map[string]string{"QUERY_TAG": "agent-sql", "TIMEZONE": "UTC"},
+		client:  server.Client(),
+	}
+	if _, err := conn.executeStatement(context.Background(), "SELECT 1", nil); err != nil {
+		t.Fatalf("executeStatement: %v", err)
+	}
+	if capturedParams["QUERY_TAG"] != "agent-sql" {
+		t.Errorf("QUERY_TAG = %q, want agent-sql", capturedParams["QUERY_TAG"])
+	}
+	if capturedParams["TIMEZONE"] != "UTC" {
+		t.Errorf("TIMEZONE = %q, want UTC", capturedParams["TIMEZONE"])
+	}
+	if capturedParams["MULTI_STATEMENT_COUNT"] != "1" {
+		t.Errorf("MULTI_STATEMENT_COUNT must remain 1, got %q", capturedParams["MULTI_STATEMENT_COUNT"])
+	}
+}
+
+// TestExecuteStatementOptionsCannotOverrideSafety ensures user options can't
+// disable our MULTI_STATEMENT_COUNT=1 safety.
+func TestExecuteStatementOptionsCannotOverrideSafety(t *testing.T) {
+	scale0 := 0
+	successResp := apiResponse{
+		Code:              "090001",
+		ResultSetMetaData: &resultMetadata{RowType: []columnType{{Name: "X", Type: "fixed", Scale: &scale0}}},
+	}
+	var capturedParams map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req statementRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		capturedParams = req.Parameters
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(successResp)
+	}))
+	defer server.Close()
+
+	conn := &snowflakeConn{
+		baseURL: server.URL,
+		token:   "tok",
+		options: map[string]string{"MULTI_STATEMENT_COUNT": "5"},
+		client:  server.Client(),
+	}
+	_, _ = conn.executeStatement(context.Background(), "SELECT 1", nil)
+	if capturedParams["MULTI_STATEMENT_COUNT"] != "1" {
+		t.Errorf("user override leaked through; MULTI_STATEMENT_COUNT = %q, want 1", capturedParams["MULTI_STATEMENT_COUNT"])
+	}
+}
+
 // -- Mock HTTP server tests ---------------------------------------------------
 
 func TestQueryWithMockServer(t *testing.T) {
