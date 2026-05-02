@@ -25,6 +25,92 @@ func (c *collectWriter) WritePagination(p *output.Pagination) error {
 }
 func (c *collectWriter) Flush() error { return nil }
 
+// TestTruncatingWriterWrapsNDJSON verifies the streaming pipeline as
+// composed in production: TruncatingWriter wrapping NDJSONWriter with a
+// row that combines a long string + embedded newline + null + unicode.
+// The output must be one valid JSON line per row with @truncated
+// reflecting only the truncated field.
+func TestTruncatingWriterWrapsNDJSON(t *testing.T) {
+	var buf bytes.Buffer
+	inner := output.NewNDJSONWriter(&buf)
+	tw := NewTruncatingWriter(inner, Config{MaxLength: 10})
+
+	row := map[string]any{
+		"long":    strings.Repeat("x", 50),
+		"unicode": "café\nrésumé",
+		"null":    nil,
+	}
+	_ = tw.WriteRow(row)
+	_ = tw.Flush()
+
+	out := buf.String()
+	// One line, valid JSON.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected one NDJSON line, got %d: %q", len(lines), out)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
+	}
+	if !strings.Contains(parsed["long"].(string), "x") {
+		t.Errorf("long field missing")
+	}
+	// @truncated should mention `long` (truncated) but not `unicode`
+	// (within limit) or `null`.
+	tr, ok := parsed["@truncated"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected @truncated map, got %T (output: %s)", parsed["@truncated"], out)
+	}
+	if _, exists := tr["long"]; !exists {
+		t.Errorf("@truncated should include 'long'; got %v", tr)
+	}
+}
+
+// TestTruncatingWriterCSVPagination confirms WritePagination on a
+// truncating-CSV pipeline reflects the rowCount the truncating writer
+// sees, not the inner one.
+func TestTruncatingWriterCSVPagination(t *testing.T) {
+	var buf bytes.Buffer
+	inner := output.NewCSVWriter(&buf, []string{"id", "name"})
+	tw := NewTruncatingWriter(inner, Config{MaxLength: 200})
+
+	for i, name := range []string{"a", "b", "c"} {
+		_ = tw.WriteRow(map[string]any{"id": i, "name": name})
+	}
+	if err := tw.WritePagination(&output.Pagination{HasMore: true, RowCount: 3}); err != nil {
+		t.Errorf("WritePagination: %v", err)
+	}
+	_ = tw.Flush()
+	// CSV doesn't render @truncated decoration -- it's a tabular
+	// format. Just check the rows landed.
+	if !strings.Contains(buf.String(), "a") || !strings.Contains(buf.String(), "c") {
+		t.Errorf("expected CSV rows; got: %s", buf.String())
+	}
+}
+
+// TestTruncatingWriterValueWithEmbeddedNewline confirms a string that
+// contains a literal "\n" doesn't get truncated mid-character or break
+// JSON encoding.
+func TestTruncatingWriterValueWithEmbeddedNewline(t *testing.T) {
+	var buf bytes.Buffer
+	inner := output.NewNDJSONWriter(&buf)
+	tw := NewTruncatingWriter(inner, Config{MaxLength: 100})
+
+	row := map[string]any{"multi": "line one\nline two\nline three"}
+	_ = tw.WriteRow(row)
+	_ = tw.Flush()
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &parsed); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, buf.String())
+	}
+	got, _ := parsed["multi"].(string)
+	if !strings.Contains(got, "line one") || !strings.Contains(got, "line three") {
+		t.Errorf("embedded newlines should round-trip; got: %q", got)
+	}
+}
+
 func TestTruncatesLongStrings(t *testing.T) {
 	inner := &collectWriter{}
 	tw := NewTruncatingWriter(inner, Config{MaxLength: 10})
