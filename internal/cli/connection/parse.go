@@ -1,11 +1,31 @@
 package connection
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
 )
+
+// parseOptionFlags converts repeated "key=value" CLI flag values into a map.
+// Values may legitimately contain '='; only the first '=' separates the key.
+// Empty keys, missing '=', and duplicate keys (last wins, with a stable
+// final state) all return a clear error.
+func parseOptionFlags(flags []string) (map[string]string, error) {
+	if len(flags) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(flags))
+	for _, raw := range flags {
+		eq := strings.IndexByte(raw, '=')
+		if eq <= 0 {
+			return nil, fmt.Errorf("--option %q must be key=value", raw)
+		}
+		out[raw[:eq]] = raw[eq+1:]
+	}
+	return out, nil
+}
 
 // stripURLCredentials returns the URL with any embedded user:pass@ removed.
 // hadCreds reports whether userinfo was present; user reports the username
@@ -45,7 +65,7 @@ func resolveDriver(driverFlag, url, path string) string {
 	return ""
 }
 
-func parseConnectionString(connStr string, driverFlag, host, port, database, path, url, account, warehouse, role, schema *string) {
+func parseConnectionString(connStr string, driverFlag, host, port, database, path, url, account, warehouse, role, schema *string, options *map[string]string) {
 	lower := strings.ToLower(connStr)
 
 	// DuckDB file extensions
@@ -79,15 +99,15 @@ func parseConnectionString(connStr string, driverFlag, host, port, database, pat
 	case driver.DriverDuckDB:
 		*path = strings.TrimPrefix(connStr, "duckdb://")
 	case driver.DriverSnowflake:
-		parseSnowflakeURL(connStr, url, account, database, schema, warehouse, role)
+		parseSnowflakeURL(connStr, url, account, database, schema, warehouse, role, options)
 	default:
-		parseGenericURL(connStr, url, host, port, database)
+		parseGenericURL(connStr, url, host, port, database, options)
 	}
 }
 
-func parseSnowflakeURL(connStr string, url, account, database, schema, warehouse, role *string) {
-	*url = connStr
-	// snowflake://account/database/schema?warehouse=WH&role=ROLE
+func parseSnowflakeURL(connStr string, urlOut, account, database, schema, warehouse, role *string, options *map[string]string) {
+	*urlOut = connStr
+	// snowflake://account/database/schema?warehouse=WH&role=ROLE&query_tag=...
 	trimmed := strings.TrimPrefix(connStr, "snowflake://")
 	parts := strings.SplitN(trimmed, "?", 2)
 	pathParts := strings.Split(parts[0], "/")
@@ -115,13 +135,22 @@ func parseSnowflakeURL(connStr string, url, account, database, schema, warehouse
 				if *role == "" {
 					*role = kv[1]
 				}
+			default:
+				if options != nil {
+					if *options == nil {
+						*options = make(map[string]string)
+					}
+					if _, exists := (*options)[kv[0]]; !exists {
+						(*options)[kv[0]] = kv[1]
+					}
+				}
 			}
 		}
 	}
 }
 
-func parseGenericURL(connStr string, url, host, port, database *string) {
-	*url = connStr
+func parseGenericURL(connStr string, urlOut, host, port, database *string, options *map[string]string) {
+	*urlOut = connStr
 	// Strip scheme: [user:pass@]host[:port]/database
 	trimmed := connStr
 	for _, prefix := range []string{"postgres://", "postgresql://", "cockroachdb://", "mysql://", "mariadb://", "mssql://", "sqlserver://"} {
@@ -134,13 +163,27 @@ func parseGenericURL(connStr string, url, host, port, database *string) {
 	}
 	slashIdx := strings.Index(hostPart, "/")
 	if slashIdx >= 0 {
-		if *database == "" {
-			db := hostPart[slashIdx+1:]
-			if qIdx := strings.Index(db, "?"); qIdx >= 0 {
-				db = db[:qIdx]
-			}
-			if db != "" {
-				*database = db
+		dbAndQuery := hostPart[slashIdx+1:]
+		var queryStr string
+		if qIdx := strings.Index(dbAndQuery, "?"); qIdx >= 0 {
+			queryStr = dbAndQuery[qIdx+1:]
+			dbAndQuery = dbAndQuery[:qIdx]
+		}
+		if *database == "" && dbAndQuery != "" {
+			*database = dbAndQuery
+		}
+		if queryStr != "" && options != nil {
+			for _, param := range strings.Split(queryStr, "&") {
+				kv := strings.SplitN(param, "=", 2)
+				if len(kv) != 2 || kv[0] == "" {
+					continue
+				}
+				if *options == nil {
+					*options = make(map[string]string)
+				}
+				if _, exists := (*options)[kv[0]]; !exists {
+					(*options)[kv[0]] = kv[1]
+				}
 			}
 		}
 		hostPart = hostPart[:slashIdx]

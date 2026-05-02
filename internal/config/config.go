@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,17 +15,18 @@ import (
 
 // Connection represents a saved database connection.
 type Connection struct {
-	Driver     string `json:"driver"`
-	Host       string `json:"host,omitempty"`
-	Port       int    `json:"port,omitempty"`
-	Database   string `json:"database,omitempty"`
-	Path       string `json:"path,omitempty"`
-	URL        string `json:"url,omitempty"`
-	Credential string `json:"credential,omitempty"`
-	Account    string `json:"account,omitempty"`
-	Warehouse  string `json:"warehouse,omitempty"`
-	Role       string `json:"role,omitempty"`
-	Schema     string `json:"schema,omitempty"`
+	Driver     string            `json:"driver"`
+	Host       string            `json:"host,omitempty"`
+	Port       int               `json:"port,omitempty"`
+	Database   string            `json:"database,omitempty"`
+	Path       string            `json:"path,omitempty"`
+	URL        string            `json:"url,omitempty"`
+	Credential string            `json:"credential,omitempty"`
+	Account    string            `json:"account,omitempty"`
+	Warehouse  string            `json:"warehouse,omitempty"`
+	Role       string            `json:"role,omitempty"`
+	Schema     string            `json:"schema,omitempty"`
+	Options    map[string]string `json:"options,omitempty"`
 }
 
 // Settings holds persistent configuration settings.
@@ -286,8 +288,21 @@ func mapToSettings(m map[string]any) Settings {
 // Never includes credentials -- only the connection target. Render-time only:
 // it backfills empty host/port/database from c.URL and applies the per-driver
 // default port so the listing reflects what would actually be used at connect
-// time. Storage is not modified.
+// time. Stored Options are appended as `?key=value&...` (alphabetized) for
+// URL-form drivers. Storage is not modified.
 func (c Connection) DisplayURL() string {
+	base := c.displayBase()
+	if c.Driver == "duckdb" {
+		// duckdb has no URL form; never append a query string.
+		return base
+	}
+	if q := optionsQueryString(c.Options); q != "" {
+		return base + "?" + q
+	}
+	return base
+}
+
+func (c Connection) displayBase() string {
 	switch c.Driver {
 	case "sqlite":
 		if c.Path != "" {
@@ -329,6 +344,24 @@ func (c Connection) DisplayURL() string {
 	default:
 		return c.Driver + "://"
 	}
+}
+
+// optionsQueryString renders an options map as a deterministically-ordered
+// `key=value&...` string (URL-encoded). Empty map → "".
+func optionsQueryString(opts map[string]string) string {
+	if len(opts) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(opts))
+	for k := range opts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	v := url.Values{}
+	for _, k := range keys {
+		v.Set(k, opts[k])
+	}
+	return v.Encode()
 }
 
 // defaultPort returns the connect-time default port for a host/port-style

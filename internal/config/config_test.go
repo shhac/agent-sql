@@ -304,6 +304,77 @@ func TestEffectiveHost(t *testing.T) {
 	}
 }
 
+func TestOptionsRoundTrip(t *testing.T) {
+	setup(t)
+
+	original := &Config{
+		Connections: map[string]Connection{
+			"prod": {
+				Driver:   "pg",
+				Host:     "h",
+				Database: "d",
+				Options:  map[string]string{"sslmode": "require", "application_name": "agent-sql"},
+			},
+		},
+		Settings: Settings{},
+	}
+	if err := Write(original); err != nil {
+		t.Fatalf("Write() error: %v", err)
+	}
+	ClearCache()
+	cfg := Read()
+	got := cfg.Connections["prod"].Options
+	if got["sslmode"] != "require" || got["application_name"] != "agent-sql" {
+		t.Errorf("options round-trip lost data: %v", got)
+	}
+}
+
+func TestDisplayURLAppendsOptions(t *testing.T) {
+	cases := []struct {
+		name string
+		conn Connection
+		want string
+	}{
+		{
+			"pg with options alphabetized",
+			Connection{Driver: "pg", Host: "h", Database: "d", Options: map[string]string{"sslmode": "require", "application_name": "foo"}},
+			"postgres://h:5432/d?application_name=foo&sslmode=require",
+		},
+		{
+			"empty options omits query string",
+			Connection{Driver: "pg", Host: "h", Database: "d"},
+			"postgres://h:5432/d",
+		},
+		{
+			"duckdb never appends query string",
+			Connection{Driver: "duckdb", Path: "/tmp/x.duckdb", Options: map[string]string{"memory_limit": "4GB"}},
+			"duckdb:///tmp/x.duckdb",
+		},
+		{
+			"snowflake with options",
+			Connection{Driver: "snowflake", Account: "acct", Database: "DB", Options: map[string]string{"query_tag": "agent-sql"}},
+			"snowflake://acct/DB?query_tag=agent-sql",
+		},
+		{
+			"sqlite with PRAGMAs",
+			Connection{Driver: "sqlite", Path: "/tmp/x.db", Options: map[string]string{"_journal_mode": "wal"}},
+			"sqlite:///tmp/x.db?_journal_mode=wal",
+		},
+		{
+			"value with reserved char gets URL-encoded",
+			Connection{Driver: "pg", Host: "h", Database: "d", Options: map[string]string{"options": "-csearch_path=public"}},
+			"postgres://h:5432/d?options=-csearch_path%3Dpublic",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.conn.DisplayURL(); got != tc.want {
+				t.Errorf("DisplayURL() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEffectivePort(t *testing.T) {
 	cases := []struct {
 		name string

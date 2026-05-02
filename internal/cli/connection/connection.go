@@ -102,18 +102,19 @@ func Register(root *cobra.Command, globals func() (string, int)) {
 
 func registerAdd(parent *cobra.Command) {
 	var (
-		driverFlag string
-		host       string
-		port       string
-		database   string
-		path       string
-		url        string
-		credName   string
-		account    string
-		warehouse  string
-		role       string
-		schema     string
-		setDefault bool
+		driverFlag  string
+		host        string
+		port        string
+		database    string
+		path        string
+		url         string
+		credName    string
+		account     string
+		warehouse   string
+		role        string
+		schema      string
+		optionFlags []string
+		setDefault  bool
 	)
 
 	add := &cobra.Command{
@@ -123,8 +124,20 @@ func registerAdd(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
 
+			var options map[string]string
 			if len(args) > 1 {
-				parseConnectionString(args[1], &driverFlag, &host, &port, &database, &path, &url, &account, &warehouse, &role, &schema)
+				parseConnectionString(args[1], &driverFlag, &host, &port, &database, &path, &url, &account, &warehouse, &role, &schema, &options)
+			}
+			optsFromFlags, err := parseOptionFlags(optionFlags)
+			if err != nil {
+				output.WriteError(os.Stderr, err)
+				return err
+			}
+			for k, v := range optsFromFlags {
+				if options == nil {
+					options = make(map[string]string)
+				}
+				options[k] = v
 			}
 
 			cleanedURL, hadCreds, embeddedUser := stripURLCredentials(url)
@@ -199,6 +212,7 @@ func registerAdd(parent *cobra.Command) {
 				Warehouse:  warehouse,
 				Role:       role,
 				Schema:     schema,
+				Options:    options,
 			}
 
 			if err := config.StoreConnection(alias, conn); err != nil {
@@ -224,6 +238,7 @@ func registerAdd(parent *cobra.Command) {
 				"warehouse":  conn.Warehouse,
 				"role":       conn.Role,
 				"schema":     conn.Schema,
+				"options":    conn.Options,
 				"isDefault":  setDefault,
 				"hint":       "Test with: agent-sql connection test",
 			}, true)
@@ -241,19 +256,22 @@ func registerAdd(parent *cobra.Command) {
 	add.Flags().StringVar(&warehouse, "warehouse", "", "Snowflake warehouse")
 	add.Flags().StringVar(&role, "role", "", "Snowflake role")
 	add.Flags().StringVar(&schema, "schema", "", "Default schema")
+	add.Flags().StringArrayVar(&optionFlags, "option", nil, "Driver-specific option as key=value (repeatable). Pass-through to the driver -- unknown keys surface at connect time.")
 	add.Flags().BoolVar(&setDefault, "default", false, "Set as default connection")
 	parent.AddCommand(add)
 }
 
 func registerUpdate(parent *cobra.Command) {
 	var (
-		driverFlag string
-		host       string
-		port       string
-		database   string
-		path       string
-		url        string
-		credName   string
+		driverFlag   string
+		host         string
+		port         string
+		database     string
+		path         string
+		url          string
+		credName     string
+		optionFlags  []string
+		clearOptions bool
 	)
 
 	update := &cobra.Command{
@@ -340,6 +358,24 @@ func registerUpdate(parent *cobra.Command) {
 				existing.Credential = credName
 				updated = append(updated, "credential")
 			}
+			if clearOptions {
+				existing.Options = nil
+				updated = append(updated, "options")
+			}
+			if cmd.Flags().Changed("option") {
+				optsFromFlags, err := parseOptionFlags(optionFlags)
+				if err != nil {
+					output.WriteError(os.Stderr, err)
+					return err
+				}
+				if existing.Options == nil {
+					existing.Options = make(map[string]string)
+				}
+				for k, v := range optsFromFlags {
+					existing.Options[k] = v
+				}
+				updated = append(updated, "options")
+			}
 
 			if err := config.StoreConnection(alias, *existing); err != nil {
 				output.WriteError(os.Stderr, err)
@@ -357,6 +393,8 @@ func registerUpdate(parent *cobra.Command) {
 	update.Flags().StringVar(&path, "path", "", "Path to database file")
 	update.Flags().StringVar(&url, "url", "", "Connection URL")
 	update.Flags().StringVar(&credName, "credential", "", "Credential alias")
+	update.Flags().StringArrayVar(&optionFlags, "option", nil, "Driver-specific option as key=value (repeatable). Merged into existing options.")
+	update.Flags().BoolVar(&clearOptions, "clear-options", false, "Remove all stored options before applying any --option flags.")
 	parent.AddCommand(update)
 }
 
@@ -410,6 +448,9 @@ func renderConnection(alias string, conn config.Connection, isDefault bool) (out
 	}
 	if conn.Credential != "" {
 		out["credential"] = conn.Credential
+	}
+	if len(conn.Options) > 0 {
+		out["options"] = conn.Options
 	}
 	return out
 }
