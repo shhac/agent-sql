@@ -282,6 +282,28 @@ func TestDisplayURLAppliesDefaultPort(t *testing.T) {
 	}
 }
 
+func TestEffectiveHost(t *testing.T) {
+	cases := []struct {
+		name string
+		conn Connection
+		want string
+	}{
+		{"pg stored host", Connection{Driver: "pg", Host: "db.example.com"}, "db.example.com"},
+		{"pg backfilled from URL", Connection{Driver: "pg", URL: "postgres://parsed.example.com/db"}, "parsed.example.com"},
+		{"snowflake returns account", Connection{Driver: "snowflake", Account: "org-acct"}, "org-acct"},
+		{"sqlite has no host", Connection{Driver: "sqlite", Path: "/tmp/x.db"}, ""},
+		{"duckdb has no host", Connection{Driver: "duckdb", Path: "/tmp/x.duckdb"}, ""},
+		{"mssql stored host", Connection{Driver: "mssql", Host: "sql.example.com"}, "sql.example.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.conn.EffectiveHost(); got != tc.want {
+				t.Errorf("EffectiveHost() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCorruptJSONReturnsDefaultConfig(t *testing.T) {
 	dir := t.TempDir()
 	SetConfigDir(dir)

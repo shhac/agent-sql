@@ -371,6 +371,21 @@ func effectiveHostPortDB(c Connection, driver string) (string, int, string) {
 	return host, port, db
 }
 
+// EffectiveHost returns the connection's host for display, derived the same
+// way as DisplayURL: stored Host, then parsed from URL. For drivers where
+// "host" doesn't apply (sqlite, duckdb), returns "". For snowflake, returns
+// the account identifier.
+func (c Connection) EffectiveHost() string {
+	switch c.Driver {
+	case "pg", "cockroachdb", "mysql", "mariadb", "mssql":
+		host, _, _ := effectiveHostPortDB(c, c.Driver)
+		return host
+	case "snowflake":
+		return c.Account
+	}
+	return ""
+}
+
 func hostPortDBURL(scheme, host string, port int, database string) string {
 	u := scheme + "://"
 	if host != "" {

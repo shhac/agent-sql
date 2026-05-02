@@ -207,7 +207,7 @@ Combines tables, columns, indexes, and constraints in one response. Same structu
 
 ## Connection list (`connection list`)
 
-Each entry shows `alias`, `driver`, `display_url`, plus `database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target — it includes the per-driver default port (5432, 26257, 3306, 1433) so the URL reflects what would actually be used at connect time. Raw storage fields (`host`, `port`, `path`, `url`) are not emitted.
+Each entry shows `alias`, `driver`, `display_url`, plus `host`/`database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target — it includes the per-driver default port (5432, 26257, 3306, 1433) so the URL reflects what would actually be used at connect time. `host` is the effective host (Snowflake reports its account here; SQLite/DuckDB omit it). Raw storage fields (`port`, `path`, `url`) are not emitted.
 
 ```json
 {
@@ -222,6 +222,7 @@ Each entry shows `alias`, `driver`, `display_url`, plus `database`/`credential` 
       "alias": "prod",
       "driver": "pg",
       "display_url": "postgres://db.example.com:5432/myapp",
+      "host": "db.example.com",
       "database": "myapp",
       "credential": "prod-readonly"
     },
@@ -229,6 +230,7 @@ Each entry shows `alias`, `driver`, `display_url`, plus `database`/`credential` 
       "alias": "warehouse",
       "driver": "snowflake",
       "display_url": "snowflake://myorg-myaccount/ANALYTICS/PUBLIC",
+      "host": "myorg-myaccount",
       "database": "ANALYTICS",
       "credential": "sf-readonly"
     },
@@ -236,6 +238,7 @@ Each entry shows `alias`, `driver`, `display_url`, plus `database`/`credential` 
       "alias": "ms",
       "driver": "mssql",
       "display_url": "mssql://sqlhost:1433/reporting",
+      "host": "sqlhost",
       "database": "reporting",
       "credential": "mssql-readonly"
     }
