@@ -167,6 +167,46 @@ func TestBuildConnectionUpdatesClearOptionsThenSet(t *testing.T) {
 	}
 }
 
+// TestOptionsURLBridge pins the seam between add-time URL parsing
+// (cli/connection's buildConnectionFromAddArgs) and connect-time DSN
+// building (each driver's TestBuildXxxURL/Config). Together they
+// guarantee that `?sslmode=require` on the command line ends up in
+// the driver's URL/DSN under the same key. A rename in either layer
+// breaks this test.
+func TestOptionsURLBridge(t *testing.T) {
+	cases := []struct {
+		name      string
+		url       string
+		wantKey   string
+		wantValue string
+	}{
+		{"pg sslmode", "postgres://h:5432/d?sslmode=require", "sslmode", "require"},
+		{"pg application_name", "postgres://h:5432/d?application_name=agent-sql", "application_name", "agent-sql"},
+		{"mysql parseTime", "mysql://h:3306/d?parseTime=true", "parseTime", "true"},
+		{"mysql tls", "mysql://h:3306/d?tls=skip-verify", "tls", "skip-verify"},
+		{"mssql encrypt", "mssql://h:1433/d?encrypt=true", "encrypt", "true"},
+		// sqlite/duckdb file paths don't carry options in their URL
+		// form -- options come via --option flags. Tested separately.
+		{"snowflake query_tag", "snowflake://acct/DB?query_tag=foo", "query_tag", "foo"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, _, err := buildConnectionFromAddArgs(addInputs{
+				Alias:      "x",
+				ConnString: tc.url,
+				CredName:   "cred",
+			})
+			if err != nil {
+				t.Fatalf("err: %v", err)
+			}
+			if conn.Options[tc.wantKey] != tc.wantValue {
+				t.Errorf("Options[%q] = %q, want %q (URL = %q, all opts = %v)",
+					tc.wantKey, conn.Options[tc.wantKey], tc.wantValue, tc.url, conn.Options)
+			}
+		})
+	}
+}
+
 func TestBuildConnectionFromAddArgsBadOptionFlag(t *testing.T) {
 	_, _, err := buildConnectionFromAddArgs(addInputs{
 		Alias:       "x",
