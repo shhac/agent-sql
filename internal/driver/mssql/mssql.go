@@ -21,6 +21,10 @@ type Opts struct {
 	Username string
 	Password string
 	Readonly bool
+	// Options are driver-specific knobs threaded into the sqlserver://
+	// URL as query parameters. Pass-through: go-mssqldb is the source of
+	// truth for which keys are valid.
+	Options map[string]string
 }
 
 // MSSQL-specific write commands extend the shared set with EXEC/EXECUTE.
@@ -40,6 +44,9 @@ func Connect(opts Opts) (driver.Connection, error) {
 		q.Set("database", opts.Database)
 	}
 	q.Set("app name", "agent-sql")
+	for k, v := range opts.Options {
+		q.Set(k, v)
+	}
 
 	u := &url.URL{
 		Scheme:   "sqlserver",

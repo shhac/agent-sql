@@ -339,6 +339,7 @@ func connectMssqlConfig(conn *config.Connection, cred *credential.Credential, re
 		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, 1433),
 		Database: conn.Database, Username: cred.Username, Password: cred.Password,
 		Readonly: readonly,
+		Options:  conn.Options,
 	})
 }
 
