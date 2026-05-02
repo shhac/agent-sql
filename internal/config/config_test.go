@@ -271,6 +271,26 @@ func TestDisplayURLAppliesDefaultPort(t *testing.T) {
 			conn: Connection{Driver: "sqlite", Path: "/tmp/x.db"},
 			want: "sqlite:///tmp/x.db",
 		},
+		{
+			name: "IPv6 host literal preserved",
+			conn: Connection{Driver: "pg", Host: "::1", Port: 5432, Database: "d"},
+			want: "postgres://::1:5432/d",
+		},
+		{
+			name: "IPv6 from URL backfill",
+			conn: Connection{Driver: "pg", URL: "postgres://[::1]:6543/d"},
+			want: "postgres://::1:6543/d",
+		},
+		{
+			name: "malformed URL falls back to base without panicking",
+			conn: Connection{Driver: "pg", URL: "postgres://[invalid"},
+			want: "postgres://:5432",
+		},
+		{
+			name: "stored URL with embedded user:pass leaks no creds",
+			conn: Connection{Driver: "pg", URL: "postgres://leakuser:leaksecret@h.example.com:5432/d"},
+			want: "postgres://h.example.com:5432/d",
+		},
 	}
 
 	for _, tc := range cases {
