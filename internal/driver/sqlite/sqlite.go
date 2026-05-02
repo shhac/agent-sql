@@ -4,6 +4,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"net/url"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
@@ -16,22 +17,18 @@ type Opts struct {
 	Path     string
 	Readonly bool
 	Create   bool
+	// Options are driver-specific knobs threaded into the file: DSN as
+	// query parameters (e.g. _journal_mode, _busy_timeout). Pass-through
+	// to modernc.org/sqlite. The "mode" key is reserved -- we always
+	// control read-only vs read-write at the URI level.
+	Options map[string]string
 }
 
 var writeCommands = append(append([]string{}, driver.WriteCommands...), "REPLACE")
 
 // Connect opens a SQLite database file.
 func Connect(opts Opts) (driver.Connection, error) {
-	dsn := "file:" + opts.Path
-	if opts.Readonly {
-		dsn += "?mode=ro"
-	} else if opts.Create {
-		dsn += "?mode=rwc"
-	} else {
-		dsn += "?mode=rw"
-	}
-
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", buildSqliteDSN(opts))
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +40,27 @@ func Connect(opts Opts) (driver.Connection, error) {
 	}
 
 	return &sqliteConn{db: db, readonly: opts.Readonly}, nil
+}
+
+// buildSqliteDSN renders Opts into a `file:path?mode=...&_pragma=...` DSN.
+// User-supplied "mode" is dropped -- read-only enforcement is non-negotiable.
+func buildSqliteDSN(opts Opts) string {
+	q := url.Values{}
+	for k, v := range opts.Options {
+		if k == "mode" {
+			continue
+		}
+		q.Set(k, v)
+	}
+	switch {
+	case opts.Readonly:
+		q.Set("mode", "ro")
+	case opts.Create:
+		q.Set("mode", "rwc")
+	default:
+		q.Set("mode", "rw")
+	}
+	return "file:" + opts.Path + "?" + q.Encode()
 }
 
 type sqliteConn struct {

@@ -43,6 +43,37 @@ func setupTestDB(t *testing.T) string {
 // QueryOpts imported from driver package — use local alias
 type QueryOpts = struct{ Write bool }
 
+func TestBuildSqliteDSN(t *testing.T) {
+	cases := []struct {
+		name string
+		opts Opts
+		want string
+	}{
+		{
+			"readonly defaults",
+			Opts{Path: "/tmp/x.db", Readonly: true},
+			"file:/tmp/x.db?mode=ro",
+		},
+		{
+			"options threaded into query",
+			Opts{Path: "/tmp/x.db", Readonly: true, Options: map[string]string{"_journal_mode": "wal", "_busy_timeout": "5000"}},
+			"file:/tmp/x.db?_busy_timeout=5000&_journal_mode=wal&mode=ro",
+		},
+		{
+			"user-supplied mode is ignored",
+			Opts{Path: "/tmp/x.db", Readonly: true, Options: map[string]string{"mode": "rwc"}},
+			"file:/tmp/x.db?mode=ro",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := buildSqliteDSN(tc.opts); got != tc.want {
+				t.Errorf("buildSqliteDSN = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConnect(t *testing.T) {
 	dbPath := setupTestDB(t)
 

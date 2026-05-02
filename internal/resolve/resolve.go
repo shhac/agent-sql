@@ -185,7 +185,7 @@ func connectFromConfig(ctx context.Context, d driver.Driver, conn *config.Connec
 		if path == "" {
 			return nil, errors.New("SQLite connection requires a path.", errors.FixableByAgent)
 		}
-		return sqlite.Connect(sqlite.Opts{Path: path, Readonly: readonly})
+		return sqlite.Connect(sqlite.Opts{Path: path, Readonly: readonly, Options: conn.Options})
 	case driver.DriverDuckDB:
 		path := resolveFilePath(conn, "duckdb://")
 		if path == "" {
