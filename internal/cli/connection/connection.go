@@ -15,6 +15,7 @@ import (
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/driver"
+	agenterrors "github.com/shhac/agent-sql/internal/errors"
 	"github.com/shhac/agent-sql/internal/output"
 	"github.com/shhac/agent-sql/internal/resolve"
 )
@@ -124,6 +125,22 @@ func registerAdd(parent *cobra.Command) {
 
 			if len(args) > 1 {
 				parseConnectionString(args[1], &driverFlag, &host, &port, &database, &path, &url, &account, &warehouse, &role, &schema)
+			}
+
+			cleanedURL, hadCreds, embeddedUser := stripURLCredentials(url)
+			url = cleanedURL
+			if hadCreds && credName == "" {
+				err := agenterrors.New(fmt.Sprintf(
+					"connection string contains embedded credentials (user %q). Config is plaintext on disk -- credentials must live in the OS keychain. "+
+						"Run: agent-sql credential add %s --username %s --password <pass>; "+
+						"then re-run with --credential %s",
+					embeddedUser, alias, embeddedUser, alias,
+				), agenterrors.FixableByHuman)
+				output.WriteError(os.Stderr, err)
+				return err
+			}
+			if hadCreds {
+				fmt.Fprintf(os.Stderr, "warning: stripped embedded credentials from URL; using --credential %s\n", credName)
 			}
 
 			if credName != "" {
@@ -289,7 +306,25 @@ func registerUpdate(parent *cobra.Command) {
 				updated = append(updated, "database")
 			}
 			if cmd.Flags().Changed("url") {
-				existing.URL = url
+				cleanedURL, hadCreds, embeddedUser := stripURLCredentials(url)
+				effectiveCred := credName
+				if !cmd.Flags().Changed("credential") {
+					effectiveCred = existing.Credential
+				}
+				if hadCreds && effectiveCred == "" {
+					err := agenterrors.New(fmt.Sprintf(
+						"--url contains embedded credentials (user %q). Config is plaintext on disk -- credentials must live in the OS keychain. "+
+							"Run: agent-sql credential add %s --username %s --password <pass>; "+
+							"then re-run update with --credential %s",
+						embeddedUser, alias, embeddedUser, alias,
+					), agenterrors.FixableByHuman)
+					output.WriteError(os.Stderr, err)
+					return err
+				}
+				if hadCreds {
+					fmt.Fprintf(os.Stderr, "warning: stripped embedded credentials from --url; keeping credential %s\n", effectiveCred)
+				}
+				existing.URL = cleanedURL
 				updated = append(updated, "url")
 			}
 			if cmd.Flags().Changed("path") {

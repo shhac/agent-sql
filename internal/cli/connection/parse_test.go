@@ -125,6 +125,39 @@ func TestParseSnowflakeURL(t *testing.T) {
 	}
 }
 
+func TestStripURLCredentials(t *testing.T) {
+	cases := []struct {
+		name     string
+		in       string
+		want     string
+		hadCreds bool
+		user     string
+	}{
+		{"pg with user:pass", "postgres://user:secret@host:5432/db", "postgres://host:5432/db", true, "user"},
+		{"pg with user only", "postgres://user@host:5432/db", "postgres://host:5432/db", true, "user"},
+		{"pg without creds unchanged", "postgres://host:5432/db", "postgres://host:5432/db", false, ""},
+		{"mssql with creds", "mssql://sa:p%40ss@sqlhost/proddb", "mssql://sqlhost/proddb", true, "sa"},
+		{"snowflake URL has no userinfo", "snowflake://acct/DB?warehouse=WH", "snowflake://acct/DB?warehouse=WH", false, ""},
+		{"empty input", "", "", false, ""},
+		{"file path is left alone", "/tmp/data.db", "/tmp/data.db", false, ""},
+		{"preserves query string", "postgres://u:p@h:5432/db?sslmode=require", "postgres://h:5432/db?sslmode=require", true, "u"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, had, user := stripURLCredentials(tc.in)
+			if got != tc.want {
+				t.Errorf("cleaned = %q, want %q", got, tc.want)
+			}
+			if had != tc.hadCreds {
+				t.Errorf("hadCreds = %v, want %v", had, tc.hadCreds)
+			}
+			if user != tc.user {
+				t.Errorf("user = %q, want %q", user, tc.user)
+			}
+		})
+	}
+}
+
 func TestResolveDriver(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -1,10 +1,29 @@
 package connection
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
 )
+
+// stripURLCredentials returns the URL with any embedded user:pass@ removed.
+// hadCreds reports whether userinfo was present; user reports the username
+// component (if any) so callers can produce a helpful error message. Inputs
+// that don't parse as URLs (file paths, malformed strings) are returned
+// unchanged with hadCreds=false.
+func stripURLCredentials(connStr string) (cleaned string, hadCreds bool, user string) {
+	if connStr == "" {
+		return "", false, ""
+	}
+	u, err := url.Parse(connStr)
+	if err != nil || u.User == nil {
+		return connStr, false, ""
+	}
+	user = u.User.Username()
+	u.User = nil
+	return u.String(), true, user
+}
 
 func resolveDriver(driverFlag, url, path string) string {
 	if driverFlag != "" {
