@@ -4,6 +4,7 @@ package config
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -282,7 +283,10 @@ func mapToSettings(m map[string]any) Settings {
 }
 
 // DisplayURL builds a human-readable connection URL from config fields.
-// Never includes credentials -- only the connection target.
+// Never includes credentials -- only the connection target. Render-time only:
+// it backfills empty host/port/database from c.URL and applies the per-driver
+// default port so the listing reflects what would actually be used at connect
+// time. Storage is not modified.
 func (c Connection) DisplayURL() string {
 	switch c.Driver {
 	case "sqlite":
@@ -296,15 +300,20 @@ func (c Connection) DisplayURL() string {
 		}
 		return "duckdb://"
 	case "pg":
-		return hostPortDBURL("postgres", c.Host, c.Port, c.Database)
+		host, port, db := effectiveHostPortDB(c, "pg")
+		return hostPortDBURL("postgres", host, port, db)
 	case "cockroachdb":
-		return hostPortDBURL("cockroachdb", c.Host, c.Port, c.Database)
+		host, port, db := effectiveHostPortDB(c, "cockroachdb")
+		return hostPortDBURL("cockroachdb", host, port, db)
 	case "mysql":
-		return hostPortDBURL("mysql", c.Host, c.Port, c.Database)
+		host, port, db := effectiveHostPortDB(c, "mysql")
+		return hostPortDBURL("mysql", host, port, db)
 	case "mariadb":
-		return hostPortDBURL("mariadb", c.Host, c.Port, c.Database)
+		host, port, db := effectiveHostPortDB(c, "mariadb")
+		return hostPortDBURL("mariadb", host, port, db)
 	case "mssql":
-		return hostPortDBURL("mssql", c.Host, c.Port, c.Database)
+		host, port, db := effectiveHostPortDB(c, "mssql")
+		return hostPortDBURL("mssql", host, port, db)
 	case "snowflake":
 		u := "snowflake://"
 		if c.Account != "" {
@@ -320,6 +329,46 @@ func (c Connection) DisplayURL() string {
 	default:
 		return c.Driver + "://"
 	}
+}
+
+// defaultPort returns the connect-time default port for a host/port-style
+// driver. Mirrors the defaults applied in resolve.connectFromConfig.
+func defaultPort(driver string) int {
+	switch driver {
+	case "pg":
+		return 5432
+	case "cockroachdb":
+		return 26257
+	case "mysql", "mariadb":
+		return 3306
+	case "mssql":
+		return 1433
+	}
+	return 0
+}
+
+// effectiveHostPortDB resolves host/port/database for display: prefer stored
+// fields, fall back to parsing c.URL, then apply the driver's default port.
+// All in-memory; never written back.
+func effectiveHostPortDB(c Connection, driver string) (string, int, string) {
+	host, port, db := c.Host, c.Port, c.Database
+	if host == "" && c.URL != "" {
+		if u, err := url.Parse(c.URL); err == nil {
+			host = u.Hostname()
+			if p := u.Port(); p != "" && port == 0 {
+				if n, err := strconv.Atoi(p); err == nil {
+					port = n
+				}
+			}
+			if db == "" {
+				db = strings.TrimPrefix(u.Path, "/")
+			}
+		}
+	}
+	if port == 0 {
+		port = defaultPort(driver)
+	}
+	return host, port, db
 }
 
 func hostPortDBURL(scheme, host string, port int, database string) string {

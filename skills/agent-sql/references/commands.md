@@ -30,7 +30,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 ## Connection (read-only for agents)
 
 - `agent-sql connection add <alias> [connection-string] [--credential <name>] [--driver --host ...]` — (human-only) save a connection. The optional connection-string positional argument (URL or file path) auto-detects driver and parses host/port/database. Flags override parsed values. Examples: `connection add mydb postgres://localhost:5432/myapp --credential pg-cred`, `connection add local ./data.db`.
-- `agent-sql connection list` — list all saved connections with driver, display URL, host/path, credential, and default status. The `display_url` field shows a human-readable connection target (never includes credentials).
+- `agent-sql connection list` — list all saved connections with `alias`, `driver`, `display_url`, `database`/`credential` when set, and `default: true` for the default. `display_url` is the canonical connection target (per-driver default ports applied; never includes credentials). Raw storage fields (host/port/path/url) are not emitted.
 - `agent-sql connection test [-c <alias>]` — test connectivity (no alias = test default connection)
 
 ## Credential (human-only mutation)

@@ -215,6 +215,73 @@ func TestSetConfigDirIsolatesTests(t *testing.T) {
 	}
 }
 
+func TestDisplayURLAppliesDefaultPort(t *testing.T) {
+	cases := []struct {
+		name string
+		conn Connection
+		want string
+	}{
+		{
+			name: "pg with no port falls back to 5432",
+			conn: Connection{Driver: "pg", Host: "db.example.com", Database: "myapp"},
+			want: "postgres://db.example.com:5432/myapp",
+		},
+		{
+			name: "pg with explicit port wins over default",
+			conn: Connection{Driver: "pg", Host: "db.example.com", Port: 6543, Database: "myapp"},
+			want: "postgres://db.example.com:6543/myapp",
+		},
+		{
+			name: "cockroachdb default port 26257",
+			conn: Connection{Driver: "cockroachdb", Host: "crdb.example.com", Database: "defaultdb"},
+			want: "cockroachdb://crdb.example.com:26257/defaultdb",
+		},
+		{
+			name: "mysql default port 3306",
+			conn: Connection{Driver: "mysql", Host: "mysql.example.com", Database: "app"},
+			want: "mysql://mysql.example.com:3306/app",
+		},
+		{
+			name: "mariadb default port 3306",
+			conn: Connection{Driver: "mariadb", Host: "maria.example.com", Database: "app"},
+			want: "mariadb://maria.example.com:3306/app",
+		},
+		{
+			name: "mssql default port 1433",
+			conn: Connection{Driver: "mssql", Host: "sql.example.com", Database: "rep"},
+			want: "mssql://sql.example.com:1433/rep",
+		},
+		{
+			name: "host backfilled from URL when not stored",
+			conn: Connection{Driver: "pg", URL: "postgres://parsed.example.com:7000/parsedb"},
+			want: "postgres://parsed.example.com:7000/parsedb",
+		},
+		{
+			name: "host backfilled from URL, default port applied when URL omits port",
+			conn: Connection{Driver: "pg", URL: "postgres://parsed.example.com/parsedb"},
+			want: "postgres://parsed.example.com:5432/parsedb",
+		},
+		{
+			name: "snowflake builds from account, no port logic",
+			conn: Connection{Driver: "snowflake", Account: "org-acct", Database: "DB", Schema: "PUBLIC"},
+			want: "snowflake://org-acct/DB/PUBLIC",
+		},
+		{
+			name: "sqlite path",
+			conn: Connection{Driver: "sqlite", Path: "/tmp/x.db"},
+			want: "sqlite:///tmp/x.db",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.conn.DisplayURL(); got != tc.want {
+				t.Errorf("DisplayURL() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCorruptJSONReturnsDefaultConfig(t *testing.T) {
 	dir := t.TempDir()
 	SetConfigDir(dir)

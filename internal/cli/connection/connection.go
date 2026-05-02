@@ -342,6 +342,37 @@ func registerRemove(parent *cobra.Command) {
 	parent.AddCommand(remove)
 }
 
+// renderConnection builds the per-row map for `connection list`. Keeps only
+// the fields a human/agent needs to identify a connection; raw storage fields
+// (host/port/path/url) are intentionally omitted -- display_url is the
+// canonical view. Defensive: a panic while rendering one row reduces to a
+// minimal entry so the rest of the list still prints.
+func renderConnection(alias string, conn config.Connection, isDefault bool) (out map[string]any) {
+	out = map[string]any{
+		"alias":   alias,
+		"driver":  conn.Driver,
+		"default": isDefault,
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			out = map[string]any{
+				"alias":   alias,
+				"driver":  conn.Driver,
+				"default": isDefault,
+				"error":   fmt.Sprintf("failed to render: %v", r),
+			}
+		}
+	}()
+	out["display_url"] = conn.DisplayURL()
+	if conn.Database != "" {
+		out["database"] = conn.Database
+	}
+	if conn.Credential != "" {
+		out["credential"] = conn.Credential
+	}
+	return out
+}
+
 func registerList(parent *cobra.Command) {
 	list := &cobra.Command{
 		Use:   "list",
@@ -353,18 +384,7 @@ func registerList(parent *cobra.Command) {
 
 			items := make([]map[string]any, 0, len(conns))
 			for alias, conn := range conns {
-				items = append(items, map[string]any{
-					"alias":       alias,
-					"driver":      conn.Driver,
-					"display_url": conn.DisplayURL(),
-					"host":        conn.Host,
-					"port":        conn.Port,
-					"database":    conn.Database,
-					"path":        conn.Path,
-					"url":         conn.URL,
-					"credential":  conn.Credential,
-					"default":     alias == defaultAlias,
-				})
+				items = append(items, renderConnection(alias, conn, alias == defaultAlias))
 			}
 
 			output.PrintJSON(map[string]any{"connections": items}, true)
