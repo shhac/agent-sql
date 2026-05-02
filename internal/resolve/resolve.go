@@ -77,13 +77,20 @@ func resolveAdHoc(ctx context.Context, connStr string, write bool) (driver.Conne
 
 	if driver.IsFilePath(connStr) {
 		d := driver.DetectDriverFromURL(connStr)
-		if d == driver.DriverDuckDB {
+		switch d {
+		case driver.DriverDuckDB:
 			if write {
 				return nil, rejectAdHocWrite()
 			}
 			return connectDuckDbAdHoc(ctx, connStr)
+		case driver.DriverSQLite:
+			return connectSqliteAdHoc(ctx, connStr, write)
+		default:
+			return nil, errors.New(
+				fmt.Sprintf("Cannot infer driver for file path %q. Recognized extensions: .db, .sqlite, .sqlite3, .db3 (sqlite); .duckdb (duckdb). Use a connection URL or --driver to disambiguate.", connStr),
+				errors.FixableByAgent,
+			)
 		}
-		return connectSqliteAdHoc(ctx, connStr, write)
 	}
 
 	return nil, nil
