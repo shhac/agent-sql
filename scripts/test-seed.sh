@@ -4,12 +4,14 @@ set -euo pipefail
 # Seed all test databases with a standard schema.
 # Requires: psql, mysql, sqlcmd (or mssql-tools)
 
-PG_URL="postgres://test:test@localhost:15432/testdb?sslmode=disable"
-MYSQL_HOST="localhost"
+PG_URL="postgres://test:test@127.0.0.1:15432/testdb?sslmode=disable"
+# Use 127.0.0.1 (not "localhost") so the mysql CLI does not switch to a
+# unix socket on Linux — Docker only exposes the TCP port.
+MYSQL_HOST="127.0.0.1"
 MYSQL_PORT="13306"
-MARIADB_HOST="localhost"
+MARIADB_HOST="127.0.0.1"
 MARIADB_PORT="13307"
-MSSQL_HOST="localhost"
+MSSQL_HOST="127.0.0.1"
 MSSQL_PORT="11433"
 
 echo "==> Seeding PostgreSQL..."
