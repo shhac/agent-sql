@@ -149,6 +149,26 @@ func TestParseOptionFlags(t *testing.T) {
 	}
 }
 
+func TestParseGenericURLIPv6Host(t *testing.T) {
+	p := parseGenericURL("postgres://[::1]:5432/db")
+	if p.Host != "::1" {
+		t.Errorf("Host = %q, want \"::1\" (brackets stripped by url.Hostname)", p.Host)
+	}
+	if p.Port != "5432" {
+		t.Errorf("Port = %q, want \"5432\"", p.Port)
+	}
+	if p.Database != "db" {
+		t.Errorf("Database = %q, want \"db\"", p.Database)
+	}
+}
+
+func TestParseGenericURLPercentEncodedOption(t *testing.T) {
+	p := parseGenericURL("postgres://h/db?application_name=agent%20sql")
+	if p.Options["application_name"] != "agent sql" {
+		t.Errorf("Options[application_name] = %q, want \"agent sql\" (percent-decoded by url.Query)", p.Options["application_name"])
+	}
+}
+
 func TestParseGenericURLOptions(t *testing.T) {
 	p := parseGenericURL("postgres://h:5432/db?sslmode=require&application_name=foo")
 	want := map[string]string{"sslmode": "require", "application_name": "foo"}

@@ -189,47 +189,22 @@ func parseSnowflakeURL(connStr string) parsedConnString {
 
 func parseGenericURL(connStr string) parsedConnString {
 	p := parsedConnString{URL: connStr}
-	// Strip scheme: [user:pass@]host[:port]/database
-	trimmed := connStr
-	for _, prefix := range []string{"postgres://", "postgresql://", "cockroachdb://", "mysql://", "mariadb://", "mssql://", "sqlserver://"} {
-		trimmed = strings.TrimPrefix(trimmed, prefix)
+	u, err := url.Parse(connStr)
+	if err != nil {
+		// Malformed URL: leave host/port/db/options empty, keep raw URL
+		// stored. The driver will surface the parse error at connect time.
+		return p
 	}
-	atIdx := strings.LastIndex(trimmed, "@")
-	hostPart := trimmed
-	if atIdx >= 0 {
-		hostPart = trimmed[atIdx+1:]
-	}
-	slashIdx := strings.Index(hostPart, "/")
-	if slashIdx >= 0 {
-		dbAndQuery := hostPart[slashIdx+1:]
-		var queryStr string
-		if qIdx := strings.Index(dbAndQuery, "?"); qIdx >= 0 {
-			queryStr = dbAndQuery[qIdx+1:]
-			dbAndQuery = dbAndQuery[:qIdx]
-		}
-		if dbAndQuery != "" {
-			p.Database = dbAndQuery
-		}
-		if queryStr != "" {
-			for _, param := range strings.Split(queryStr, "&") {
-				kv := strings.SplitN(param, "=", 2)
-				if len(kv) != 2 || kv[0] == "" {
-					continue
-				}
-				if p.Options == nil {
-					p.Options = make(map[string]string)
-				}
-				p.Options[kv[0]] = kv[1]
+	p.Host = u.Hostname()
+	p.Port = u.Port()
+	p.Database = strings.TrimPrefix(u.Path, "/")
+	if q := u.Query(); len(q) > 0 {
+		p.Options = make(map[string]string, len(q))
+		for k, vs := range q {
+			if len(vs) > 0 {
+				p.Options[k] = vs[0]
 			}
 		}
-		hostPart = hostPart[:slashIdx]
-	}
-	colonIdx := strings.LastIndex(hostPart, ":")
-	if colonIdx >= 0 {
-		p.Host = hostPart[:colonIdx]
-		p.Port = hostPart[colonIdx+1:]
-	} else if hostPart != "" {
-		p.Host = hostPart
 	}
 	return p
 }
