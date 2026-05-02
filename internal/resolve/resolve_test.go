@@ -97,7 +97,7 @@ func TestCheckWritePermission(t *testing.T) {
 	}
 }
 
-func TestParseURL(t *testing.T) {
+func TestParseGenericURL(t *testing.T) {
 	tests := []struct {
 		name     string
 		url      string
@@ -147,26 +147,50 @@ func TestParseURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			host, port, db, user, pass, err := parseURL(tt.url)
+			u, err := parseGenericURL(tt.url)
 			if err != nil {
-				t.Fatalf("parseURL() error = %v", err)
+				t.Fatalf("parseGenericURL() error = %v", err)
 			}
-			if host != tt.wantHost {
-				t.Errorf("host = %q, want %q", host, tt.wantHost)
+			if u.Host != tt.wantHost {
+				t.Errorf("Host = %q, want %q", u.Host, tt.wantHost)
 			}
-			if port != tt.wantPort {
-				t.Errorf("port = %q, want %q", port, tt.wantPort)
+			if u.Port != tt.wantPort {
+				t.Errorf("Port = %q, want %q", u.Port, tt.wantPort)
 			}
-			if db != tt.wantDB {
-				t.Errorf("database = %q, want %q", db, tt.wantDB)
+			if u.Database != tt.wantDB {
+				t.Errorf("Database = %q, want %q", u.Database, tt.wantDB)
 			}
-			if user != tt.wantUser {
-				t.Errorf("user = %q, want %q", user, tt.wantUser)
+			if u.Username != tt.wantUser {
+				t.Errorf("Username = %q, want %q", u.Username, tt.wantUser)
 			}
-			if pass != tt.wantPass {
-				t.Errorf("password = %q, want %q", pass, tt.wantPass)
+			if u.Password != tt.wantPass {
+				t.Errorf("Password = %q, want %q", u.Password, tt.wantPass)
 			}
 		})
+	}
+}
+
+// TestParseGenericURLOptions confirms ad-hoc URL query params land in
+// Options for pass-through to drivers.
+func TestParseGenericURLOptions(t *testing.T) {
+	u, err := parseGenericURL("mysql://u:p@h:3306/db?parseTime=true&tls=skip-verify")
+	if err != nil {
+		t.Fatalf("parseGenericURL() error = %v", err)
+	}
+	if u.Options["parseTime"] != "true" {
+		t.Errorf("Options[parseTime] = %q, want true", u.Options["parseTime"])
+	}
+	if u.Options["tls"] != "skip-verify" {
+		t.Errorf("Options[tls] = %q, want skip-verify", u.Options["tls"])
+	}
+}
+
+// TestParseGenericURLMalformedReturnsError confirms a malformed URL no
+// longer silently dials localhost (was the previous bug).
+func TestParseGenericURLMalformedReturnsError(t *testing.T) {
+	_, err := parseGenericURL("postgres://[invalid")
+	if err == nil {
+		t.Fatal("expected error for malformed URL")
 	}
 }
 

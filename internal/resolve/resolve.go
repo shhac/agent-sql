@@ -271,7 +271,7 @@ func connectPgLikeConfig(ctx context.Context, d driver.Driver, conn *config.Conn
 }
 
 func connectMysqlLikeURL(d driver.Driver, connStr string) (driver.Connection, error) {
-	host, port, database, user, password, err := parseURL(connStr)
+	u, err := parseGenericURL(connStr)
 	if err != nil {
 		return nil, err
 	}
@@ -280,8 +280,9 @@ func connectMysqlLikeURL(d driver.Driver, connStr string) (driver.Connection, er
 		variant = "mariadb"
 	}
 	return mysql.Connect(mysql.Opts{
-		Host: host, Port: parsePort(port, 3306), Database: database,
-		Username: user, Password: password, Readonly: true, Variant: variant,
+		Host: u.Host, Port: parsePort(u.Port, 3306), Database: u.Database,
+		Username: u.Username, Password: u.Password, Readonly: true, Variant: variant,
+		Options: u.Options,
 	})
 }
 
@@ -332,13 +333,14 @@ func connectSnowflakeConfig(conn *config.Connection, cred *credential.Credential
 }
 
 func connectMssqlURL(connStr string) (driver.Connection, error) {
-	host, port, database, user, password, err := parseURL(connStr)
+	u, err := parseGenericURL(connStr)
 	if err != nil {
 		return nil, err
 	}
 	return mssql.Connect(mssql.Opts{
-		Host: host, Port: parsePort(port, 1433), Database: database,
-		Username: user, Password: password, Readonly: true,
+		Host: u.Host, Port: parsePort(u.Port, 1433), Database: u.Database,
+		Username: u.Username, Password: u.Password, Readonly: true,
+		Options: u.Options,
 	})
 }
 
@@ -371,20 +373,51 @@ func configAliases() []string {
 	return out
 }
 
-func parseURL(connStr string) (host, port, database, user, password string, err error) {
+// genericURL is the structured form of a host:port:database connection
+// URL (postgres, mysql, mariadb, mssql, sqlserver). Userinfo is preserved
+// because ad-hoc URL connections legitimately carry credentials -- only
+// stored connections reject them. Options carries any query-string
+// parameters for pass-through to the driver.
+type genericURL struct {
+	Host     string
+	Port     string
+	Database string
+	Username string
+	Password string
+	Options  map[string]string
+}
+
+// parseGenericURL parses a host-style connection URL. Returns a
+// FixableByHuman error if the URL is malformed -- the previous
+// behavior of silently swallowing parse errors and falling back to
+// localhost:default-port was a footgun.
+func parseGenericURL(connStr string) (genericURL, error) {
 	u, err := url.Parse(connStr)
 	if err != nil {
-		return
+		return genericURL{}, errors.New(
+			fmt.Sprintf("Invalid connection URL %q: %v", connStr, err),
+			errors.FixableByHuman,
+		)
 	}
-	host = u.Hostname()
-	if host == "" {
-		host = "localhost"
+	out := genericURL{
+		Host:     u.Hostname(),
+		Port:     u.Port(),
+		Database: strings.TrimPrefix(u.Path, "/"),
+		Username: u.User.Username(),
 	}
-	port = u.Port()
-	database = strings.TrimPrefix(u.Path, "/")
-	user = u.User.Username()
-	password, _ = u.User.Password()
-	return
+	if out.Host == "" {
+		out.Host = "localhost"
+	}
+	out.Password, _ = u.User.Password()
+	if q := u.Query(); len(q) > 0 {
+		out.Options = make(map[string]string, len(q))
+		for k, vs := range q {
+			if len(vs) > 0 {
+				out.Options[k] = vs[0]
+			}
+		}
+	}
+	return out, nil
 }
 
 func parsePort(s string, def int) int {
