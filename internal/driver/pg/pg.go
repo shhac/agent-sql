@@ -5,6 +5,8 @@ package pg
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,6 +21,10 @@ type Opts struct {
 	Username string
 	Password string
 	Readonly bool
+	// Options are driver-specific knobs threaded into the pgx connection
+	// URL as query parameters. Pass-through: pgx is the source of truth
+	// for which keys are valid.
+	Options map[string]string
 }
 
 // DefaultPort is the standard PostgreSQL port.
@@ -32,12 +38,7 @@ func Connect(ctx context.Context, opts Opts) (driver.Connection, error) {
 		opts.Port = DefaultPort
 	}
 
-	connStr := fmt.Sprintf(
-		"host=%s port=%d dbname=%s user=%s password=%s sslmode=prefer",
-		opts.Host, opts.Port, opts.Database, opts.Username, opts.Password,
-	)
-
-	conn, err := pgx.Connect(ctx, connStr)
+	conn, err := pgx.Connect(ctx, buildPgURL(opts))
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -50,6 +51,26 @@ func Connect(ctx context.Context, opts Opts) (driver.Connection, error) {
 	}
 
 	return &pgConn{conn: conn, readonly: opts.Readonly}, nil
+}
+
+// buildPgURL renders an Opts into a postgres:// URL. sslmode defaults to
+// "prefer" but is overridden if the caller supplies sslmode in Options.
+func buildPgURL(opts Opts) string {
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(opts.Username, opts.Password),
+		Host:   opts.Host + ":" + strconv.Itoa(opts.Port),
+		Path:   "/" + opts.Database,
+	}
+	q := u.Query()
+	if _, ok := opts.Options["sslmode"]; !ok {
+		q.Set("sslmode", "prefer")
+	}
+	for k, v := range opts.Options {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // ConnectURL opens a PostgreSQL connection from a connection URL.

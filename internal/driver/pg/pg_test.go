@@ -10,6 +10,37 @@ import (
 	"github.com/shhac/agent-sql/internal/errors"
 )
 
+func TestBuildPgURL(t *testing.T) {
+	cases := []struct {
+		name string
+		opts Opts
+		want string
+	}{
+		{
+			"defaults to sslmode=prefer",
+			Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p"},
+			"postgres://u:p@h:5432/d?sslmode=prefer",
+		},
+		{
+			"options override sslmode",
+			Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p", Options: map[string]string{"sslmode": "require"}},
+			"postgres://u:p@h:5432/d?sslmode=require",
+		},
+		{
+			"options pass through, alphabetized",
+			Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p", Options: map[string]string{"application_name": "agent-sql", "sslmode": "require"}},
+			"postgres://u:p@h:5432/d?application_name=agent-sql&sslmode=require",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := buildPgURL(tc.opts); got != tc.want {
+				t.Errorf("buildPgURL = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestQuoteIdent(t *testing.T) {
 	c := &pgConn{}
 

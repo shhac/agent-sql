@@ -246,6 +246,7 @@ func connectPgLikeConfig(ctx context.Context, d driver.Driver, conn *config.Conn
 		Host: orStr(conn.Host, "localhost"), Port: orInt(conn.Port, defaultPort),
 		Database: orStr(conn.Database, defaultDB),
 		Username: cred.Username, Password: cred.Password, Readonly: readonly,
+		Options: conn.Options,
 	})
 }
 
