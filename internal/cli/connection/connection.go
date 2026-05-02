@@ -139,7 +139,39 @@ func registerAdd(parent *cobra.Command) {
 
 			var options map[string]string
 			if len(args) > 1 {
-				parseConnectionString(args[1], &driverFlag, &host, &port, &database, &path, &url, &account, &warehouse, &role, &schema, &options)
+				parsed := parseConnectionString(args[1])
+				// Explicit flag wins over connection-string parse on conflict.
+				if driverFlag == "" {
+					driverFlag = parsed.Driver
+				}
+				if host == "" {
+					host = parsed.Host
+				}
+				if port == "" {
+					port = parsed.Port
+				}
+				if database == "" {
+					database = parsed.Database
+				}
+				if path == "" {
+					path = parsed.Path
+				}
+				if url == "" {
+					url = parsed.URL
+				}
+				if account == "" {
+					account = parsed.Account
+				}
+				if warehouse == "" {
+					warehouse = parsed.Warehouse
+				}
+				if role == "" {
+					role = parsed.Role
+				}
+				if schema == "" {
+					schema = parsed.Schema
+				}
+				options = parsed.Options
 			}
 			optsFromFlags, err := parseOptionFlags(optionFlags)
 			if err != nil {

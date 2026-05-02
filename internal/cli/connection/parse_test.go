@@ -51,21 +51,18 @@ func TestParseGenericURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var url, host, port, database string
-			var options map[string]string
-			parseGenericURL(tt.connStr, &url, &host, &port, &database, &options)
-
-			if url != tt.connStr {
-				t.Errorf("url = %q, want %q", url, tt.connStr)
+			p := parseGenericURL(tt.connStr)
+			if p.URL != tt.connStr {
+				t.Errorf("URL = %q, want %q", p.URL, tt.connStr)
 			}
-			if host != tt.wantHost {
-				t.Errorf("host = %q, want %q", host, tt.wantHost)
+			if p.Host != tt.wantHost {
+				t.Errorf("Host = %q, want %q", p.Host, tt.wantHost)
 			}
-			if port != tt.wantPort {
-				t.Errorf("port = %q, want %q", port, tt.wantPort)
+			if p.Port != tt.wantPort {
+				t.Errorf("Port = %q, want %q", p.Port, tt.wantPort)
 			}
-			if database != tt.wantDB {
-				t.Errorf("database = %q, want %q", database, tt.wantDB)
+			if p.Database != tt.wantDB {
+				t.Errorf("Database = %q, want %q", p.Database, tt.wantDB)
 			}
 		})
 	}
@@ -101,27 +98,24 @@ func TestParseSnowflakeURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var url, account, database, schema, warehouse, role string
-			var options map[string]string
-			parseSnowflakeURL(tt.connStr, &url, &account, &database, &schema, &warehouse, &role, &options)
-
-			if url != tt.connStr {
-				t.Errorf("url = %q, want %q", url, tt.connStr)
+			p := parseSnowflakeURL(tt.connStr)
+			if p.URL != tt.connStr {
+				t.Errorf("URL = %q, want %q", p.URL, tt.connStr)
 			}
-			if account != tt.wantAccount {
-				t.Errorf("account = %q, want %q", account, tt.wantAccount)
+			if p.Account != tt.wantAccount {
+				t.Errorf("Account = %q, want %q", p.Account, tt.wantAccount)
 			}
-			if database != tt.wantDB {
-				t.Errorf("database = %q, want %q", database, tt.wantDB)
+			if p.Database != tt.wantDB {
+				t.Errorf("Database = %q, want %q", p.Database, tt.wantDB)
 			}
-			if schema != tt.wantSchema {
-				t.Errorf("schema = %q, want %q", schema, tt.wantSchema)
+			if p.Schema != tt.wantSchema {
+				t.Errorf("Schema = %q, want %q", p.Schema, tt.wantSchema)
 			}
-			if warehouse != tt.wantWarehouse {
-				t.Errorf("warehouse = %q, want %q", warehouse, tt.wantWarehouse)
+			if p.Warehouse != tt.wantWarehouse {
+				t.Errorf("Warehouse = %q, want %q", p.Warehouse, tt.wantWarehouse)
 			}
-			if role != tt.wantRole {
-				t.Errorf("role = %q, want %q", role, tt.wantRole)
+			if p.Role != tt.wantRole {
+				t.Errorf("Role = %q, want %q", p.Role, tt.wantRole)
 			}
 		})
 	}
@@ -156,25 +150,21 @@ func TestParseOptionFlags(t *testing.T) {
 }
 
 func TestParseGenericURLOptions(t *testing.T) {
-	var url, host, port, database string
-	var options map[string]string
-	parseGenericURL("postgres://h:5432/db?sslmode=require&application_name=foo", &url, &host, &port, &database, &options)
+	p := parseGenericURL("postgres://h:5432/db?sslmode=require&application_name=foo")
 	want := map[string]string{"sslmode": "require", "application_name": "foo"}
-	if !mapsEqual(options, want) {
-		t.Errorf("options = %v, want %v", options, want)
+	if !mapsEqual(p.Options, want) {
+		t.Errorf("Options = %v, want %v", p.Options, want)
 	}
 }
 
 func TestParseSnowflakeURLOptions(t *testing.T) {
-	var url, account, database, schema, warehouse, role string
-	var options map[string]string
-	parseSnowflakeURL("snowflake://acct/DB/PUBLIC?warehouse=WH&role=ANALYST&query_tag=foo&timezone=UTC", &url, &account, &database, &schema, &warehouse, &role, &options)
-	if warehouse != "WH" || role != "ANALYST" {
-		t.Errorf("warehouse/role not lifted to first-class fields: %s/%s", warehouse, role)
+	p := parseSnowflakeURL("snowflake://acct/DB/PUBLIC?warehouse=WH&role=ANALYST&query_tag=foo&timezone=UTC")
+	if p.Warehouse != "WH" || p.Role != "ANALYST" {
+		t.Errorf("warehouse/role not lifted to first-class fields: %s/%s", p.Warehouse, p.Role)
 	}
 	want := map[string]string{"query_tag": "foo", "timezone": "UTC"}
-	if !mapsEqual(options, want) {
-		t.Errorf("options = %v, want %v (warehouse/role should not be in options)", options, want)
+	if !mapsEqual(p.Options, want) {
+		t.Errorf("Options = %v, want %v (warehouse/role should not be in options)", p.Options, want)
 	}
 }
 

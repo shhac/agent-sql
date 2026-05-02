@@ -100,60 +100,70 @@ func resolveDriver(driverFlag, url, path string) string {
 	return ""
 }
 
-func parseConnectionString(connStr string, driverFlag, host, port, database, path, url, account, warehouse, role, schema *string, options *map[string]string) {
+// parsedConnString holds everything extractable from a positional
+// connection-string argument. All fields are independent zero-value
+// defaults; the caller decides how to merge with explicit flag values
+// (typically: explicit flag wins on conflict).
+type parsedConnString struct {
+	Driver    string
+	Host      string
+	Port      string
+	Database  string
+	Path      string
+	URL       string
+	Account   string
+	Warehouse string
+	Role      string
+	Schema    string
+	Options   map[string]string
+}
+
+func parseConnectionString(connStr string) parsedConnString {
 	lower := strings.ToLower(connStr)
 
-	// DuckDB file extensions
-	if strings.HasSuffix(lower, ".duckdb") {
-		*path = connStr
-		return
-	}
-
-	// SQLite file extensions
-	for _, ext := range []string{".sqlite", ".db", ".sqlite3", ".db3"} {
+	// File-extension shortcuts: .duckdb, .sqlite, .db, .sqlite3, .db3
+	for _, ext := range []string{".duckdb", ".sqlite3", ".sqlite", ".db3", ".db"} {
 		if strings.HasSuffix(lower, ext) {
-			*path = connStr
-			return
+			return parsedConnString{Path: connStr}
 		}
 	}
 
-	// File path
+	// Plain file path with no recognized extension
 	if driver.IsFilePath(connStr) {
-		*path = connStr
-		return
+		return parsedConnString{Path: connStr}
 	}
 
 	detected := driver.DetectDriverFromURL(connStr)
 	if detected == "" {
-		return
+		return parsedConnString{}
 	}
 
 	switch detected {
 	case driver.DriverSQLite:
-		*path = strings.TrimPrefix(connStr, "sqlite://")
+		return parsedConnString{Path: strings.TrimPrefix(connStr, "sqlite://")}
 	case driver.DriverDuckDB:
-		*path = strings.TrimPrefix(connStr, "duckdb://")
+		return parsedConnString{Path: strings.TrimPrefix(connStr, "duckdb://")}
 	case driver.DriverSnowflake:
-		parseSnowflakeURL(connStr, url, account, database, schema, warehouse, role, options)
+		return parseSnowflakeURL(connStr)
 	default:
-		parseGenericURL(connStr, url, host, port, database, options)
+		return parseGenericURL(connStr)
 	}
 }
 
-func parseSnowflakeURL(connStr string, urlOut, account, database, schema, warehouse, role *string, options *map[string]string) {
-	*urlOut = connStr
+func parseSnowflakeURL(connStr string) parsedConnString {
+	p := parsedConnString{URL: connStr}
 	// snowflake://account/database/schema?warehouse=WH&role=ROLE&query_tag=...
 	trimmed := strings.TrimPrefix(connStr, "snowflake://")
 	parts := strings.SplitN(trimmed, "?", 2)
 	pathParts := strings.Split(parts[0], "/")
-	if *account == "" && len(pathParts) > 0 {
-		*account = pathParts[0]
+	if len(pathParts) > 0 {
+		p.Account = pathParts[0]
 	}
-	if *database == "" && len(pathParts) > 1 {
-		*database = pathParts[1]
+	if len(pathParts) > 1 {
+		p.Database = pathParts[1]
 	}
-	if *schema == "" && len(pathParts) > 2 {
-		*schema = pathParts[2]
+	if len(pathParts) > 2 {
+		p.Schema = pathParts[2]
 	}
 	if len(parts) > 1 {
 		for _, param := range strings.Split(parts[1], "&") {
@@ -163,29 +173,22 @@ func parseSnowflakeURL(connStr string, urlOut, account, database, schema, wareho
 			}
 			switch strings.ToLower(kv[0]) {
 			case "warehouse":
-				if *warehouse == "" {
-					*warehouse = kv[1]
-				}
+				p.Warehouse = kv[1]
 			case "role":
-				if *role == "" {
-					*role = kv[1]
-				}
+				p.Role = kv[1]
 			default:
-				if options != nil {
-					if *options == nil {
-						*options = make(map[string]string)
-					}
-					if _, exists := (*options)[kv[0]]; !exists {
-						(*options)[kv[0]] = kv[1]
-					}
+				if p.Options == nil {
+					p.Options = make(map[string]string)
 				}
+				p.Options[kv[0]] = kv[1]
 			}
 		}
 	}
+	return p
 }
 
-func parseGenericURL(connStr string, urlOut, host, port, database *string, options *map[string]string) {
-	*urlOut = connStr
+func parseGenericURL(connStr string) parsedConnString {
+	p := parsedConnString{URL: connStr}
 	// Strip scheme: [user:pass@]host[:port]/database
 	trimmed := connStr
 	for _, prefix := range []string{"postgres://", "postgresql://", "cockroachdb://", "mysql://", "mariadb://", "mssql://", "sqlserver://"} {
@@ -204,36 +207,29 @@ func parseGenericURL(connStr string, urlOut, host, port, database *string, optio
 			queryStr = dbAndQuery[qIdx+1:]
 			dbAndQuery = dbAndQuery[:qIdx]
 		}
-		if *database == "" && dbAndQuery != "" {
-			*database = dbAndQuery
+		if dbAndQuery != "" {
+			p.Database = dbAndQuery
 		}
-		if queryStr != "" && options != nil {
+		if queryStr != "" {
 			for _, param := range strings.Split(queryStr, "&") {
 				kv := strings.SplitN(param, "=", 2)
 				if len(kv) != 2 || kv[0] == "" {
 					continue
 				}
-				if *options == nil {
-					*options = make(map[string]string)
+				if p.Options == nil {
+					p.Options = make(map[string]string)
 				}
-				if _, exists := (*options)[kv[0]]; !exists {
-					(*options)[kv[0]] = kv[1]
-				}
+				p.Options[kv[0]] = kv[1]
 			}
 		}
 		hostPart = hostPart[:slashIdx]
 	}
 	colonIdx := strings.LastIndex(hostPart, ":")
 	if colonIdx >= 0 {
-		if *host == "" {
-			*host = hostPart[:colonIdx]
-		}
-		if *port == "" {
-			*port = hostPart[colonIdx+1:]
-		}
-	} else {
-		if *host == "" && hostPart != "" {
-			*host = hostPart
-		}
+		p.Host = hostPart[:colonIdx]
+		p.Port = hostPart[colonIdx+1:]
+	} else if hostPart != "" {
+		p.Host = hostPart
 	}
+	return p
 }
