@@ -54,14 +54,18 @@ func TestBuildMssqlURL(t *testing.T) {
 		}
 	})
 
-	t.Run("user database option cannot clobber opts.Database", func(t *testing.T) {
+	t.Run("user database option overrides opts.Database", func(t *testing.T) {
+		// Pass-through philosophy: a user `--option database=other` is
+		// an explicit choice and must win over the stored Database.
+		// Lets a stored connection target a different database for
+		// specific runs without creating a new alias.
 		got := buildMssqlURL(Opts{
-			Host: "h", Port: 1433, Database: "real-db", Username: "u", Password: "p",
-			Options: map[string]string{"database": "user-injected"},
+			Host: "h", Port: 1433, Database: "default-db", Username: "u", Password: "p",
+			Options: map[string]string{"database": "override-db"},
 		})
 		u, _ := url.Parse(got)
-		if u.Query().Get("database") != "real-db" {
-			t.Errorf("connection target should win; database = %q, want real-db", u.Query().Get("database"))
+		if u.Query().Get("database") != "override-db" {
+			t.Errorf("user option should win; database = %q, want override-db", u.Query().Get("database"))
 		}
 	})
 

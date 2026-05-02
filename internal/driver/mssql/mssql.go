@@ -54,24 +54,23 @@ func Connect(opts Opts) (driver.Connection, error) {
 
 // buildMssqlURL constructs the sqlserver:// URL handed to go-mssqldb.
 //
-// Collision policy:
-//   - User options are applied first (pass-through to go-mssqldb).
-//   - "app name" defaults to "agent-sql" only if the user didn't supply one.
-//   - "database" always uses opts.Database -- a user --option database=foo
-//     cannot override the connection target.
+// Collision policy: user options win on conflict, matching the
+// pass-through philosophy of every other driver in this codebase. A
+// user `--option database=other` overrides opts.Database; this is a
+// feature -- it lets a stored connection target a different database
+// for specific runs without creating a new alias. A user
+// `--option "app name=my-app"` overrides the agent-sql default.
 //
-// Other unknown keys pass through verbatim; go-mssqldb decides which
-// are valid at connect time.
+// Unknown keys pass through verbatim; go-mssqldb decides which are
+// valid at connect time.
 func buildMssqlURL(opts Opts) string {
 	q := url.Values{}
-	for k, v := range opts.Options {
-		q.Set(k, v)
-	}
-	if q.Get("app name") == "" {
-		q.Set("app name", "agent-sql")
-	}
 	if opts.Database != "" {
-		q.Set("database", opts.Database) // connection target wins
+		q.Set("database", opts.Database)
+	}
+	q.Set("app name", "agent-sql")
+	for k, v := range opts.Options {
+		q.Set(k, v) // applied last: user wins on conflict
 	}
 	u := &url.URL{
 		Scheme:   "sqlserver",
