@@ -128,93 +128,77 @@ CREATE INDEX idx_orders_user ON orders(user_id);
 SQL
 
 echo "==> Seeding MSSQL..."
-# Try mssql-tools18 first, fall back to mssql-tools
-SQLCMD=$(command -v sqlcmd 2>/dev/null || echo "")
-if [ -z "$SQLCMD" ]; then
-    echo "sqlcmd not found, skipping MSSQL seed"
-else
-    # Create the database if it doesn't exist, then seed
-    $SQLCMD -S "$MSSQL_HOST,$MSSQL_PORT" -U SA -P 'TestPass123!' -C -Q "
-        IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;
-    " 2>/dev/null || $SQLCMD -S "$MSSQL_HOST,$MSSQL_PORT" -U SA -P 'TestPass123!' -Q "
-        IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;
-    " 2>/dev/null
+# Prefer host sqlcmd if installed, otherwise shell into the container (which
+# always ships mssql-tools18 or mssql-tools). CI doesn't have sqlcmd on the
+# runner, so the docker-exec path is the one that actually runs there.
+# SQL is fed via stdin so quoting/newlines stay sane.
+HOST_SQLCMD=$(command -v sqlcmd 2>/dev/null || echo "")
+mssql_run() {
+    local db="${1:-}"
+    local db_arg=""
+    if [ -n "$db" ]; then
+        db_arg="-d $db"
+    fi
+    if [ -n "$HOST_SQLCMD" ]; then
+        # -C trusts the dev cert. Requires sqlcmd v18+ (any modern install).
+        $HOST_SQLCMD -S "$MSSQL_HOST,$MSSQL_PORT" -U SA -P 'TestPass123!' -C $db_arg
+    else
+        # -T disables the TTY so docker exec forwards our stdin straight through.
+        # The container has either mssql-tools18 (modern) or mssql-tools (legacy);
+        # try the newer one first, fall back if the binary doesn't exist.
+        if docker compose -f docker-compose.test.yml exec -T mssql test -x /opt/mssql-tools18/bin/sqlcmd; then
+            docker compose -f docker-compose.test.yml exec -T mssql \
+                /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'TestPass123!' -C $db_arg
+        else
+            docker compose -f docker-compose.test.yml exec -T mssql \
+                /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P 'TestPass123!' $db_arg
+        fi
+    fi
+}
 
-    $SQLCMD -S "$MSSQL_HOST,$MSSQL_PORT" -U SA -P 'TestPass123!' -d testdb -C -Q "
-        IF OBJECT_ID('orders', 'U') IS NOT NULL DROP TABLE orders;
-        IF OBJECT_ID('users', 'U') IS NOT NULL DROP TABLE users;
+mssql_run <<'SQL'
+IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;
+GO
+SQL
 
-        CREATE TABLE users (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            name NVARCHAR(255) NOT NULL,
-            email NVARCHAR(255),
-            age INT,
-            bio NVARCHAR(MAX)
-        );
+mssql_run testdb <<'SQL'
+IF OBJECT_ID('orders', 'U') IS NOT NULL DROP TABLE orders;
+IF OBJECT_ID('users', 'U') IS NOT NULL DROP TABLE users;
 
-        INSERT INTO users (name, email, age, bio) VALUES
-            (N'Alice', N'alice@test.com', 30, N'Software engineer'),
-            (N'Bob', NULL, 25, NULL),
-            (N'Charlie', N'charlie@test.com', 35, N'Line one
+CREATE TABLE users (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    name NVARCHAR(255) NOT NULL,
+    email NVARCHAR(255),
+    age INT,
+    bio NVARCHAR(MAX)
+);
+
+INSERT INTO users (name, email, age, bio) VALUES
+    (N'Alice', N'alice@test.com', 30, N'Software engineer'),
+    (N'Bob', NULL, 25, NULL),
+    (N'Charlie', N'charlie@test.com', 35, N'Line one
 Line two
 Line three'),
-            (N'Héloïse', N'heloise@test.com', 28, N'日本語テスト'),
-            (N'Eve', N'eve@test.com', NULL, N'Has \"quotes\" and ''apostrophes''');
+    (N'Héloïse', N'heloise@test.com', 28, N'日本語テスト'),
+    (N'Eve', N'eve@test.com', NULL, N'Has "quotes" and ''apostrophes''');
 
-        CREATE TABLE orders (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            user_id INT FOREIGN KEY REFERENCES users(id),
-            amount DECIMAL(10,2) NOT NULL,
-            note NVARCHAR(MAX)
-        );
+CREATE TABLE orders (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    user_id INT FOREIGN KEY REFERENCES users(id),
+    amount DECIMAL(10,2) NOT NULL,
+    note NVARCHAR(MAX)
+);
 
-        INSERT INTO orders (user_id, amount, note) VALUES
-            (1, 99.99, N'First order'),
-            (1, 149.50, NULL),
-            (2, 25.00, N'Rush delivery
+INSERT INTO orders (user_id, amount, note) VALUES
+    (1, 99.99, N'First order'),
+    (1, 149.50, NULL),
+    (2, 25.00, N'Rush delivery
 Handle with care'),
-            (4, 0.01, N'Minimum amount'),
-            (3, 1000.00, N'Bulk order — special chars: €£¥');
+    (4, 0.01, N'Minimum amount'),
+    (3, 1000.00, N'Bulk order — special chars: €£¥');
 
-        CREATE INDEX idx_orders_user ON orders(user_id);
-    " 2>/dev/null || $SQLCMD -S "$MSSQL_HOST,$MSSQL_PORT" -U SA -P 'TestPass123!' -d testdb -Q "
-        IF OBJECT_ID('orders', 'U') IS NOT NULL DROP TABLE orders;
-        IF OBJECT_ID('users', 'U') IS NOT NULL DROP TABLE users;
-
-        CREATE TABLE users (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            name NVARCHAR(255) NOT NULL,
-            email NVARCHAR(255),
-            age INT,
-            bio NVARCHAR(MAX)
-        );
-
-        INSERT INTO users (name, email, age, bio) VALUES
-            (N'Alice', N'alice@test.com', 30, N'Software engineer'),
-            (N'Bob', NULL, 25, NULL),
-            (N'Charlie', N'charlie@test.com', 35, N'Line one
-Line two
-Line three'),
-            (N'Héloïse', N'heloise@test.com', 28, N'日本語テスト'),
-            (N'Eve', N'eve@test.com', NULL, N'Has \"quotes\" and ''apostrophes''');
-
-        CREATE TABLE orders (
-            id INT IDENTITY(1,1) PRIMARY KEY,
-            user_id INT FOREIGN KEY REFERENCES users(id),
-            amount DECIMAL(10,2) NOT NULL,
-            note NVARCHAR(MAX)
-        );
-
-        INSERT INTO orders (user_id, amount, note) VALUES
-            (1, 99.99, N'First order'),
-            (1, 149.50, NULL),
-            (2, 25.00, N'Rush delivery
-Handle with care'),
-            (4, 0.01, N'Minimum amount'),
-            (3, 1000.00, N'Bulk order — special chars: €£¥');
-
-        CREATE INDEX idx_orders_user ON orders(user_id);
-    "
-fi
+CREATE INDEX idx_orders_user ON orders(user_id);
+GO
+SQL
 
 echo "==> Seeding complete."
