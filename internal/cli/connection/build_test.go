@@ -3,6 +3,8 @@ package connection
 import (
 	"strings"
 	"testing"
+
+	"github.com/shhac/agent-sql/internal/config"
 )
 
 func TestBuildConnectionFromAddArgsURLParsing(t *testing.T) {
@@ -100,6 +102,68 @@ func TestBuildConnectionFromAddArgsInvalidPort(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalid port") {
 		t.Errorf("err = %v, want invalid port", err)
+	}
+}
+
+func TestBuildConnectionUpdatesAppliesOnlyChangedFields(t *testing.T) {
+	existing := &config.Connection{
+		Driver: "pg", Host: "old.host", Port: 5432, Database: "old-db",
+	}
+	in := updateInputs{
+		Alias: "x",
+		Host:  "new.host",
+		// Port/Database not set; should not change because not in `changed`.
+	}
+	changed := map[string]bool{"host": true}
+
+	updated, warnings, err := buildConnectionUpdates(existing, in, changed)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
+	}
+	if existing.Host != "new.host" {
+		t.Errorf("Host = %q, want new.host", existing.Host)
+	}
+	if existing.Port != 5432 || existing.Database != "old-db" {
+		t.Errorf("untouched fields mutated: %+v", existing)
+	}
+	if len(updated) != 1 || updated[0] != "host" {
+		t.Errorf("updated = %v, want [host]", updated)
+	}
+}
+
+func TestBuildConnectionUpdatesInvalidPort(t *testing.T) {
+	existing := &config.Connection{Driver: "pg"}
+	_, _, err := buildConnectionUpdates(existing, updateInputs{Alias: "x", Port: "not-a-number"}, map[string]bool{"port": true})
+	if err == nil || !strings.Contains(err.Error(), "invalid port") {
+		t.Errorf("err = %v, want invalid port", err)
+	}
+}
+
+func TestBuildConnectionUpdatesClearOptionsThenSet(t *testing.T) {
+	existing := &config.Connection{
+		Driver:  "pg",
+		Options: map[string]string{"old_key": "x"},
+	}
+	in := updateInputs{
+		Alias:        "x",
+		ClearOptions: true,
+		OptionFlags:  []string{"new_key=v"},
+	}
+	updated, _, err := buildConnectionUpdates(existing, in, map[string]bool{})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if existing.Options["old_key"] != "" {
+		t.Errorf("clear-options should remove old_key; got %v", existing.Options)
+	}
+	if existing.Options["new_key"] != "v" {
+		t.Errorf("--option should add new_key after clear; got %v", existing.Options)
+	}
+	if len(updated) != 1 || updated[0] != "options" {
+		t.Errorf("updated = %v, want [options] (only one entry even with clear+set)", updated)
 	}
 }
 

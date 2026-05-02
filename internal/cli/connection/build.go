@@ -33,6 +33,85 @@ func validateCredentialRef(credName string) error {
 	)
 }
 
+// updateInputs collects everything `connection update` reads from the
+// user. Only fields whose name appears in the `changed` set passed to
+// buildConnectionUpdates are actually applied to the existing
+// connection -- the value carried here is meaningless when the flag
+// was not explicitly set.
+type updateInputs struct {
+	Alias        string
+	DriverFlag   string
+	Host         string
+	Port         string
+	Database     string
+	Path         string
+	URL          string
+	CredName     string
+	OptionFlags  []string
+	ClearOptions bool
+}
+
+// buildConnectionUpdates applies a set of updates to existing in
+// place. Only fields whose name is in `changed` are applied. Returns
+// the list of updated field names (for the receipt's "updated" array),
+// any warnings the caller should print, and the first error.
+//
+// `changed["credential"]` controls the URL-update fallback in
+// applyURLUpdate -- when --url is set without --credential, the
+// existing credential is reused for the embedded-creds rejection check.
+func buildConnectionUpdates(existing *config.Connection, in updateInputs, changed map[string]bool) (updated []string, warnings []string, err error) {
+	if changed["driver"] {
+		existing.Driver = in.DriverFlag
+		updated = append(updated, "driver")
+	}
+	if changed["host"] {
+		existing.Host = in.Host
+		updated = append(updated, "host")
+	}
+	if changed["port"] {
+		n, atoiErr := strconv.Atoi(in.Port)
+		if atoiErr != nil {
+			return nil, nil, fmt.Errorf("invalid port: %s", in.Port)
+		}
+		existing.Port = n
+		updated = append(updated, "port")
+	}
+	if changed["database"] {
+		existing.Database = in.Database
+		updated = append(updated, "database")
+	}
+	if changed["url"] {
+		w, urlErr := applyURLUpdate(existing, in.URL, in.Alias, in.CredName, changed["credential"])
+		if urlErr != nil {
+			return nil, nil, urlErr
+		}
+		if w != "" {
+			warnings = append(warnings, w)
+		}
+		updated = append(updated, "url")
+	}
+	if changed["path"] {
+		abs, absErr := filepath.Abs(in.Path)
+		if absErr != nil {
+			return nil, nil, absErr
+		}
+		existing.Path = abs
+		updated = append(updated, "path")
+	}
+	if changed["credential"] {
+		existing.Credential = in.CredName
+		updated = append(updated, "credential")
+	}
+	optsChanged, optsErr := applyOptionUpdates(existing, in.ClearOptions, in.OptionFlags)
+	if optsErr != nil {
+		return nil, nil, optsErr
+	}
+	if optsChanged {
+		updated = append(updated, "options")
+	}
+	return updated, warnings, nil
+}
+
 // applyOptionUpdates mutates existing.Options based on `--clear-options`
 // and repeated `--option k=v` flags. Order is documented in the user-facing
 // help: clear runs first, then merges. Returns changed=true if either flag

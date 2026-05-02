@@ -3,14 +3,18 @@ package connection
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
 )
+
+// updateFlagNames are the cobra flag names whose `Changed` status the
+// RunE collects to drive buildConnectionUpdates. Listed once so adding
+// a new updatable field is one entry here + one branch in
+// buildConnectionUpdates.
+var updateFlagNames = []string{"driver", "host", "port", "database", "url", "path", "credential"}
 
 func registerUpdate(parent *cobra.Command) {
 	var (
@@ -45,60 +49,26 @@ func registerUpdate(parent *cobra.Command) {
 				}
 			}
 
-			updated := []string{}
-			if cmd.Flags().Changed("driver") {
-				existing.Driver = driverFlag
-				updated = append(updated, "driver")
-			}
-			if cmd.Flags().Changed("host") {
-				existing.Host = host
-				updated = append(updated, "host")
-			}
-			if cmd.Flags().Changed("port") {
-				n, err := strconv.Atoi(port)
-				if err != nil {
-					portErr := fmt.Errorf("invalid port: %s", port)
-					output.WriteError(os.Stderr, portErr)
-					return portErr
+			changed := map[string]bool{}
+			for _, name := range updateFlagNames {
+				if cmd.Flags().Changed(name) {
+					changed[name] = true
 				}
-				existing.Port = n
-				updated = append(updated, "port")
 			}
-			if cmd.Flags().Changed("database") {
-				existing.Database = database
-				updated = append(updated, "database")
+			in := updateInputs{
+				Alias: alias, DriverFlag: driverFlag,
+				Host: host, Port: port, Database: database,
+				Path: path, URL: url, CredName: credName,
+				OptionFlags: optionFlags, ClearOptions: clearOptions,
 			}
-			if cmd.Flags().Changed("url") {
-				warning, err := applyURLUpdate(existing, url, alias, credName, cmd.Flags().Changed("credential"))
-				if err != nil {
-					output.WriteError(os.Stderr, err)
-					return err
-				}
-				if warning != "" {
-					output.Warn("%s", warning)
-				}
-				updated = append(updated, "url")
-			}
-			if cmd.Flags().Changed("path") {
-				abs, err := filepath.Abs(path)
-				if err != nil {
-					output.WriteError(os.Stderr, err)
-					return err
-				}
-				existing.Path = abs
-				updated = append(updated, "path")
-			}
-			if cmd.Flags().Changed("credential") {
-				existing.Credential = credName
-				updated = append(updated, "credential")
-			}
-			optsChanged, err := applyOptionUpdates(existing, clearOptions, optionFlags)
+
+			updated, warnings, err := buildConnectionUpdates(existing, in, changed)
 			if err != nil {
 				output.WriteError(os.Stderr, err)
 				return err
 			}
-			if optsChanged {
-				updated = append(updated, "options")
+			for _, w := range warnings {
+				output.Warn("%s", w)
 			}
 
 			if err := config.StoreConnection(alias, *existing); err != nil {
