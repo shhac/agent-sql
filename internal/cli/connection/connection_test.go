@@ -83,14 +83,15 @@ func TestConnectionAddRejectsEmbeddedCredentialsWithoutCredentialFlag(t *testing
 	config.SetConfigDir(t.TempDir())
 
 	stderr, restore := captureStderr(t)
-	defer restore()
 
 	root := testRoot(t)
 	root.SetArgs([]string{"connection", "add", "leak", "postgres://u:secret@h/d"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 
-	if err := root.Execute(); err == nil {
+	err := root.Execute()
+	restore() // flush pipe before reading the buffer
+	if err == nil {
 		t.Fatal("expected non-nil error from Execute (rejection)")
 	}
 	if got := config.GetConnection("leak"); got != nil {
@@ -125,10 +126,8 @@ func TestConnectionAddStripsEmbeddedCredentialsWhenCredentialFlagProvided(t *tes
 		t.Fatalf("seed credential: %v", err)
 	}
 
-	stdout, restore := captureStdout(t)
-	defer restore()
+	stdout, restoreOut := captureStdout(t)
 	stderr, restoreErr := captureStderr(t)
-	defer restoreErr()
 
 	root := testRoot(t)
 	root.SetArgs([]string{
@@ -139,7 +138,10 @@ func TestConnectionAddStripsEmbeddedCredentialsWhenCredentialFlagProvided(t *tes
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 
-	if err := root.Execute(); err != nil {
+	err := root.Execute()
+	restoreErr()
+	restoreOut()
+	if err != nil {
 		t.Fatalf("Execute: %v\nstderr: %s\nstdout: %s", err, stderr.String(), stdout.String())
 	}
 
@@ -176,10 +178,8 @@ func TestConnectionUpdateUrlPreservesExistingCredential(t *testing.T) {
 		t.Fatalf("seed connection: %v", err)
 	}
 
-	stdout, restore := captureStdout(t)
-	defer restore()
+	stdout, restoreOut := captureStdout(t)
 	stderr, restoreErr := captureStderr(t)
-	defer restoreErr()
 
 	root := testRoot(t)
 	root.SetArgs([]string{
@@ -189,7 +189,10 @@ func TestConnectionUpdateUrlPreservesExistingCredential(t *testing.T) {
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 
-	if err := root.Execute(); err != nil {
+	err := root.Execute()
+	restoreErr()
+	restoreOut()
+	if err != nil {
 		t.Fatalf("Execute: %v\nstderr: %s\nstdout: %s", err, stderr.String(), stdout.String())
 	}
 

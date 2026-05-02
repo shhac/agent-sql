@@ -302,7 +302,32 @@ func (c Connection) DisplayURL() string {
 	return base
 }
 
+// hostPortDriverInfo holds per-driver display info for host:port-style
+// drivers (pg, cockroachdb, mysql, mariadb, mssql). The scheme is what
+// appears before :// in display URLs (note pg → "postgres"). DefaultPort
+// mirrors the connect-time default applied in resolve.connectFromConfig.
+type hostPortDriverInfo struct {
+	Scheme      string
+	DefaultPort int
+}
+
+// hostPortDrivers is the single source of truth for which drivers use
+// host:port wire format and what their display scheme + default port are.
+// Adding a new host:port driver: add one entry here. Adding a non-host
+// driver (file, account, etc.) requires a new arm in displayBase below.
+var hostPortDrivers = map[string]hostPortDriverInfo{
+	"pg":          {Scheme: "postgres", DefaultPort: 5432},
+	"cockroachdb": {Scheme: "cockroachdb", DefaultPort: 26257},
+	"mysql":       {Scheme: "mysql", DefaultPort: 3306},
+	"mariadb":     {Scheme: "mariadb", DefaultPort: 3306},
+	"mssql":       {Scheme: "mssql", DefaultPort: 1433},
+}
+
 func (c Connection) displayBase() string {
+	if info, ok := hostPortDrivers[c.Driver]; ok {
+		host, port, db := effectiveHostPortDB(c, c.Driver)
+		return hostPortDBURL(info.Scheme, host, port, db)
+	}
 	switch c.Driver {
 	case "sqlite":
 		if c.Path != "" {
@@ -314,21 +339,6 @@ func (c Connection) displayBase() string {
 			return "duckdb://" + c.Path
 		}
 		return "duckdb://"
-	case "pg":
-		host, port, db := effectiveHostPortDB(c, "pg")
-		return hostPortDBURL("postgres", host, port, db)
-	case "cockroachdb":
-		host, port, db := effectiveHostPortDB(c, "cockroachdb")
-		return hostPortDBURL("cockroachdb", host, port, db)
-	case "mysql":
-		host, port, db := effectiveHostPortDB(c, "mysql")
-		return hostPortDBURL("mysql", host, port, db)
-	case "mariadb":
-		host, port, db := effectiveHostPortDB(c, "mariadb")
-		return hostPortDBURL("mariadb", host, port, db)
-	case "mssql":
-		host, port, db := effectiveHostPortDB(c, "mssql")
-		return hostPortDBURL("mssql", host, port, db)
 	case "snowflake":
 		u := "snowflake://"
 		if c.Account != "" {
@@ -364,18 +374,11 @@ func optionsQueryString(opts map[string]string) string {
 	return v.Encode()
 }
 
-// defaultPort returns the connect-time default port for a host/port-style
-// driver. Mirrors the defaults applied in resolve.connectFromConfig.
+// defaultPort returns the connect-time default port for a host:port-style
+// driver. Reads from the hostPortDrivers registry (single source of truth).
 func defaultPort(driver string) int {
-	switch driver {
-	case "pg":
-		return 5432
-	case "cockroachdb":
-		return 26257
-	case "mysql", "mariadb":
-		return 3306
-	case "mssql":
-		return 1433
+	if info, ok := hostPortDrivers[driver]; ok {
+		return info.DefaultPort
 	}
 	return 0
 }
@@ -409,22 +412,21 @@ func effectiveHostPortDB(c Connection, driver string) (string, int, string) {
 // "host" doesn't apply (sqlite, duckdb), returns "". For snowflake, returns
 // the account identifier.
 func (c Connection) EffectiveHost() string {
-	switch c.Driver {
-	case "pg", "cockroachdb", "mysql", "mariadb", "mssql":
+	if _, ok := hostPortDrivers[c.Driver]; ok {
 		host, _, _ := effectiveHostPortDB(c, c.Driver)
 		return host
-	case "snowflake":
+	}
+	if c.Driver == "snowflake" {
 		return c.Account
 	}
 	return ""
 }
 
-// EffectivePort returns the connect-time port for host-port drivers: stored
+// EffectivePort returns the connect-time port for host:port drivers: stored
 // Port, then parsed from URL, then the per-driver default. Returns 0 for
 // drivers without a port (sqlite, duckdb, snowflake).
 func (c Connection) EffectivePort() int {
-	switch c.Driver {
-	case "pg", "cockroachdb", "mysql", "mariadb", "mssql":
+	if _, ok := hostPortDrivers[c.Driver]; ok {
 		_, port, _ := effectiveHostPortDB(c, c.Driver)
 		return port
 	}
