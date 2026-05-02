@@ -133,6 +133,19 @@ echo "==> Seeding MSSQL..."
 # runner, so the docker-exec path is the one that actually runs there.
 # SQL is fed via stdin so quoting/newlines stay sane.
 HOST_SQLCMD=$(command -v sqlcmd 2>/dev/null || echo "")
+# Resolve the in-container sqlcmd path ONCE, so we don't rerun
+# `docker exec test -x ...` per call — that would consume the heredoc's stdin
+# even though `test` doesn't read it (docker exec -T forwards stdin blindly).
+CONTAINER_SQLCMD=""
+CONTAINER_TLS_FLAG=""
+if [ -z "$HOST_SQLCMD" ]; then
+    if docker compose -f docker-compose.test.yml exec -T mssql test -x /opt/mssql-tools18/bin/sqlcmd </dev/null; then
+        CONTAINER_SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
+        CONTAINER_TLS_FLAG="-C"  # required on tools18 to trust the dev cert
+    else
+        CONTAINER_SQLCMD="/opt/mssql-tools/bin/sqlcmd"
+    fi
+fi
 mssql_run() {
     local db="${1:-}"
     local db_arg=""
@@ -143,16 +156,8 @@ mssql_run() {
         # -C trusts the dev cert. Requires sqlcmd v18+ (any modern install).
         $HOST_SQLCMD -S "$MSSQL_HOST,$MSSQL_PORT" -U SA -P 'TestPass123!' -C $db_arg
     else
-        # -T disables the TTY so docker exec forwards our stdin straight through.
-        # The container has either mssql-tools18 (modern) or mssql-tools (legacy);
-        # try the newer one first, fall back if the binary doesn't exist.
-        if docker compose -f docker-compose.test.yml exec -T mssql test -x /opt/mssql-tools18/bin/sqlcmd; then
-            docker compose -f docker-compose.test.yml exec -T mssql \
-                /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'TestPass123!' -C $db_arg
-        else
-            docker compose -f docker-compose.test.yml exec -T mssql \
-                /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P 'TestPass123!' $db_arg
-        fi
+        docker compose -f docker-compose.test.yml exec -T mssql \
+            $CONTAINER_SQLCMD -S localhost -U SA -P 'TestPass123!' $CONTAINER_TLS_FLAG $db_arg
     fi
 }
 
