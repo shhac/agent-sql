@@ -214,36 +214,27 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+				effectiveLimit := limit
+				if effectiveLimit <= 0 {
+					effectiveLimit = 5
+				}
 
-			ctx, cancel := shared.MakeContext(g.Timeout)
-			defer cancel()
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-			defer func() { _ = drv.Close() }()
+				quoted := drv.QuoteIdent(args[0])
+				whereClause := ""
+				if where != "" {
+					whereClause = " WHERE " + where
+				}
+				sql := fmt.Sprintf("SELECT * FROM %s%s LIMIT %d", quoted, whereClause, effectiveLimit)
 
-			effectiveLimit := limit
-			if effectiveLimit <= 0 {
-				effectiveLimit = 5
-			}
+				result, err := drv.Query(ctx, sql, driver.QueryOpts{})
+				if err != nil {
+					return err
+				}
 
-			quoted := drv.QuoteIdent(args[0])
-			whereClause := ""
-			if where != "" {
-				whereClause = " WHERE " + where
-			}
-			sql := fmt.Sprintf("SELECT * FROM %s%s LIMIT %d", quoted, whereClause, effectiveLimit)
-
-			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-
-			writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
-			return nil
+				writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
+				return nil
+			})
 		},
 	}
 	sample.Flags().IntVar(&limit, "limit", 0, "Number of sample rows (default 5)")
@@ -278,23 +269,14 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 			}
 			sql := prefix + " " + args[0]
 
-			ctx, cancel := shared.MakeContext(g.Timeout)
-			defer cancel()
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-			defer func() { _ = drv.Close() }()
-
-			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-
-			output.PrintJSON(map[string]any{"plan": result.Rows}, true)
-			return nil
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+				result, err := drv.Query(ctx, sql, driver.QueryOpts{})
+				if err != nil {
+					return err
+				}
+				output.PrintJSON(map[string]any{"plan": result.Rows}, true)
+				return nil
+			})
 		},
 	}
 	explain.Flags().BoolVar(&analyze, "analyze", false, "Run EXPLAIN ANALYZE (read-only queries only)")
@@ -310,45 +292,36 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
+			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+				quoted := drv.QuoteIdent(args[0])
+				whereClause := ""
+				if where != "" {
+					whereClause = " WHERE " + where
+				}
+				sql := fmt.Sprintf("SELECT COUNT(*) AS count FROM %s%s", quoted, whereClause)
 
-			ctx, cancel := shared.MakeContext(g.Timeout)
-			defer cancel()
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-			defer func() { _ = drv.Close() }()
+				result, err := drv.Query(ctx, sql, driver.QueryOpts{})
+				if err != nil {
+					return err
+				}
 
-			quoted := drv.QuoteIdent(args[0])
-			whereClause := ""
-			if where != "" {
-				whereClause = " WHERE " + where
-			}
-			sql := fmt.Sprintf("SELECT COUNT(*) AS count FROM %s%s", quoted, whereClause)
-
-			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
-			if err != nil {
-				output.WriteError(os.Stderr, err)
-				return err
-			}
-
-			countVal := 0
-			if len(result.Rows) > 0 {
-				if v, ok := result.Rows[0]["count"]; ok {
-					switch n := v.(type) {
-					case int64:
-						countVal = int(n)
-					case float64:
-						countVal = int(n)
-					case int:
-						countVal = n
+				countVal := 0
+				if len(result.Rows) > 0 {
+					if v, ok := result.Rows[0]["count"]; ok {
+						switch n := v.(type) {
+						case int64:
+							countVal = int(n)
+						case float64:
+							countVal = int(n)
+						case int:
+							countVal = n
+						}
 					}
 				}
-			}
 
-			output.PrintJSON(map[string]any{"table": args[0], "count": countVal}, true)
-			return nil
+				output.PrintJSON(map[string]any{"table": args[0], "count": countVal}, true)
+				return nil
+			})
 		},
 	}
 	count.Flags().StringVar(&where, "where", "", "WHERE clause filter")
