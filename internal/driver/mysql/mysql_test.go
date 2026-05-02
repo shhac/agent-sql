@@ -10,6 +10,59 @@ import (
 	"github.com/shhac/agent-sql/internal/errors"
 )
 
+func TestBuildMysqlConfig(t *testing.T) {
+	t.Run("typed option fields populate", func(t *testing.T) {
+		cfg, err := buildMysqlConfig(Opts{
+			Host: "h", Port: 3306, Database: "d", Username: "u", Password: "p",
+			Options: map[string]string{"parseTime": "true", "tls": "skip-verify"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !cfg.ParseTime {
+			t.Error("ParseTime not set from options")
+		}
+		if cfg.TLSConfig != "skip-verify" {
+			t.Errorf("TLSConfig = %q, want skip-verify", cfg.TLSConfig)
+		}
+	})
+	t.Run("unknown options pass through Params", func(t *testing.T) {
+		cfg, err := buildMysqlConfig(Opts{
+			Host: "h", Port: 3306, Database: "d", Username: "u", Password: "p",
+			Options: map[string]string{"someFutureKey": "abc"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.Params["someFutureKey"] != "abc" {
+			t.Errorf("Params[someFutureKey] = %q, want abc", cfg.Params["someFutureKey"])
+		}
+	})
+	t.Run("MultiStatements always false", func(t *testing.T) {
+		cfg, err := buildMysqlConfig(Opts{
+			Host: "h", Port: 3306, Database: "d", Username: "u", Password: "p",
+			Options: map[string]string{"multiStatements": "true"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.MultiStatements {
+			t.Error("MultiStatements must always be false; user input ignored")
+		}
+	})
+	t.Run("connection target fields override options", func(t *testing.T) {
+		cfg, err := buildMysqlConfig(Opts{
+			Host: "real-host", Port: 3306, Database: "real-db", Username: "real-user", Password: "real-pass",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.User != "real-user" || cfg.Passwd != "real-pass" || cfg.DBName != "real-db" || cfg.Addr != "real-host:3306" {
+			t.Errorf("connection target fields not applied: %+v", cfg)
+		}
+	})
+}
+
 func TestQuoteIdent(t *testing.T) {
 	conn := &mysqlConn{}
 

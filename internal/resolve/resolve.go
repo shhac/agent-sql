@@ -282,6 +282,7 @@ func connectMysqlLikeConfig(d driver.Driver, conn *config.Connection, cred *cred
 		Database: orStr(conn.Database, "mysql"),
 		Username: cred.Username, Password: cred.Password,
 		Readonly: readonly, Variant: variant,
+		Options: conn.Options,
 	})
 }
 
