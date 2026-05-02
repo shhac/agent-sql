@@ -1,3 +1,12 @@
+// Tests in this file pin the *helper* contract for buildConnectionFromAddArgs
+// and buildConnectionUpdates -- pure logic, no cobra. The user-facing
+// contract (exit code, stderr JSON shape, password not echoed) is tested
+// at the cobra level in connection_test.go. Both layers exist on purpose:
+// helper tests catch regressions before the cobra wiring runs; cobra tests
+// catch wiring drift between the helper and the registered command.
+//
+// The URL-grammar contract for parseGenericURL is in parse_test.go; the
+// integration through buildConnectionFromAddArgs is asserted here.
 package connection
 
 import (
