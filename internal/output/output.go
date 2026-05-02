@@ -47,6 +47,15 @@ func PrintJSON(data any, prune bool) {
 	_ = enc.Encode(normalized)
 }
 
+// Warn writes a non-error advisory to stderr with a consistent
+// "warning: " prefix and trailing newline. Used for cases where an
+// operation succeeds but the user should know something happened
+// (credentials stripped, fallback used, etc.). For errors, use
+// WriteError, which produces structured JSON; Warn is plain text.
+func Warn(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+}
+
 // WriteError writes an error to stderr as JSON.
 func WriteError(w io.Writer, err error) {
 	var qerr *agenterrors.QueryError

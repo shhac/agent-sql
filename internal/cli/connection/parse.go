@@ -36,7 +36,8 @@ func parseOptionFlags(flags []string) (map[string]string, error) {
 //   - the URL has no embedded user:pass@ (warning is empty), OR
 //   - the URL has embedded creds AND a credential reference is present
 //     (effectiveCred != ""), in which case the userinfo is stripped and
-//     a warning string is returned for the caller to print.
+//     a warning *content* string is returned. The caller should pass it
+//     to output.Warn (which adds the "warning: " prefix + newline).
 //
 // Returns (raw, "", err) when the URL has embedded creds and no credential
 // is available -- the error is FixableByHuman and names the user so the
@@ -60,7 +61,7 @@ func rejectEmbeddedCreds(rawURL, alias, effectiveCred, field string) (cleaned, w
 			field, embeddedUser, alias, embeddedUser, alias,
 		), agenterrors.FixableByHuman)
 	}
-	return cleaned, fmt.Sprintf("warning: stripped embedded credentials from %s; using --credential %s\n", field, effectiveCred), nil
+	return cleaned, fmt.Sprintf("stripped embedded credentials from %s; using --credential %s", field, effectiveCred), nil
 }
 
 // stripURLCredentials returns the URL with any embedded user:pass@ removed.

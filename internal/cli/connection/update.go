@@ -75,7 +75,7 @@ func registerUpdate(parent *cobra.Command) {
 					return err
 				}
 				if warning != "" {
-					fmt.Fprint(os.Stderr, warning)
+					output.Warn("%s", warning)
 				}
 				updated = append(updated, "url")
 			}

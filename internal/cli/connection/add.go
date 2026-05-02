@@ -1,7 +1,6 @@
 package connection
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -50,7 +49,7 @@ func registerAdd(parent *cobra.Command) {
 				return err
 			}
 			for _, w := range warnings {
-				fmt.Fprint(os.Stderr, w)
+				output.Warn("%s", w)
 			}
 
 			if err := validateCredentialRef(credName); err != nil {

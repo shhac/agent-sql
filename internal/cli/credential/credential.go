@@ -119,7 +119,7 @@ func registerAdd(parent *cobra.Command) {
 			}
 
 			if storage == "file" && runtime.GOOS != "darwin" {
-				fmt.Fprintln(os.Stderr, "Warning: credentials stored in plaintext (macOS Keychain not available)")
+				output.Warn("credentials stored in plaintext (macOS Keychain not available)")
 			}
 
 			output.PrintJSON(map[string]any{
