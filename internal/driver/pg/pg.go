@@ -5,8 +5,6 @@ package pg
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -51,26 +49,6 @@ func Connect(ctx context.Context, opts Opts) (driver.Connection, error) {
 	}
 
 	return &pgConn{conn: conn, readonly: opts.Readonly}, nil
-}
-
-// buildPgURL renders an Opts into a postgres:// URL. sslmode defaults to
-// "prefer" but is overridden if the caller supplies sslmode in Options.
-func buildPgURL(opts Opts) string {
-	u := &url.URL{
-		Scheme: "postgres",
-		User:   url.UserPassword(opts.Username, opts.Password),
-		Host:   opts.Host + ":" + strconv.Itoa(opts.Port),
-		Path:   "/" + opts.Database,
-	}
-	q := u.Query()
-	if _, ok := opts.Options["sslmode"]; !ok {
-		q.Set("sslmode", "prefer")
-	}
-	for k, v := range opts.Options {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-	return u.String()
 }
 
 // ConnectURL opens a PostgreSQL connection from a connection URL.
