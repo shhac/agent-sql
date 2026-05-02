@@ -9,6 +9,51 @@ import (
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 )
 
+// applyOptionUpdates mutates existing.Options based on `--clear-options`
+// and repeated `--option k=v` flags. Order is documented in the user-facing
+// help: clear runs first, then merges. Returns changed=true if either flag
+// produced a change so the caller can append "options" to its updated[]
+// once (avoids the duplicate-entry bug when both flags are present).
+func applyOptionUpdates(existing *config.Connection, clearOptions bool, optionFlags []string) (changed bool, err error) {
+	if clearOptions {
+		existing.Options = nil
+		changed = true
+	}
+	if len(optionFlags) > 0 {
+		optsFromFlags, parseErr := parseOptionFlags(optionFlags)
+		if parseErr != nil {
+			return false, parseErr
+		}
+		if existing.Options == nil {
+			existing.Options = make(map[string]string)
+		}
+		for k, v := range optsFromFlags {
+			existing.Options[k] = v
+		}
+		changed = true
+	}
+	return changed, nil
+}
+
+// applyURLUpdate sets existing.URL to the cleaned form of rawURL,
+// rejecting embedded credentials when no effective credential reference
+// is available. credChanged should be true iff the caller's --credential
+// flag was explicitly set; when false, existing.Credential is used as
+// the effective credential for the rejection check. Returns any warning
+// the caller should print.
+func applyURLUpdate(existing *config.Connection, rawURL, alias, credName string, credChanged bool) (warning string, err error) {
+	effectiveCred := credName
+	if !credChanged {
+		effectiveCred = existing.Credential
+	}
+	cleanedURL, w, err := rejectEmbeddedCreds(rawURL, alias, effectiveCred, "--url")
+	if err != nil {
+		return "", err
+	}
+	existing.URL = cleanedURL
+	return w, nil
+}
+
 // addInputs collects everything `connection add` reads from the user
 // before any side effects. Fields mirror the command's positional and
 // flag arguments. The Alias is required; ConnString is the optional

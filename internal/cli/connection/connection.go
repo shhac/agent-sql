@@ -156,21 +156,9 @@ func registerAdd(parent *cobra.Command) {
 				fmt.Fprint(os.Stderr, w)
 			}
 
-			if credName != "" {
-				cred := credential.Get(credName)
-				if cred == nil {
-					names := credential.List()
-					listing := "(none)"
-					if len(names) > 0 {
-						listing = strings.Join(names, ", ")
-					}
-					credErr := fmt.Errorf(
-						"credential %q not found. Available: %s. Run: agent-sql credential add <alias> --username <user> --password <pass>",
-						credName, listing,
-					)
-					output.WriteError(os.Stderr, credErr)
-					return credErr
-				}
+			if err := validateCredentialRef(credName); err != nil {
+				output.WriteError(os.Stderr, err)
+				return err
 			}
 
 			if err := config.StoreConnection(alias, conn); err != nil {
@@ -240,22 +228,15 @@ func registerUpdate(parent *cobra.Command) {
 			alias := args[0]
 			existing := config.GetConnection(alias)
 			if existing == nil {
-				output.WriteError(os.Stderr, fmt.Errorf("connection %q not found", alias))
-				return nil
+				err := fmt.Errorf("connection %q not found", alias)
+				output.WriteError(os.Stderr, err)
+				return err
 			}
 
-			if credName != "" {
-				cred := credential.Get(credName)
-				if cred == nil {
-					names := credential.List()
-					listing := "(none)"
-					if len(names) > 0 {
-						listing = strings.Join(names, ", ")
-					}
-					output.WriteError(os.Stderr, fmt.Errorf(
-						"credential %q not found. Available: %s", credName, listing,
-					))
-					return nil
+			if cmd.Flags().Changed("credential") {
+				if err := validateCredentialRef(credName); err != nil {
+					output.WriteError(os.Stderr, err)
+					return err
 				}
 			}
 
@@ -271,8 +252,9 @@ func registerUpdate(parent *cobra.Command) {
 			if cmd.Flags().Changed("port") {
 				n, err := strconv.Atoi(port)
 				if err != nil {
-					output.WriteError(os.Stderr, fmt.Errorf("invalid port: %s", port))
-					return nil
+					portErr := fmt.Errorf("invalid port: %s", port)
+					output.WriteError(os.Stderr, portErr)
+					return portErr
 				}
 				existing.Port = n
 				updated = append(updated, "port")
@@ -282,11 +264,7 @@ func registerUpdate(parent *cobra.Command) {
 				updated = append(updated, "database")
 			}
 			if cmd.Flags().Changed("url") {
-				effectiveCred := credName
-				if !cmd.Flags().Changed("credential") {
-					effectiveCred = existing.Credential
-				}
-				cleanedURL, warning, err := rejectEmbeddedCreds(url, alias, effectiveCred, "--url")
+				warning, err := applyURLUpdate(existing, url, alias, credName, cmd.Flags().Changed("credential"))
 				if err != nil {
 					output.WriteError(os.Stderr, err)
 					return err
@@ -294,14 +272,13 @@ func registerUpdate(parent *cobra.Command) {
 				if warning != "" {
 					fmt.Fprint(os.Stderr, warning)
 				}
-				existing.URL = cleanedURL
 				updated = append(updated, "url")
 			}
 			if cmd.Flags().Changed("path") {
 				abs, err := filepath.Abs(path)
 				if err != nil {
 					output.WriteError(os.Stderr, err)
-					return nil
+					return err
 				}
 				existing.Path = abs
 				updated = append(updated, "path")
@@ -310,28 +287,18 @@ func registerUpdate(parent *cobra.Command) {
 				existing.Credential = credName
 				updated = append(updated, "credential")
 			}
-			if clearOptions {
-				existing.Options = nil
-				updated = append(updated, "options")
+			optsChanged, err := applyOptionUpdates(existing, clearOptions, optionFlags)
+			if err != nil {
+				output.WriteError(os.Stderr, err)
+				return err
 			}
-			if cmd.Flags().Changed("option") {
-				optsFromFlags, err := parseOptionFlags(optionFlags)
-				if err != nil {
-					output.WriteError(os.Stderr, err)
-					return err
-				}
-				if existing.Options == nil {
-					existing.Options = make(map[string]string)
-				}
-				for k, v := range optsFromFlags {
-					existing.Options[k] = v
-				}
+			if optsChanged {
 				updated = append(updated, "options")
 			}
 
 			if err := config.StoreConnection(alias, *existing); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			output.PrintJSON(map[string]any{"ok": true, "alias": alias, "updated": updated}, true)
@@ -365,6 +332,28 @@ func registerRemove(parent *cobra.Command) {
 		},
 	}
 	parent.AddCommand(remove)
+}
+
+// validateCredentialRef returns nil if credName is empty or refers to an
+// existing credential entry. Otherwise it returns an error naming the
+// available credentials and the recovery command. Used by both add and
+// update to reject typos before persisting the connection.
+func validateCredentialRef(credName string) error {
+	if credName == "" {
+		return nil
+	}
+	if cred := credential.Get(credName); cred != nil {
+		return nil
+	}
+	names := credential.List()
+	listing := "(none)"
+	if len(names) > 0 {
+		listing = strings.Join(names, ", ")
+	}
+	return fmt.Errorf(
+		"credential %q not found. Available: %s. Run: agent-sql credential add <alias> --username <user> --password <pass>",
+		credName, listing,
+	)
 }
 
 // renderConnection builds the per-row map for `connection list`. Keeps only
