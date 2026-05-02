@@ -105,6 +105,16 @@ func resolveDriver(driverFlag, url, path string) string {
 // connection-string argument. All fields are independent zero-value
 // defaults; the caller decides how to merge with explicit flag values
 // (typically: explicit flag wins on conflict).
+//
+// This type is CLI-internal: it exists to feed `connection add`'s
+// flag-merge step, and includes fields like Driver and Path that are
+// CLI/config concepts rather than runtime URL grammar. The runtime URL
+// parser for snowflake (the only driver with non-host:port URL grammar)
+// lives in its driver package as `snowflake.ParseURL`. They look
+// similar but serve different layers: parsedConnString is for storage
+// merging at add time; snowflake.ParseURL is for connect-time URL
+// interpretation (used by both `connection add` here and the ad-hoc
+// connectSnowflakeURL in resolve.go). The seam is intentional.
 type parsedConnString struct {
 	Driver    string
 	Host      string
