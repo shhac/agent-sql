@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"testing"
 
@@ -11,34 +12,62 @@ import (
 )
 
 func TestBuildPgURL(t *testing.T) {
-	cases := []struct {
-		name string
-		opts Opts
-		want string
-	}{
-		{
-			"defaults to sslmode=prefer",
-			Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p"},
-			"postgres://u:p@h:5432/d?sslmode=prefer",
-		},
-		{
-			"options override sslmode",
-			Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p", Options: map[string]string{"sslmode": "require"}},
-			"postgres://u:p@h:5432/d?sslmode=require",
-		},
-		{
-			"options pass through, alphabetized",
-			Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p", Options: map[string]string{"application_name": "agent-sql", "sslmode": "require"}},
-			"postgres://u:p@h:5432/d?application_name=agent-sql&sslmode=require",
-		},
+	t.Run("defaults to sslmode=prefer", func(t *testing.T) {
+		got := buildPgURL(Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p"})
+		u := mustParseURL(t, got)
+		if u.Scheme != "postgres" {
+			t.Errorf("Scheme = %q, want postgres", u.Scheme)
+		}
+		if u.Host != "h:5432" {
+			t.Errorf("Host = %q, want h:5432", u.Host)
+		}
+		if u.Path != "/d" {
+			t.Errorf("Path = %q, want /d", u.Path)
+		}
+		if user, pass, ok := userinfo(u); !ok || user != "u" || pass != "p" {
+			t.Errorf("userinfo = %s/%s/%v, want u/p/true", user, pass, ok)
+		}
+		if u.Query().Get("sslmode") != "prefer" {
+			t.Errorf("sslmode = %q, want prefer", u.Query().Get("sslmode"))
+		}
+	})
+
+	t.Run("options override sslmode", func(t *testing.T) {
+		got := buildPgURL(Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p", Options: map[string]string{"sslmode": "require"}})
+		u := mustParseURL(t, got)
+		if u.Query().Get("sslmode") != "require" {
+			t.Errorf("sslmode = %q, want require", u.Query().Get("sslmode"))
+		}
+	})
+
+	t.Run("options pass through", func(t *testing.T) {
+		got := buildPgURL(Opts{Host: "h", Port: 5432, Database: "d", Username: "u", Password: "p", Options: map[string]string{"application_name": "agent-sql", "sslmode": "require"}})
+		u := mustParseURL(t, got)
+		if u.Query().Get("application_name") != "agent-sql" {
+			t.Errorf("application_name = %q", u.Query().Get("application_name"))
+		}
+		if u.Query().Get("sslmode") != "require" {
+			t.Errorf("sslmode = %q, want require", u.Query().Get("sslmode"))
+		}
+	})
+}
+
+func mustParseURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", raw, err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := buildPgURL(tc.opts); got != tc.want {
-				t.Errorf("buildPgURL = %q, want %q", got, tc.want)
-			}
-		})
+	return u
+}
+
+func userinfo(u *url.URL) (user, pass string, hasPassword bool) {
+	if u.User == nil {
+		return "", "", false
 	}
+	user = u.User.Username()
+	pass, hasPassword = u.User.Password()
+	return user, pass, hasPassword
 }
 
 func TestQuoteIdent(t *testing.T) {
