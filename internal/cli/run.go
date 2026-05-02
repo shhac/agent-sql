@@ -34,7 +34,7 @@ func registerRunCommand(root *cobra.Command) {
 			})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			defer func() { _ = drv.Close() }()
 

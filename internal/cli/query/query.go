@@ -99,7 +99,7 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Write: write, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			defer func() { _ = drv.Close() }()
 
@@ -143,7 +143,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	sr, err := streamer.QueryStream(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
-		return nil
+		return err
 	}
 	if sr.Iterator == nil {
 		// Write result
@@ -167,14 +167,14 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 		row, err := sr.Iterator.Scan()
 		if err != nil {
 			output.WriteError(os.Stderr, err)
-			return nil
+			return err
 		}
 		_ = w.WriteRow(row)
 		count++
 	}
 	if err := sr.Iterator.Err(); err != nil {
 		output.WriteError(os.Stderr, err)
-		return nil
+		return err
 	}
 	_ = w.Flush()
 	return nil
@@ -184,7 +184,7 @@ func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opt
 	result, err := drv.Query(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
-		return nil
+		return err
 	}
 
 	if write && isWriteResult(result) {
@@ -220,7 +220,7 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			defer func() { _ = drv.Close() }()
 
@@ -239,7 +239,7 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
@@ -263,11 +263,12 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 
 			if analyze {
 				if m := writePattern.FindStringSubmatch(args[0]); len(m) > 1 {
-					output.WriteError(os.Stderr, fmt.Errorf(
+					err := fmt.Errorf(
 						"EXPLAIN ANALYZE is not allowed for write queries (detected %s); EXPLAIN ANALYZE actually executes the query, which would modify data. Use EXPLAIN without --analyze for write queries",
 						strings.ToUpper(m[1]),
-					))
-					return nil
+					)
+					output.WriteError(os.Stderr, err)
+					return err
 				}
 			}
 
@@ -282,14 +283,14 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			defer func() { _ = drv.Close() }()
 
 			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			output.PrintJSON(map[string]any{"plan": result.Rows}, true)
@@ -315,7 +316,7 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Timeout: g.Timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			defer func() { _ = drv.Close() }()
 
@@ -329,7 +330,7 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			result, err := drv.Query(ctx, sql, driver.QueryOpts{})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			countVal := 0

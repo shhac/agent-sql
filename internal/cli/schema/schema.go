@@ -224,10 +224,11 @@ func registerConstraints(parent *cobra.Command, globals func() SchemaGlobals) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if constraintType != "" {
 				if _, ok := typeMap[constraintType]; !ok {
-					output.WriteError(os.Stderr, fmt.Errorf(
+					err := fmt.Errorf(
 						"invalid constraint type: %q; valid types: pk, fk, unique, check", constraintType,
-					))
-					return nil
+					)
+					output.WriteError(os.Stderr, err)
+					return err
 				}
 			}
 

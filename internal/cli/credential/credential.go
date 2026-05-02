@@ -102,7 +102,7 @@ func registerAdd(parent *cobra.Command) {
 				filledUser, filledPass, err := promptMissingViaDialog(cmd.Context(), name, username, password)
 				if err != nil {
 					output.WriteError(os.Stderr, err)
-					return nil
+					return err
 				}
 				username = filledUser
 				password = filledPass
@@ -115,7 +115,7 @@ func registerAdd(parent *cobra.Command) {
 			})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			if storage == "file" && runtime.GOOS != "darwin" {
@@ -148,7 +148,7 @@ func registerRemove(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := credential.Remove(args[0]); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "removed": args[0]}, true)
 			return nil

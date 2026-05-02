@@ -95,8 +95,9 @@ func registerGet(parent *cobra.Command) {
 			key := args[0]
 			def := findKey(key)
 			if def == nil {
-				output.WriteError(os.Stderr, fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames()))
-				return nil
+				err := fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames())
+				output.WriteError(os.Stderr, err)
+				return err
 			}
 
 			value := config.GetSetting(key)
@@ -116,19 +117,20 @@ func registerSet(parent *cobra.Command) {
 			key, rawValue := args[0], args[1]
 			def := findKey(key)
 			if def == nil {
-				output.WriteError(os.Stderr, fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames()))
-				return nil
+				err := fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames())
+				output.WriteError(os.Stderr, err)
+				return err
 			}
 
 			value, err := parseConfigValue(def, rawValue)
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			if err := config.UpdateSetting(key, value); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			output.PrintJSON(map[string]any{"ok": true, "key": key, "value": value}, true)
@@ -146,7 +148,7 @@ func registerReset(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.ResetSettings(); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "message": "Settings reset to defaults"}, true)
 			return nil

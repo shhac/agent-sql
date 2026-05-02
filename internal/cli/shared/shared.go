@@ -31,8 +31,11 @@ func MakeContext(timeoutMs int) (context.Context, context.CancelFunc) {
 	return ctx, func() {}
 }
 
-// WithConnection resolves a connection, runs fn, and handles cleanup and error output.
-// Errors from resolution or fn are written to stderr as structured JSON.
+// WithConnection resolves a connection, runs fn, and handles cleanup and
+// error output. Errors from resolution or fn are written to stderr as
+// structured JSON AND propagated to the caller (cobra) so the process
+// exits non-zero. Cobra's SilenceErrors is set on the root, so the JSON
+// is the only thing emitted on stderr.
 func WithConnection(conn string, timeout int, fn func(ctx context.Context, drv driver.Connection) error) error {
 	ctx, cancel := MakeContext(timeout)
 	defer cancel()
@@ -40,12 +43,13 @@ func WithConnection(conn string, timeout int, fn func(ctx context.Context, drv d
 	drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
 	if err != nil {
 		output.WriteError(os.Stderr, err)
-		return nil
+		return err
 	}
 	defer func() { _ = drv.Close() }()
 
 	if err := fn(ctx, drv); err != nil {
 		output.WriteError(os.Stderr, err)
+		return err
 	}
 	return nil
 }

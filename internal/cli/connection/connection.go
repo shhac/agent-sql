@@ -325,7 +325,7 @@ func registerRemove(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.RemoveConnection(args[0]); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "removed": args[0]}, true)
 			return nil
@@ -431,14 +431,14 @@ func registerTest(parent *cobra.Command, globals func() (string, int)) {
 			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: connAlias, Timeout: timeout})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			defer func() { _ = drv.Close() }()
 
 			result, err := drv.Query(ctx, "SELECT 1", driver.QueryOpts{})
 			if err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 
 			displayAlias := connAlias
@@ -464,7 +464,7 @@ func registerSetDefault(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.SetDefault(args[0]); err != nil {
 				output.WriteError(os.Stderr, err)
-				return nil
+				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "default": args[0]}, true)
 			return nil
