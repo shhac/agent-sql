@@ -4,10 +4,34 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/shhac/agent-sql/internal/config"
+	"github.com/shhac/agent-sql/internal/credential"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 )
+
+// validateCredentialRef returns nil if credName is empty or refers to an
+// existing credential entry. Otherwise it returns an error naming the
+// available credentials and the recovery command. Used by both add and
+// update to reject typos before persisting the connection.
+func validateCredentialRef(credName string) error {
+	if credName == "" {
+		return nil
+	}
+	if cred := credential.Get(credName); cred != nil {
+		return nil
+	}
+	names := credential.List()
+	listing := "(none)"
+	if len(names) > 0 {
+		listing = strings.Join(names, ", ")
+	}
+	return fmt.Errorf(
+		"credential %q not found. Available: %s. Run: agent-sql credential add <alias> --username <user> --password <pass>",
+		credName, listing,
+	)
+}
 
 // applyOptionUpdates mutates existing.Options based on `--clear-options`
 // and repeated `--option k=v` flags. Order is documented in the user-facing
