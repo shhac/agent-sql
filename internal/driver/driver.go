@@ -122,6 +122,13 @@ type Connection interface {
 	// QuoteIdent quotes an identifier for safe use in SQL.
 	QuoteIdent(name string) string
 
+	// BuildSampleSelect composes `SELECT * FROM <quotedTable>[ WHERE ...] LIMIT n`
+	// in the dialect's native form. Most drivers delegate to SuffixLimitSelect;
+	// MSSQL overrides to emit `SELECT TOP n * FROM ...` instead. Used by
+	// `query sample` — the CLI owns every byte of the input here, so dialect
+	// composition stays inside the driver and never touches user SQL.
+	BuildSampleSelect(quotedTable, whereClause string, n int) string
+
 	// Close releases the connection resources.
 	Close() error
 }

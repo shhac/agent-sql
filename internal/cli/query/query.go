@@ -53,7 +53,7 @@ OPTIONS
 
 OUTPUT FORMAT (default NDJSON)
   Each row: {"col": val, ..., "@truncated": null}
-  Last line when more rows: {"@pagination": {"hasMore": true, "rowCount": 20}}
+  Last line when more rows: {"@pagination": {"hasMore": true, "rowCount": 20, "hint": "..."}}
 
 WRITE OUTPUT
   {"result": "ok", "rowsAffected": 5, "command": "UPDATE"}
@@ -61,9 +61,14 @@ WRITE OUTPUT
 SAFETY
   Queries are read-only by default. --write requires a credential with writePermission.
   Long strings are truncated; use --full or --expand to see full values.
-`
 
-var sqlHasLimit = regexp.MustCompile(`(?i)\bLIMIT\s+\d+`)
+PAGINATION
+  agent-sql never modifies user SQL. When a SELECT exceeds the row cap (default
+  --limit, or your explicit --limit), the cursor is closed early and a final
+  @pagination line reports hasMore=true. The CLI does not navigate to the next
+  page itself — re-run with a larger --limit, or write your own LIMIT/TOP and
+  cursor predicate (e.g. WHERE id > <last>) for true pagination.
+`
 
 var writePattern = regexp.MustCompile(`(?i)^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)\b`)
 
@@ -113,6 +118,14 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 
 // ExecuteRun runs a SQL query on an already-resolved connection and writes results.
 // Uses streaming (QueryStream) when the driver supports it, falling back to buffered Query.
+//
+// User SQL is sent verbatim — we never modify it to inject LIMIT/TOP. Pagination
+// is enforced client-side: we read up to `effectiveLimit+1` rows from the iterator
+// and close the cursor early if we hit the cap. The "+1" is the probe for
+// hasMore=true. Trade-off: the database planner doesn't know we'll stop, so
+// huge ORDER BY queries lose LIMIT-aware optimization. Users who care put
+// LIMIT/TOP in their own SQL — the hint on the @pagination payload nudges
+// them in that direction.
 func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, expand string, full bool, compact bool, formatFlag string) error {
 	pageSize := resolveLimit(limitFlag)
 	maxRows := resolveMaxRows()
@@ -120,26 +133,37 @@ func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFla
 	if maxRows > 0 && maxRows < effectiveLimit {
 		effectiveLimit = maxRows
 	}
+	limitFromUser := limitFlag > 0
 
 	isSelectLike := !write && driver.DetectCommand(sql, driver.WriteCommands) == ""
-	effectiveSQL := sql
-	if isSelectLike && !sqlHasLimit.MatchString(sql) {
-		effectiveSQL = strings.TrimRight(strings.TrimRight(sql, " \t\n"), ";") + fmt.Sprintf(" LIMIT %d", effectiveLimit+1)
-	}
-
 	opts := driver.QueryOpts{Write: write}
 	format := output.ResolveFormat(formatFlag)
 
 	// Try streaming path
 	if streamer, ok := drv.(driver.StreamingQuerier); ok && isSelectLike {
-		return executeStreaming(ctx, streamer, effectiveSQL, opts, effectiveLimit, expand, full, compact, format)
+		return executeStreaming(ctx, streamer, sql, opts, effectiveLimit, limitFromUser, expand, full, compact, format)
 	}
 
 	// Buffered fallback
-	return executeBuffered(ctx, drv, effectiveSQL, opts, write, effectiveLimit, expand, full, compact, format)
+	return executeBuffered(ctx, drv, sql, opts, write, effectiveLimit, limitFromUser, expand, full, compact, format)
 }
 
-func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql string, opts driver.QueryOpts, limit int, expand string, full bool, compact bool, format output.Format) error {
+// paginationHint returns guidance for the agent/user when truncation fires.
+// The hint differentiates user-supplied --limit (they chose the cap) from
+// the implicit default (we picked it for safety) so the suggested action
+// is specific.
+func paginationHint(limit int, fromUser bool) string {
+	source := "default safety cap"
+	if fromUser {
+		source = "your --limit"
+	}
+	return fmt.Sprintf(
+		"stopped at %s of %d rows; raise --limit for more, or push the cap into your SQL with LIMIT/TOP for planner-side acceleration",
+		source, limit,
+	)
+}
+
+func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql string, opts driver.QueryOpts, limit int, limitFromUser bool, expand string, full bool, compact bool, format output.Format) error {
 	sr, err := streamer.QueryStream(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
@@ -159,8 +183,14 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	count := 0
 	for sr.Iterator.Next() {
 		if count >= limit {
-			// One extra row means hasMore=true
-			_ = w.WritePagination(&output.Pagination{HasMore: true, RowCount: limit})
+			// We pulled one row past the limit — closing the iterator (via the
+			// deferred Close above) cancels the cursor server-side on every
+			// driver we use, so the database stops streaming further rows.
+			_ = w.WritePagination(&output.Pagination{
+				HasMore:  true,
+				RowCount: limit,
+				Hint:     paginationHint(limit, limitFromUser),
+			})
 			_ = w.Flush()
 			return nil
 		}
@@ -180,7 +210,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	return nil
 }
 
-func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opts driver.QueryOpts, write bool, limit int, expand string, full bool, compact bool, format output.Format) error {
+func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opts driver.QueryOpts, write bool, limit int, limitFromUser bool, expand string, full bool, compact bool, format output.Format) error {
 	result, err := drv.Query(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
@@ -196,11 +226,13 @@ func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opt
 
 	hasMore := !write && len(result.Rows) > limit
 	displayRows := result.Rows
+	hint := ""
 	if hasMore {
 		displayRows = result.Rows[:limit]
+		hint = paginationHint(limit, limitFromUser)
 	}
 
-	writeQueryResults(displayRows, hasMore, expand, full, compact, format, result.Columns)
+	writeQueryResults(displayRows, hasMore, hint, expand, full, compact, format, result.Columns)
 	return nil
 }
 
@@ -225,14 +257,14 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 				if where != "" {
 					whereClause = " WHERE " + where
 				}
-				sql := fmt.Sprintf("SELECT * FROM %s%s LIMIT %d", quoted, whereClause, effectiveLimit)
+				sql := drv.BuildSampleSelect(quoted, whereClause, effectiveLimit)
 
 				result, err := drv.Query(ctx, sql, driver.QueryOpts{})
 				if err != nil {
 					return err
 				}
 
-				writeQueryResults(result.Rows, false, g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
+				writeQueryResults(result.Rows, false, "", g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
 				return nil
 			})
 		},
@@ -384,7 +416,7 @@ func makeWriter(expand string, full bool, compact bool, format output.Format, co
 	)
 }
 
-func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full bool, compact bool, format output.Format, columns []string) {
+func writeQueryResults(rows []map[string]any, hasMore bool, hint string, expand string, full bool, compact bool, format output.Format, columns []string) {
 	w := makeWriter(expand, full, compact, format, columns)
 
 	for _, row := range rows {
@@ -395,6 +427,7 @@ func writeQueryResults(rows []map[string]any, hasMore bool, expand string, full 
 		_ = w.WritePagination(&output.Pagination{
 			HasMore:  true,
 			RowCount: len(rows),
+			Hint:     hint,
 		})
 	}
 

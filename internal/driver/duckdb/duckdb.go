@@ -114,6 +114,10 @@ func (c *duckdbConn) QuoteIdent(name string) string {
 	return driver.QuoteIdentDot(name)
 }
 
+func (c *duckdbConn) BuildSampleSelect(quotedTable, whereClause string, n int) string {
+	return driver.SuffixLimitSelect(quotedTable, whereClause, n)
+}
+
 func (c *duckdbConn) Close() error {
 	return nil
 }

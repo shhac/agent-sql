@@ -77,6 +77,10 @@ func (c *pgConn) QuoteIdent(name string) string {
 	return driver.QuoteIdentDot(name)
 }
 
+func (c *pgConn) BuildSampleSelect(quotedTable, whereClause string, n int) string {
+	return driver.SuffixLimitSelect(quotedTable, whereClause, n)
+}
+
 func (c *pgConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.QueryResult, error) {
 	if c.readonly {
 		if err := driver.GuardReadOnly(sqlStr); err != nil {

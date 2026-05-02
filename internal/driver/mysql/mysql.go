@@ -71,6 +71,10 @@ func (c *mysqlConn) QuoteIdent(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
+func (c *mysqlConn) BuildSampleSelect(quotedTable, whereClause string, n int) string {
+	return driver.SuffixLimitSelect(quotedTable, whereClause, n)
+}
+
 func (c *mysqlConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.QueryResult, error) {
 	cmd := driver.DetectCommand(sqlStr, writeCommands)
 

@@ -126,6 +126,10 @@ func (c *snowflakeConn) QuoteIdent(name string) string {
 	return driver.QuoteIdentDot(name)
 }
 
+func (c *snowflakeConn) BuildSampleSelect(quotedTable, whereClause string, n int) string {
+	return driver.SuffixLimitSelect(quotedTable, whereClause, n)
+}
+
 func (c *snowflakeConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.QueryResult, error) {
 	if c.readonly && !opts.Write {
 		if err := validateReadOnly(sqlStr); err != nil {

@@ -14,8 +14,9 @@ import (
 
 // Pagination holds pagination metadata for result sets.
 type Pagination struct {
-	HasMore  bool `json:"hasMore"`
-	RowCount int  `json:"rowCount"`
+	HasMore  bool   `json:"hasMore"`
+	RowCount int    `json:"rowCount"`
+	Hint     string `json:"hint,omitempty"`
 }
 
 // ResultWriter writes query results in a streaming fashion.

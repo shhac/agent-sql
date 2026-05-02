@@ -48,6 +48,10 @@ func (c *sqliteConn) QuoteIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
+func (c *sqliteConn) BuildSampleSelect(quotedTable, whereClause string, n int) string {
+	return driver.SuffixLimitSelect(quotedTable, whereClause, n)
+}
+
 func (c *sqliteConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.QueryResult, error) {
 	cmd := driver.DetectCommand(sqlStr, writeCommands)
 	if cmd != "" && opts.Write {

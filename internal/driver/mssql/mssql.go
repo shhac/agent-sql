@@ -4,6 +4,7 @@ package mssql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	_ "github.com/microsoft/go-mssqldb"
@@ -62,6 +63,12 @@ func (c *mssqlConn) QuoteIdent(name string) string {
 		parts = append(parts, "["+escaped+"]")
 	}
 	return strings.Join(parts, ".")
+}
+
+// BuildSampleSelect emits T-SQL form. MSSQL puts the row cap immediately
+// after SELECT (`SELECT TOP n ...`), not as a trailing clause.
+func (c *mssqlConn) BuildSampleSelect(quotedTable, whereClause string, n int) string {
+	return fmt.Sprintf("SELECT TOP %d * FROM %s%s", n, quotedTable, whereClause)
 }
 
 func (c *mssqlConn) Query(ctx context.Context, sqlStr string, opts driver.QueryOpts) (*driver.QueryResult, error) {
