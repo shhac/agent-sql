@@ -169,6 +169,33 @@ func TestParseGenericURLPercentEncodedOption(t *testing.T) {
 	}
 }
 
+func TestParseGenericURLValueContainingAmpersand(t *testing.T) {
+	// Encoded `&` in value via %26: should stay as a single value, not
+	// split into a separate key.
+	p := parseGenericURL("postgres://h/db?tag=foo%26bar")
+	if p.Options["tag"] != "foo&bar" {
+		t.Errorf("Options[tag] = %q, want \"foo&bar\"", p.Options["tag"])
+	}
+	if _, exists := p.Options["bar"]; exists {
+		t.Error("`&` in encoded value must not produce a phantom key")
+	}
+}
+
+func TestParseGenericURLEmptySegmentsIgnored(t *testing.T) {
+	// Trailing `&` and `&&` are tolerated by url.Parse and produce no
+	// spurious empty-key entries.
+	p := parseGenericURL("postgres://h/db?sslmode=require&&application_name=foo&")
+	if p.Options["sslmode"] != "require" {
+		t.Errorf("sslmode lost: %v", p.Options)
+	}
+	if p.Options["application_name"] != "foo" {
+		t.Errorf("application_name lost: %v", p.Options)
+	}
+	if _, exists := p.Options[""]; exists {
+		t.Error("empty key should not appear in options")
+	}
+}
+
 func TestParseGenericURLOptions(t *testing.T) {
 	p := parseGenericURL("postgres://h:5432/db?sslmode=require&application_name=foo")
 	want := map[string]string{"sslmode": "require", "application_name": "foo"}
