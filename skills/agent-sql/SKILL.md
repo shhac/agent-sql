@@ -33,6 +33,14 @@ agent-sql run -c mssql://user:pass@host/db 'SELECT * FROM users'  # MSSQL URL (z
 agent-sql run -c myalias 'SELECT * FROM users'                     # saved connection alias
 ```
 
+Ad-hoc URLs accept driver-specific options as query-string params (pgx, gomysql, go-mssqldb, snowflake all parse them):
+
+```bash
+agent-sql run -c 'postgres://h/d?sslmode=require&application_name=foo' 'SELECT 1'
+agent-sql run -c 'mysql://h/d?parseTime=true&tls=skip-verify' 'SELECT 1'
+agent-sql run -c 'mssql://h/d?encrypt=true' 'SELECT 1'
+```
+
 For named connections, discover what's available:
 
 ```bash

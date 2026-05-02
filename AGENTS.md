@@ -53,20 +53,38 @@ Design docs live in `design-docs/` (gitignored, local-only). If present:
 cmd/
   agent-sql/                  # CLI entry point (main.go)
 internal/
-  cli/                        # cobra commands
+  cli/                        # cobra commands; root has SilenceErrors=true so RunE errors propagate
+                              # as exit codes without cobra reprinting them.
     root.go                   # global flags (-c, --format, --expand, --full, --timeout)
     run.go                    # top-level `run` alias
     usage.go                  # LLM reference card
+    shared/                   # WithConnection helper, GlobalFlags, RegisterUsage
     query/                    # query run/sample/explain/count/usage
     schema/                   # schema tables/describe/indexes/constraints/search/dump/usage
-    connection/               # connection add/remove/update/list/test/set-default/usage
+    connection/               # split per command:
+                              #   register.go      — Register + usage const
+                              #   add.go           — registerAdd
+                              #   update.go        — registerUpdate
+                              #   list.go          — registerList + renderConnection
+                              #   simple.go        — registerRemove + registerSetDefault
+                              #   test_cmd.go      — registerTest (only one using resolve)
+                              #   build.go         — buildConnectionFromAddArgs,
+                              #                       buildConnectionUpdates,
+                              #                       validateCredentialRef, applyURLUpdate,
+                              #                       applyOptionUpdates
+                              #   parse.go         — parsedConnString, parseGenericURL,
+                              #                       parseSnowflakeURL, rejectEmbeddedCreds,
+                              #                       parseOptionFlags
     credential/               # credential add/remove/list/usage
     config/                   # config get/set/reset/list-keys/usage
   driver/
     driver.go                 # Connection interface, QueryResult, schema types
-    resolve.go                # Driver resolution from config / URL / file path
+    registry.go               # SINGLE source of truth for per-driver metadata: Scheme,
+                              # DefaultPort, DefaultDB, HostPort, CredentialKind, DisplayLabel.
+                              # display.go and resolve/ both read from this.
     detect.go                 # URL scheme and file extension detection
     guard.go                  # Keyword-based read-only guard (shared by PG, MSSQL)
+    helpers.go / sqlrows.go   # ScanAllRows, SQLRowsIterator, SplitSchemaTable
     pg/                       # PostgreSQL (pgx) — also used by CockroachDB
     cockroachdb/              # Thin wrapper over pg (port 26257, db defaultdb)
     mysql/                    # MySQL (go-sql-driver/mysql) — also used by MariaDB
@@ -75,11 +93,32 @@ internal/
     duckdb/                   # DuckDB (subprocess — spawns duckdb CLI with NDJSON output)
     snowflake/                # Snowflake (HTTP REST API v2)
     mssql/                    # MSSQL (go-mssqldb)
-  config/                     # Config file I/O (connections + settings)
+
+    # Canonical per-driver layout (every driver follows this):
+    #   <name>.go    Connect + Connection-interface methods only
+    #   dsn.go       DSN/URL builder (when non-trivial)
+    #   schema.go    Schema methods (GetTables, DescribeTable, …)
+    #   errors.go    classifyError + driver-specific error helpers
+    #   options.go   Option-merging helpers (currently only duckdb)
+
+  resolve/                    # alias / URL / file → driver.Connection (the dispatch hub)
+    resolve.go                # top-level Resolve dispatch
+    policy.go                 # write-permission, credential-required helpers
+    urlparse.go               # genericURL struct, parseGenericURL, parsePort
+    connect_pg.go             # pg/cockroachdb stored connect
+    connect_mysql.go          # mysql/mariadb URL + stored connect
+    connect_snowflake.go      # snowflake URL + stored connect
+    connect_mssql.go          # mssql URL + stored connect
+    connect_file.go           # sqlite + duckdb ad-hoc
+
+  config/                     # Config file I/O + display rendering
+    config.go                 # types, JSON I/O, settings get/set
+    display.go                # DisplayURL, AsReceipt, EffectiveHost/Port; reads driver.Registry
   credential/                 # Credential storage (Keychain on macOS, file fallback)
   dialog/                     # Native OS dialog wrapper (ncruces/zenity); Default Prompter overridable for tests
     dialogtest/               # Recording fake Prompter for tests
-  output/                     # ResultWriter interface, NDJSON/JSON/YAML/CSV formatters
+  output/                     # ResultWriter interface; NDJSON/JSON/YAML/CSV formatters;
+                              # PrintJSON, WriteError, Warn helpers
   truncation/                 # @truncated decorator (ResultWriter wrapper)
   errors/                     # QueryError type, per-driver error classification
 ```
@@ -87,10 +126,14 @@ internal/
 ## Key patterns
 
 - **Connection interface**: Every driver implements `driver.Connection`. CLI commands call interface methods — zero driver-specific branching.
+- **Driver registry**: `internal/driver/registry.go` is the single source of truth for per-driver metadata (scheme, default port/db, credential kind, display label). `config/display.go` and `resolve/` both read from it. Adding a driver is a single Registry entry plus the driver-package implementation.
 - **context.Context**: All driver methods take `context.Context` for timeout/cancellation (except `QuoteIdent` and `Close`).
 - **ResultWriter**: Streaming output interface. NDJSON writes rows as they arrive. JSON/YAML buffer internally. Truncation is a decorator wrapping the inner writer.
-- **Error classification**: `errors.QueryError` with `FixableBy` field (`agent`/`human`/`retry`). Drivers pre-classify; `errors.Classify()` handles the rest.
+- **Error classification**: `errors.QueryError` with `FixableBy` field (`agent`/`human`/`retry`). Every driver's `classifyError` includes an "already classified, pass through" guard so re-wrapping doesn't lose the original FixableBy.
+- **Hard-exit on errors**: every CLI command's RunE returns non-nil on failure (with cobra's `SilenceErrors: true` on root, this propagates as a non-zero exit code without double-printing). Shell `&&` chains reflect actual outcomes.
 - **Connection resolution**: `-c` accepts aliases, file paths (`.db`, `.duckdb`), or URLs (postgres://, cockroachdb://, mysql://, mariadb://, duckdb://, snowflake://, mssql://, sqlserver://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default.
+- **Connection options**: per-driver knobs (sslmode, parseTime, encrypt, _journal_mode, query_tag, …) flow from URL query strings or repeated `--option k=v` flags into `Connection.Options`, then through to the driver lib via its native option-handling (pgx URL, gomysql.ParseDSN, sqlite URI, go-mssqldb URL, snowflake session params, duckdb SET prelude). Pass-through: the underlying driver lib is the source of truth for valid keys.
+- **Embedded credentials**: stored connection URLs reject `user:pass@` at add/update time (config is plaintext on disk). Ad-hoc `-c <url>` preserves embedded creds because they're per-process and never written.
 - **Keyword guard**: Shared read-only guard for PG and MSSQL. Blocks statements starting with INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, MERGE, GRANT, REVOKE. PG also uses server-side `BEGIN READ ONLY`.
 - **Thin wrappers**: CockroachDB wraps PG (different defaults). MariaDB wraps MySQL (different timeout syntax).
 
@@ -111,20 +154,31 @@ When changing CLI behavior, flags, output shape, or commands, also update the ap
 
 ### Adding a new driver — checklist
 
-Every file below must be updated. Use the existing drivers as a model.
+Use the existing drivers as a model. The driver registry centralizes most
+metadata; the per-driver wiring follows the canonical file shape.
 
-**Core:**
-- [ ] `internal/driver/driver.go` — add to `Driver` constants
-- [ ] `internal/driver/<name>/` — driver implementation
+**Core (driver package + registry):**
+- [ ] `internal/driver/driver.go` — add to `Driver` constants and `AllDrivers`
+- [ ] `internal/driver/registry.go` — add a `Registry` entry (Scheme, DefaultPort, DefaultDB, HostPort, Credential, DisplayLabel). Most downstream code reads from here automatically.
 - [ ] `internal/driver/detect.go` — URL pattern and/or file extension detection
-- [ ] `internal/driver/resolve.go` — builder entry, write permission check, driver name in error messages
+- [ ] `internal/driver/<name>/` — driver implementation following the canonical layout:
+  - [ ] `<name>.go` — Connect + Connection-interface methods
+  - [ ] `dsn.go` — DSN/URL builder if non-trivial
+  - [ ] `schema.go` — schema methods (GetTables, DescribeTable, …)
+  - [ ] `errors.go` — classifyError with the "already-classified pass-through" guard at top
+  - [ ] `options.go` — option helpers if non-trivial
+
+**Resolve dispatch:**
+- [ ] `internal/resolve/connect_<name>.go` — connect-time wiring (one file per driver)
+- [ ] `internal/resolve/resolve.go` — add a case in connectFromURL and connectFromConfig
+- [ ] `internal/resolve/connect_<name>.go` calls into `requireUserPass` / `requirePassword` (policy.go)
 
 **CLI text (every place that lists drivers):**
-- [ ] `internal/cli/connection/add.go` — `--driver` flag description, connection string parsing
+- [ ] `internal/cli/connection/add.go` — `--driver` flag description
 - [ ] `internal/cli/connection/update.go` — `--driver` flag description
-- [ ] `internal/cli/connection/usage.go` — examples, AD-HOC section
-- [ ] `internal/cli/credential/add.go` — hint text
-- [ ] `internal/cli/usage.go` — driver list, ad-hoc examples, CONNECTION section
+- [ ] `internal/cli/connection/register.go` — `usageText` const: examples, AD-HOC section, driver list
+- [ ] `internal/cli/credential/credential.go` — `usageText` hint text
+- [ ] `internal/cli/usage.go` — top-level driver list, ad-hoc examples, CONNECTION section
 
 **Documentation:**
 - [ ] `skills/agent-sql/SKILL.md` — description, triggers, driver list, quick start, safety section
@@ -134,6 +188,8 @@ Every file below must be updated. Use the existing drivers as a model.
 
 **Tests:**
 - [ ] `internal/driver/<name>/<name>_test.go` — query, schema, readonly, data types, error classification
+- [ ] `internal/driver/<name>/`-test for the DSN/URL builder if `dsn.go` exists
 - [ ] `internal/driver/detect_test.go` — URL detection, file extension detection
-- [ ] `internal/driver/resolve_test.go` — write permission check
+- [ ] `internal/resolve/resolve_test.go` — `TestCheckWritePermission` table
+- [ ] `internal/cli/connection/build_test.go` — `TestOptionsURLBridge` row for the driver's URL grammar
 

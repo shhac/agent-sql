@@ -73,6 +73,11 @@ AGENT_SQL_SNOWFLAKE_TOKEN=<pat> agent-sql run \
 # MSSQL / SQL Server
 agent-sql run -c mssql://user:pass@localhost/myapp 'SELECT * FROM users'
 agent-sql run -c sqlserver://user:pass@localhost/myapp 'SELECT * FROM users'
+
+# Ad-hoc URLs accept driver-specific options as query-string params
+# (sslmode for pg, parseTime/tls for mysql, encrypt for mssql, …)
+agent-sql run -c 'postgres://user:pass@h/d?sslmode=require&application_name=foo' 'SELECT 1'
+agent-sql run -c 'mysql://user:pass@h/d?parseTime=true&tls=skip-verify' 'SELECT 1'
 ```
 
 For databases you use repeatedly, save a named connection. The second argument is a connection string — driver, host, port, and database are auto-detected:

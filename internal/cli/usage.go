@@ -23,10 +23,14 @@ AD-HOC USAGE (zero setup):
   agent-sql run -c mssql://user:pass@host/db "SELECT 1"               # MSSQL URL
   agent-sql schema tables -c ./mydb.sqlite                             # schema from file
 
+  Driver-specific options pass through via URL query string:
+  agent-sql run -c 'postgres://h/d?sslmode=require' "SELECT 1"
+  agent-sql run -c 'mysql://h/d?parseTime=true&tls=skip-verify' "SELECT 1"
+
 NAMED CONNECTIONS (human-only setup):
   credential add <alias> --username <u> --password <p> [--write]
   credential add <alias> [--username <u>] [--write] --form    # native popup, LLM never sees secret
-  connection add <alias> [connection-string] [--credential <name>] [--driver --host --port --database --path --url]
+  connection add <alias> [connection-string] [--credential <name>] [--driver --host --port --database --path --url] [--option k=v]
   connection test [alias]
 
 COMMANDS:
@@ -62,7 +66,8 @@ LLM SECRET SAFETY: Never put a user-pasted password into --password. Instruct th
 
 OUTPUT: NDJSON to stdout (default) — one JSON object per line, no envelope.
   Each row: {"col": val, ..., "@truncated": null}. Last line when more rows: {"@pagination": {...}}.
-  Errors always JSON to stderr: { "error": "...", "fixable_by": "agent"|"human" }.
+  Errors always JSON to stderr: { "error": "...", "fixable_by": "agent"|"human"|"retry" } AND exit 1.
+  Success exits 0. Shell "agent-sql ... && echo ok" reflects actual outcome.
 
 DETAIL: Run "<command> usage" for per-command docs.
 `
