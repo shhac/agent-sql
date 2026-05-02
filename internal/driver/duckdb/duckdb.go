@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/shhac/agent-sql/internal/driver"
@@ -17,6 +18,12 @@ import (
 type Opts struct {
 	Path     string // empty means in-memory
 	Readonly bool
+	// Options are applied as `SET key='value';` statements prepended to
+	// every query (DuckDB is subprocess-based -- no persistent session).
+	// The reserved key "extensions" is comma-separated and translates to
+	// `INSTALL <ext>; LOAD <ext>;` per item. DuckDB rejects unknown
+	// settings or bad values at execution time.
+	Options map[string]string
 }
 
 var writeCommands = []string{
@@ -36,7 +43,12 @@ func Connect(ctx context.Context, opts Opts) (driver.Connection, error) {
 		).WithHint("DuckDB requires the duckdb CLI on PATH. Set AGENT_SQL_DUCKDB_PATH to use a custom location.")
 	}
 
-	conn := &duckdbConn{bin: bin, path: opts.Path, readonly: opts.Readonly}
+	conn := &duckdbConn{
+		bin:      bin,
+		path:     opts.Path,
+		readonly: opts.Readonly,
+		prelude:  buildOptionsPrelude(opts.Options),
+	}
 
 	// Verify database is accessible
 	if _, err := conn.exec(ctx, "SELECT 1"); err != nil {
@@ -50,6 +62,45 @@ type duckdbConn struct {
 	bin      string
 	path     string
 	readonly bool
+	prelude  string // SET / INSTALL+LOAD statements run before every query
+}
+
+// buildOptionsPrelude turns Options into `SET k='v'; ...` (alphabetized).
+// The reserved key "extensions" is comma-split into INSTALL+LOAD pairs.
+// Single quotes in values are doubled (SQL string escaping).
+func buildOptionsPrelude(opts map[string]string) string {
+	if len(opts) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(opts))
+	for k := range opts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var sb strings.Builder
+	for _, k := range keys {
+		v := opts[k]
+		if k == "extensions" {
+			for _, ext := range strings.Split(v, ",") {
+				e := strings.TrimSpace(ext)
+				if e == "" {
+					continue
+				}
+				sb.WriteString("INSTALL ")
+				sb.WriteString(e)
+				sb.WriteString("; LOAD ")
+				sb.WriteString(e)
+				sb.WriteString("; ")
+			}
+			continue
+		}
+		sb.WriteString("SET ")
+		sb.WriteString(k)
+		sb.WriteString("='")
+		sb.WriteString(strings.ReplaceAll(v, "'", "''"))
+		sb.WriteString("'; ")
+	}
+	return sb.String()
 }
 
 func findBin() string {

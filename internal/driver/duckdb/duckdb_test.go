@@ -12,6 +12,28 @@ import (
 	"github.com/shhac/agent-sql/internal/errors"
 )
 
+func TestBuildOptionsPrelude(t *testing.T) {
+	cases := []struct {
+		name string
+		in   map[string]string
+		want string
+	}{
+		{"empty", nil, ""},
+		{"single SET", map[string]string{"memory_limit": "4GB"}, "SET memory_limit='4GB'; "},
+		{"alphabetized", map[string]string{"threads": "4", "memory_limit": "4GB"}, "SET memory_limit='4GB'; SET threads='4'; "},
+		{"single quote escaped", map[string]string{"temp_directory": "/tmp/o'malley"}, "SET temp_directory='/tmp/o''malley'; "},
+		{"extensions reserved key", map[string]string{"extensions": "httpfs, json"}, "INSTALL httpfs; LOAD httpfs; INSTALL json; LOAD json; "},
+		{"extensions plus settings", map[string]string{"extensions": "httpfs", "memory_limit": "4GB"}, "INSTALL httpfs; LOAD httpfs; SET memory_limit='4GB'; "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := buildOptionsPrelude(tc.in); got != tc.want {
+				t.Errorf("buildOptionsPrelude = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func skipIfNoDuckDB(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("duckdb"); err != nil {

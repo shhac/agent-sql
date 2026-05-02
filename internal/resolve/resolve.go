@@ -191,7 +191,7 @@ func connectFromConfig(ctx context.Context, d driver.Driver, conn *config.Connec
 		if path == "" {
 			return nil, errors.New("DuckDB connection requires a path.", errors.FixableByAgent)
 		}
-		return duckdb.Connect(ctx, duckdb.Opts{Path: path, Readonly: readonly})
+		return duckdb.Connect(ctx, duckdb.Opts{Path: path, Readonly: readonly, Options: conn.Options})
 	case driver.DriverPG, driver.DriverCockroachDB:
 		return connectPgLikeConfig(ctx, d, conn, cred, readonly)
 	case driver.DriverMySQL, driver.DriverMariaDB:

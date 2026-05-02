@@ -19,7 +19,7 @@ func (c *duckdbConn) buildArgs(sql string) []string {
 	if c.path != "" {
 		args = append(args, c.path)
 	}
-	args = append(args, "-c", sql)
+	args = append(args, "-c", c.prelude+sql)
 	return args
 }
 
@@ -71,7 +71,7 @@ func (c *duckdbConn) buildArgsWrite(sql string) []string {
 	if c.path != "" {
 		args = append(args, c.path)
 	}
-	args = append(args, "-c", sql)
+	args = append(args, "-c", c.prelude+sql)
 	return args
 }
 
