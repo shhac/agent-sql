@@ -29,6 +29,9 @@ type credentialEntry struct {
 	KeychainManaged bool   `json:"keychainManaged,omitempty"`
 }
 
+// KEYCHAIN-MIGRATION: Keep keychain availability injectable for temporary migration tests.
+var keychainAvailable = func() bool { return runtime.GOOS == "darwin" }
+
 func credentialsPath() string {
 	return filepath.Join(config.ConfigDir(), "credentials.json")
 }
@@ -73,7 +76,7 @@ func Get(name string) *Credential {
 	}
 
 	// Try to read from Keychain
-	if entry.KeychainManaged && runtime.GOOS == "darwin" {
+	if entry.KeychainManaged && keychainAvailable() {
 		if kcCred := readKeychain(name); kcCred != nil {
 			cred.Username = kcCred.Username
 			cred.Password = kcCred.Password
@@ -87,7 +90,7 @@ func Get(name string) *Credential {
 func Store(name string, cred Credential) (storage string, err error) {
 	entries := readIndex()
 
-	if runtime.GOOS == "darwin" {
+	if keychainAvailable() {
 		if err := writeKeychain(name, &cred); err == nil {
 			entries[name] = credentialEntry{
 				Username:        "__KEYCHAIN__",
@@ -115,7 +118,7 @@ func Remove(name string) error {
 	if !ok {
 		return &NotFoundError{Name: name}
 	}
-	if entry.KeychainManaged && runtime.GOOS == "darwin" {
+	if entry.KeychainManaged && keychainAvailable() {
 		deleteKeychain(name)
 	}
 	delete(entries, name)
@@ -143,11 +146,25 @@ func (e *NotFoundError) Error() string {
 
 // Keychain helpers (macOS only)
 
-const keychainService = "agent-sql"
+const keychainService = "app.paulie.agent-sql"
+
+// KEYCHAIN-MIGRATION: Remove this legacy service constant after the migration window.
+const legacyKeychainService = "agent-sql"
+
+// KEYCHAIN-MIGRATION: Service-specific helpers let the temporary migration code read/write both names.
+var (
+	readKeychainForService   = platformReadKeychain
+	writeKeychainForService  = platformWriteKeychain
+	deleteKeychainForService = platformDeleteKeychain
+)
 
 func readKeychain(name string) *Credential {
+	return readKeychainForService(keychainService, name)
+}
+
+func platformReadKeychain(service, name string) *Credential {
 	out, err := exec.Command("security", "find-generic-password",
-		"-s", keychainService, "-a", name, "-w").Output()
+		"-s", service, "-a", name, "-w").Output()
 	if err != nil {
 		return nil
 	}
@@ -159,18 +176,26 @@ func readKeychain(name string) *Credential {
 }
 
 func writeKeychain(name string, cred *Credential) error {
+	return writeKeychainForService(keychainService, name, cred)
+}
+
+func platformWriteKeychain(service, name string, cred *Credential) error {
 	data, err := json.Marshal(cred)
 	if err != nil {
 		return err
 	}
 	// Delete existing entry first (ignore errors)
 	_ = exec.Command("security", "delete-generic-password",
-		"-s", keychainService, "-a", name).Run()
+		"-s", service, "-a", name).Run()
 	return exec.Command("security", "add-generic-password",
-		"-s", keychainService, "-a", name, "-w", string(data)).Run()
+		"-s", service, "-a", name, "-w", string(data)).Run()
 }
 
 func deleteKeychain(name string) {
+	deleteKeychainForService(keychainService, name)
+}
+
+func platformDeleteKeychain(service, name string) {
 	_ = exec.Command("security", "delete-generic-password",
-		"-s", keychainService, "-a", name).Run()
+		"-s", service, "-a", name).Run()
 }

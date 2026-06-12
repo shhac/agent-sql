@@ -10,6 +10,7 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/query"
 	"github.com/shhac/agent-sql/internal/cli/schema"
 	"github.com/shhac/agent-sql/internal/cli/shared"
+	"github.com/shhac/agent-sql/internal/credential"
 )
 
 // Global flags accessible to all commands.
@@ -20,6 +21,8 @@ var (
 	flagFull       bool
 	flagTimeout    int
 	flagCompact    bool
+	// KEYCHAIN-MIGRATION: Hidden temporary gate for legacy Keychain service fallback.
+	flagMigrateKeychain bool
 )
 
 // allGlobals returns all global flag values for query commands.
@@ -50,6 +53,7 @@ func schemaGlobals() schema.SchemaGlobals {
 }
 
 func newRootCmd(version string) *cobra.Command {
+	flagMigrateKeychain = true
 	root := &cobra.Command{
 		Use:     "agent-sql",
 		Short:   "Read-only-by-default SQL CLI for AI agents",
@@ -65,6 +69,17 @@ func newRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().BoolVarP(&flagFull, "full", "F", false, "Expand all truncated fields")
 	root.PersistentFlags().IntVarP(&flagTimeout, "timeout", "t", 0, "Query timeout in milliseconds")
 	root.PersistentFlags().BoolVarP(&flagCompact, "compact", "C", false, "Compact output (typed NDJSON: columns once, then row arrays)")
+	// KEYCHAIN-MIGRATION: Hidden temporary flags; remove with credential_migration.go.
+	root.PersistentFlags().BoolVar(&flagMigrateKeychain, "migrate", true, "migrate legacy Keychain service credentials")
+	_ = root.PersistentFlags().MarkHidden("migrate")
+	noMigrate := root.PersistentFlags().Bool("no-migrate", false, "use legacy Keychain service credentials without prompting")
+	_ = root.PersistentFlags().MarkHidden("no-migrate")
+	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if noMigrate != nil && *noMigrate {
+			flagMigrateKeychain = false
+		}
+		credential.SetMigrationRequired(flagMigrateKeychain)
+	}
 
 	// Register command groups
 	registerRunCommand(root)

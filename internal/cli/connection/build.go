@@ -19,7 +19,10 @@ func validateCredentialRef(credName string) error {
 	if credName == "" {
 		return nil
 	}
-	if cred := credential.Get(credName); cred != nil {
+	// KEYCHAIN-MIGRATION: Surface legacy-service credentials as a hard setup error.
+	if cred, err := credential.GetForRead(credName); err != nil {
+		return err
+	} else if cred != nil {
 		return nil
 	}
 	names := credential.List()

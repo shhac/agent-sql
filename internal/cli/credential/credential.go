@@ -72,6 +72,16 @@ func Register(root *cobra.Command) {
 	cred := &cobra.Command{
 		Use:   "credential",
 		Short: "Manage stored credentials",
+		// KEYCHAIN-MIGRATION: Temporary root action for `agent-sql credential --migrate`.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			migrated, err := credential.MigrateLegacyCredentials()
+			if err != nil {
+				output.WriteError(os.Stderr, err)
+				return err
+			}
+			output.PrintJSON(map[string]any{"ok": true, "migrated": migrated, "storage": "keychain"}, true)
+			return nil
+		},
 	}
 
 	registerAdd(cred)
@@ -167,7 +177,12 @@ func registerList(parent *cobra.Command) {
 
 			items := make([]map[string]any, 0, len(names))
 			for _, name := range names {
-				cred := credential.Get(name)
+				// KEYCHAIN-MIGRATION: Surface legacy-service credentials as a hard setup error.
+				cred, err := credential.GetForRead(name)
+				if err != nil {
+					output.WriteError(os.Stderr, err)
+					return err
+				}
 				if cred == nil {
 					continue
 				}
