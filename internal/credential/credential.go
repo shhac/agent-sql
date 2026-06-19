@@ -29,7 +29,6 @@ type credentialEntry struct {
 	KeychainManaged bool   `json:"keychainManaged,omitempty"`
 }
 
-// KEYCHAIN-MIGRATION: Keep keychain availability injectable for temporary migration tests.
 var keychainAvailable = func() bool { return runtime.GOOS == "darwin" }
 
 func credentialsPath() string {
@@ -148,23 +147,9 @@ func (e *NotFoundError) Error() string {
 
 const keychainService = "app.paulie.agent-sql"
 
-// KEYCHAIN-MIGRATION: Remove this legacy service constant after the migration window.
-const legacyKeychainService = "agent-sql"
-
-// KEYCHAIN-MIGRATION: Service-specific helpers let the temporary migration code read/write both names.
-var (
-	readKeychainForService   = platformReadKeychain
-	writeKeychainForService  = platformWriteKeychain
-	deleteKeychainForService = platformDeleteKeychain
-)
-
 func readKeychain(name string) *Credential {
-	return readKeychainForService(keychainService, name)
-}
-
-func platformReadKeychain(service, name string) *Credential {
 	out, err := exec.Command("security", "find-generic-password",
-		"-s", service, "-a", name, "-w").Output()
+		"-s", keychainService, "-a", name, "-w").Output()
 	if err != nil {
 		return nil
 	}
@@ -176,26 +161,18 @@ func platformReadKeychain(service, name string) *Credential {
 }
 
 func writeKeychain(name string, cred *Credential) error {
-	return writeKeychainForService(keychainService, name, cred)
-}
-
-func platformWriteKeychain(service, name string, cred *Credential) error {
 	data, err := json.Marshal(cred)
 	if err != nil {
 		return err
 	}
 	// Delete existing entry first (ignore errors)
 	_ = exec.Command("security", "delete-generic-password",
-		"-s", service, "-a", name).Run()
+		"-s", keychainService, "-a", name).Run()
 	return exec.Command("security", "add-generic-password",
-		"-s", service, "-a", name, "-w", string(data)).Run()
+		"-s", keychainService, "-a", name, "-w", string(data)).Run()
 }
 
 func deleteKeychain(name string) {
-	deleteKeychainForService(keychainService, name)
-}
-
-func platformDeleteKeychain(service, name string) {
 	_ = exec.Command("security", "delete-generic-password",
-		"-s", service, "-a", name).Run()
+		"-s", keychainService, "-a", name).Run()
 }

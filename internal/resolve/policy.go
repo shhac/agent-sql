@@ -18,12 +18,11 @@ func rejectAdHocWrite() *errors.QueryError {
 
 // credFor looks up the credential referenced by a stored connection,
 // or nil if the connection has no credential reference.
-func credFor(conn *config.Connection) (*credential.Credential, error) {
+func credFor(conn *config.Connection) *credential.Credential {
 	if conn.Credential == "" {
-		return nil, nil
+		return nil
 	}
-	// KEYCHAIN-MIGRATION: Surface legacy-service credentials as a hard setup error.
-	return credential.GetForRead(conn.Credential)
+	return credential.Get(conn.Credential)
 }
 
 // checkWritePermission gates write-mode access. The credential must

@@ -122,10 +122,7 @@ func resolveFromConfig(ctx context.Context, alias string, write bool) (driver.Co
 	}
 
 	if write {
-		cred, err := credFor(conn)
-		if err != nil {
-			return nil, err
-		}
+		cred := credFor(conn)
 		if err := checkWritePermission(d, cred, alias); err != nil {
 			return nil, err
 		}
@@ -157,10 +154,7 @@ func connectFromURL(ctx context.Context, d driver.Driver, connStr string) (drive
 
 // connectFromConfig dispatches a stored connection to the right driver.
 func connectFromConfig(ctx context.Context, d driver.Driver, conn *config.Connection, readonly bool) (driver.Connection, error) {
-	cred, err := credFor(conn)
-	if err != nil {
-		return nil, err
-	}
+	cred := credFor(conn)
 	switch d {
 	case driver.DriverSQLite:
 		path := resolveFilePath(conn, "sqlite://")
