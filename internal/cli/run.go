@@ -38,7 +38,12 @@ func registerRunCommand(root *cobra.Command) {
 			}
 			defer func() { _ = drv.Close() }()
 
-			return query.ExecuteRun(ctx, drv, sql, limit, write, flagExpand, flagFull, flagCompact, flagFormat)
+			return query.ExecuteRun(ctx, drv, sql, limit, write, query.RenderOpts{
+				Expand:     flagExpand,
+				Full:       flagFull,
+				Compact:    flagCompact,
+				FormatFlag: flagFormat,
+			})
 		},
 	}
 	run.Flags().IntVarP(&limit, "limit", "l", 0, "Maximum rows to return")

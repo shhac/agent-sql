@@ -72,6 +72,22 @@ PAGINATION
 
 var writePattern = regexp.MustCompile(`(?i)^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)\b`)
 
+// RenderOpts bundles the row-rendering knobs that travel together from the
+// command flags down through the writer pipeline: which fields to show
+// untruncated (Expand/Full), whether to use the compact typed-NDJSON writer
+// (Compact), and the output Format. FormatFlag is the raw flag string;
+// the format is resolved (flag > config > default) inside ExecuteRun.
+type RenderOpts struct {
+	Expand     string
+	Full       bool
+	Compact    bool
+	FormatFlag string
+
+	// format is the resolved output format (flag > config > default), filled
+	// in by ExecuteRun before the opts travel down the writer pipeline.
+	format output.Format
+}
+
 // Register adds the query command group to root.
 func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	query := &cobra.Command{
@@ -108,7 +124,12 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 			}
 			defer func() { _ = drv.Close() }()
 
-			return ExecuteRun(ctx, drv, args[0], limit, write, g.Expand, g.Full, g.Compact, g.Format)
+			return ExecuteRun(ctx, drv, args[0], limit, write, RenderOpts{
+				Expand:     g.Expand,
+				Full:       g.Full,
+				Compact:    g.Compact,
+				FormatFlag: g.Format,
+			})
 		},
 	}
 	run.Flags().IntVarP(&limit, "limit", "l", 0, "Maximum rows to return")
@@ -126,7 +147,7 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 // huge ORDER BY queries lose LIMIT-aware optimization. Users who care put
 // LIMIT/TOP in their own SQL — the hint on the @pagination payload nudges
 // them in that direction.
-func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, expand string, full bool, compact bool, formatFlag string) error {
+func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, render RenderOpts) error {
 	pageSize := resolveLimit(limitFlag)
 	maxRows := resolveMaxRows()
 	effectiveLimit := pageSize
@@ -137,15 +158,15 @@ func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFla
 
 	isSelectLike := !write && driver.DetectCommand(sql, driver.WriteCommands) == ""
 	opts := driver.QueryOpts{Write: write}
-	format := output.ResolveFormat(formatFlag)
+	render.format = output.ResolveFormat(render.FormatFlag)
 
 	// Try streaming path
 	if streamer, ok := drv.(driver.StreamingQuerier); ok && isSelectLike {
-		return executeStreaming(ctx, streamer, sql, opts, effectiveLimit, limitFromUser, expand, full, compact, format)
+		return executeStreaming(ctx, streamer, sql, opts, effectiveLimit, limitFromUser, render)
 	}
 
 	// Buffered fallback
-	return executeBuffered(ctx, drv, sql, opts, write, effectiveLimit, limitFromUser, expand, full, compact, format)
+	return executeBuffered(ctx, drv, sql, opts, write, effectiveLimit, limitFromUser, render)
 }
 
 // paginationHint returns guidance for the agent/user when truncation fires.
@@ -163,7 +184,7 @@ func paginationHint(limit int, fromUser bool) string {
 	)
 }
 
-func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql string, opts driver.QueryOpts, limit int, limitFromUser bool, expand string, full bool, compact bool, format output.Format) error {
+func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql string, opts driver.QueryOpts, limit int, limitFromUser bool, render RenderOpts) error {
 	sr, err := streamer.QueryStream(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
@@ -178,7 +199,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	}
 	defer func() { _ = sr.Iterator.Close() }()
 
-	w := makeWriter(expand, full, compact, format, sr.Iterator.Columns())
+	w := makeWriter(render, sr.Iterator.Columns())
 
 	count := 0
 	for sr.Iterator.Next() {
@@ -210,7 +231,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	return nil
 }
 
-func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opts driver.QueryOpts, write bool, limit int, limitFromUser bool, expand string, full bool, compact bool, format output.Format) error {
+func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opts driver.QueryOpts, write bool, limit int, limitFromUser bool, render RenderOpts) error {
 	result, err := drv.Query(ctx, sql, opts)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
@@ -232,7 +253,7 @@ func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opt
 		hint = paginationHint(limit, limitFromUser)
 	}
 
-	writeQueryResults(displayRows, hasMore, hint, expand, full, compact, format, result.Columns)
+	writeQueryResults(displayRows, hasMore, hint, render, result.Columns)
 	return nil
 }
 
@@ -264,7 +285,12 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 					return err
 				}
 
-				writeQueryResults(result.Rows, false, "", g.Expand, g.Full, g.Compact, output.ResolveFormat(g.Format), result.Columns)
+				writeQueryResults(result.Rows, false, "", RenderOpts{
+					Expand:  g.Expand,
+					Full:    g.Full,
+					Compact: g.Compact,
+					format:  output.ResolveFormat(g.Format),
+				}, result.Columns)
 				return nil
 			})
 		},
@@ -389,10 +415,10 @@ func isWriteResult(result *driver.QueryResult) bool {
 	return false
 }
 
-func makeWriter(expand string, full bool, compact bool, format output.Format, columns []string) *truncation.TruncatingWriter {
+func makeWriter(render RenderOpts, columns []string) *truncation.TruncatingWriter {
 	expandMap := make(map[string]bool)
-	if expand != "" {
-		for _, f := range strings.Split(expand, ",") {
+	if render.Expand != "" {
+		for _, f := range strings.Split(render.Expand, ",") {
 			expandMap[strings.TrimSpace(f)] = true
 		}
 	}
@@ -404,20 +430,20 @@ func makeWriter(expand string, full bool, compact bool, format output.Format, co
 	}
 
 	var inner output.ResultWriter
-	if compact {
+	if render.Compact {
 		inner = output.NewCompactWriter(os.Stdout, columns)
 	} else {
-		inner = output.NewWriter(os.Stdout, format, columns)
+		inner = output.NewWriter(os.Stdout, render.format, columns)
 	}
 
 	return truncation.NewTruncatingWriter(
 		inner,
-		truncation.Config{MaxLength: maxLen, Expand: expandMap, Full: full},
+		truncation.Config{MaxLength: maxLen, Expand: expandMap, Full: render.Full},
 	)
 }
 
-func writeQueryResults(rows []map[string]any, hasMore bool, hint string, expand string, full bool, compact bool, format output.Format, columns []string) {
-	w := makeWriter(expand, full, compact, format, columns)
+func writeQueryResults(rows []map[string]any, hasMore bool, hint string, render RenderOpts, columns []string) {
+	w := makeWriter(render, columns)
 
 	for _, row := range rows {
 		_ = w.WriteRow(row)

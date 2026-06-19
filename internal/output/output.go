@@ -42,7 +42,7 @@ func PrintJSON(data any, prune bool) {
 	var normalized any
 	_ = json.Unmarshal([]byte(s), &normalized)
 	if prune {
-		normalized = pruneNulls(normalized)
+		normalized = out.PruneNils(normalized)
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -73,28 +73,6 @@ func WriteError(w io.Writer, err error) {
 		payload["hint"] = qerr.Hint
 	}
 	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func pruneNulls(data any) any {
-	switch v := data.(type) {
-	case map[string]any:
-		result := make(map[string]any, len(v))
-		for k, val := range v {
-			if val == nil {
-				continue
-			}
-			result[k] = pruneNulls(val)
-		}
-		return result
-	case []any:
-		result := make([]any, len(v))
-		for i, val := range v {
-			result[i] = pruneNulls(val)
-		}
-		return result
-	default:
-		return data
-	}
 }
 
 // Format identifies an output format. The shared formats come from the

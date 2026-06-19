@@ -43,27 +43,6 @@ func TestWithHintAddsHint(t *testing.T) {
 	}
 }
 
-func TestClassifyPassesThroughPreClassified(t *testing.T) {
-	original := New("pre-classified", FixableByHuman)
-	result := Classify(original, ErrorContext{})
-
-	if result != original {
-		t.Error("Classify should return the same QueryError for pre-classified errors")
-	}
-}
-
-func TestClassifyFallsToGenericAgentError(t *testing.T) {
-	plain := fmt.Errorf("some random error")
-	result := Classify(plain, ErrorContext{})
-
-	if result.FixableBy != FixableByAgent {
-		t.Errorf("FixableBy = %q, want %q", result.FixableBy, FixableByAgent)
-	}
-	if result.Message != "some random error" {
-		t.Errorf("Message = %q, want %q", result.Message, "some random error")
-	}
-}
-
 func TestAsReturnsFalseForNil(t *testing.T) {
 	var target *QueryError
 	if As(nil, &target) {

@@ -88,39 +88,6 @@ type plainErr struct{ msg string }
 
 func (e *plainErr) Error() string { return e.msg }
 
-func TestPruneNullsRemovesNilValues(t *testing.T) {
-	input := map[string]any{
-		"name": "Alice",
-		"age":  nil,
-		"city": "NYC",
-	}
-	result := pruneNulls(input).(map[string]any)
-
-	if _, ok := result["age"]; ok {
-		t.Error("pruneNulls should remove nil values")
-	}
-	if result["name"] != "Alice" {
-		t.Errorf("name = %v, want %q", result["name"], "Alice")
-	}
-	if result["city"] != "NYC" {
-		t.Errorf("city = %v, want %q", result["city"], "NYC")
-	}
-}
-
-func TestPruneNullsPreservesNonNilValues(t *testing.T) {
-	input := map[string]any{
-		"a": "hello",
-		"b": float64(42),
-		"c": true,
-		"d": []any{"x", "y"},
-	}
-	result := pruneNulls(input).(map[string]any)
-
-	if len(result) != 4 {
-		t.Errorf("expected 4 keys, got %d", len(result))
-	}
-}
-
 func TestNDJSONWriterWritesOneObjectPerLine(t *testing.T) {
 	var buf bytes.Buffer
 	w := NewNDJSONWriter(&buf)

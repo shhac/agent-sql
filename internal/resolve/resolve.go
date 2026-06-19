@@ -63,7 +63,7 @@ func resolveAlias(explicit string) string {
 func resolveAdHoc(ctx context.Context, connStr string, write bool) (driver.Connection, error) {
 	if connStr == "" {
 		return nil, errors.New(
-			fmt.Sprintf("No connection specified and no default configured. Available connections: %s. Tip: -c also accepts file paths (e.g. ./data.db) and connection URLs (e.g. postgres://user:pass@host/db).", listAliases()),
+			fmt.Sprintf("No connection specified and no default configured. Available connections: %s. %s", listAliases(), errors.ConnTip),
 			errors.FixableByAgent,
 		)
 	}
