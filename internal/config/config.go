@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/shhac/lib-agent-cli/xdg"
 )
 
 // Connection represents a saved database connection.
@@ -63,17 +65,14 @@ var (
 	configDir string
 )
 
-// ConfigDir returns the config directory, creating it if needed.
+// ConfigDir returns the config directory, creating it if needed. The
+// test-override short-circuit is kept; the default path now comes from the
+// shared xdg helper so the whole family resolves $XDG_CONFIG_HOME identically.
 func ConfigDir() string {
 	if configDir != "" {
 		return configDir
 	}
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, _ := os.UserHomeDir()
-		dir = filepath.Join(home, ".config")
-	}
-	return filepath.Join(dir, "agent-sql")
+	return xdg.ConfigDir("agent-sql")
 }
 
 // SetConfigDir overrides the config directory (for testing).

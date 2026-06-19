@@ -10,6 +10,7 @@ import (
 
 	"github.com/shhac/agent-sql/internal/config"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
+	out "github.com/shhac/lib-agent-output"
 )
 
 // Pagination holds pagination metadata for result sets.
@@ -96,13 +97,15 @@ func pruneNulls(data any) any {
 	}
 }
 
-// Format identifies an output format.
-type Format string
+// Format identifies an output format. The shared formats come from the
+// lib-agent-output contract; FormatCSV is an agent-sql-only tabular format the
+// shared contract doesn't define, so it stays local.
+type Format = out.Format
 
 const (
-	FormatNDJSON Format = "jsonl"
-	FormatJSON   Format = "json"
-	FormatYAML   Format = "yaml"
+	FormatNDJSON        = out.FormatNDJSON
+	FormatJSON          = out.FormatJSON
+	FormatYAML          = out.FormatYAML
 	FormatCSV    Format = "csv"
 )
 
@@ -140,18 +143,21 @@ func ResolveFormat(flagFormat string) Format {
 	return FormatNDJSON
 }
 
-// ParseFormat parses a format string, returning an error for unknown formats.
+// ParseFormat parses a format string. CSV is agent-sql-only and handled here;
+// the shared formats route through the family parser, which is lenient (accepts
+// "ndjson"/"yml", case-insensitive, trims spaces) and classifies an unknown
+// format as fixable_by:agent. The empty string defaults to NDJSON.
 func ParseFormat(s string) (Format, error) {
-	switch s {
-	case "jsonl", "":
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
 		return FormatNDJSON, nil
-	case "json":
-		return FormatJSON, nil
-	case "yaml":
-		return FormatYAML, nil
-	case "csv":
-		return FormatCSV, nil
-	default:
-		return "", fmt.Errorf("unknown format %q, expected: jsonl, json, yaml, csv", s)
 	}
+	if strings.EqualFold(trimmed, "csv") {
+		return FormatCSV, nil
+	}
+	f, err := out.ParseFormat(s)
+	if err != nil {
+		return "", fmt.Errorf("unknown format %q, expected: jsonl, json, yaml, csv", strings.TrimSpace(s))
+	}
+	return f, nil
 }
