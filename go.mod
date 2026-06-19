@@ -7,7 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/ncruces/zenity v0.10.14
-	github.com/shhac/lib-agent-cli v0.2.0
+	github.com/shhac/lib-agent-cli v0.3.0
 	github.com/shhac/lib-agent-output v0.4.3
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1

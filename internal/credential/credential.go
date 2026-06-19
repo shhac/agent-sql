@@ -6,12 +6,10 @@ package credential
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/shhac/agent-sql/internal/config"
+	"github.com/shhac/lib-agent-cli/creds"
 )
 
 // Credential represents stored authentication credentials.
@@ -29,7 +27,12 @@ type credentialEntry struct {
 	KeychainManaged bool   `json:"keychainManaged,omitempty"`
 }
 
-var keychainAvailable = func() bool { return runtime.GOOS == "darwin" }
+// keychainService owns the reverse-domain namespace for this CLI's secrets.
+const keychainService = "app.paulie.agent-sql"
+
+var keychain = creds.NewKeychain(keychainService)
+
+func keychainAvailable() bool { return keychain.Available() }
 
 func credentialsPath() string {
 	return filepath.Join(config.ConfigDir(), "credentials.json")
@@ -145,16 +148,13 @@ func (e *NotFoundError) Error() string {
 
 // Keychain helpers (macOS only)
 
-const keychainService = "app.paulie.agent-sql"
-
 func readKeychain(name string) *Credential {
-	out, err := exec.Command("security", "find-generic-password",
-		"-s", keychainService, "-a", name, "-w").Output()
-	if err != nil {
+	secret, ok := keychain.Get(name)
+	if !ok {
 		return nil
 	}
 	var cred Credential
-	if err := json.Unmarshal([]byte(strings.TrimSpace(string(out))), &cred); err != nil {
+	if err := json.Unmarshal([]byte(secret), &cred); err != nil {
 		return nil
 	}
 	return &cred
@@ -165,14 +165,9 @@ func writeKeychain(name string, cred *Credential) error {
 	if err != nil {
 		return err
 	}
-	// Delete existing entry first (ignore errors)
-	_ = exec.Command("security", "delete-generic-password",
-		"-s", keychainService, "-a", name).Run()
-	return exec.Command("security", "add-generic-password",
-		"-s", keychainService, "-a", name, "-w", string(data)).Run()
+	return keychain.Set(name, string(data))
 }
 
 func deleteKeychain(name string) {
-	_ = exec.Command("security", "delete-generic-password",
-		"-s", keychainService, "-a", name).Run()
+	_ = keychain.Delete(name)
 }
