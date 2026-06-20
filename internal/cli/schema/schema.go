@@ -85,7 +85,7 @@ func printResult(data any, g SchemaGlobals, prune bool, schemaType string) {
 	format := output.ResolveFormat(g.Format)
 	switch format {
 	case output.FormatYAML:
-		_ = output.PrintYAML(os.Stdout, data)
+		_ = output.PrintYAMLViaJSON(os.Stdout, data, prune)
 	default:
 		output.PrintJSON(data, prune)
 	}

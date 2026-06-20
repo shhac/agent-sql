@@ -1,8 +1,10 @@
 package output
 
 import (
+	"encoding/json"
 	"io"
 
+	out "github.com/shhac/lib-agent-output"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,4 +66,24 @@ func PrintYAML(w io.Writer, data any) error {
 	enc.SetIndent(2)
 	defer func() { _ = enc.Close() }()
 	return enc.Encode(data)
+}
+
+// PrintYAMLViaJSON writes data as YAML after a JSON round-trip, so the keys,
+// omitempty behavior, and nil-pruning match the JSON output exactly. Schema
+// structs carry json tags that yaml.v3 ignores (it lowercases Go field names),
+// so encoding them directly diverges from --format json; routing through JSON
+// first keeps the two formats shape-identical.
+func PrintYAMLViaJSON(w io.Writer, data any, prune bool) error {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	var normalized any
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return err
+	}
+	if prune {
+		normalized = out.PruneNils(normalized)
+	}
+	return PrintYAML(w, normalized)
 }
