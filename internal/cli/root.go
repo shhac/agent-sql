@@ -71,7 +71,7 @@ func newRootCmd(version string, reachedRunE *bool) *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVarP(&flagConnection, "connection", "c", "", "Connection alias, file path, or URL")
-	root.PersistentFlags().StringVarP(&flagFormat, "format", "f", "", "Output format: jsonl, json, yaml, csv, sql")
+	root.PersistentFlags().StringVarP(&flagFormat, "format", "f", "", "Output format: jsonl, json, yaml, csv (sql is schema dump only)")
 	root.PersistentFlags().StringVarP(&flagExpand, "expand", "e", "", "Expand specific truncated fields (comma-separated)")
 	root.PersistentFlags().BoolVarP(&flagFull, "full", "F", false, "Expand all truncated fields")
 	root.PersistentFlags().IntVarP(&flagTimeout, "timeout", "t", 0, "Query timeout in milliseconds")

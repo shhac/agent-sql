@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func buildBinary(t *testing.T) string {
@@ -214,6 +216,110 @@ func TestCLIVersion(t *testing.T) {
 	stdout, _ := runCLI(t, bin, "--version")
 	if !strings.Contains(stdout, "agent-sql") {
 		t.Error("version missing agent-sql")
+	}
+}
+
+// TestCLIYAMLMatchesJSON guards that --format yaml produces the same key names
+// and pruning as --format json for both a single resource (schema describe) and
+// a list (schema tables). The structs carry json tags that yaml.v3 ignores, so
+// without a JSON round-trip the YAML keys would diverge (e.g. primarykey vs
+// primaryKey, and empty defaultValue would leak instead of being omitted).
+func TestCLIYAMLMatchesJSON(t *testing.T) {
+	bin := buildBinary(t)
+	dbPath := setupTestDB(t)
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"single resource (describe)", []string{"schema", "describe", "users"}},
+		{"list (tables)", []string{"schema", "tables"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			jsonOut, _ := runCLI(t, bin, append([]string{"-c", dbPath, "-f", "json"}, tc.args...)...)
+			yamlOut, _ := runCLI(t, bin, append([]string{"-c", dbPath, "-f", "yaml"}, tc.args...)...)
+
+			var fromJSON, fromYAML any
+			if err := json.Unmarshal([]byte(jsonOut), &fromJSON); err != nil {
+				t.Fatalf("json output not valid JSON: %v\n%s", err, jsonOut)
+			}
+			if err := yaml.Unmarshal([]byte(yamlOut), &fromYAML); err != nil {
+				t.Fatalf("yaml output not valid YAML: %v\n%s", err, yamlOut)
+			}
+
+			// Re-marshal both through JSON so the comparison ignores
+			// representation (yaml decodes to map[string]any like json does
+			// once normalized) and compares structure and key names.
+			normJSON, _ := json.Marshal(fromJSON)
+			normYAML, _ := json.Marshal(normalizeYAML(fromYAML))
+			if string(normJSON) != string(normYAML) {
+				t.Errorf("yaml and json disagree.\njson: %s\nyaml: %s", normJSON, normYAML)
+			}
+		})
+	}
+}
+
+// normalizeYAML converts yaml.v3's map[interface{}]interface{} (or
+// map[string]interface{}) trees into json-marshalable map[string]any trees.
+func normalizeYAML(v any) any {
+	switch m := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(m))
+		for k, val := range m {
+			out[k] = normalizeYAML(val)
+		}
+		return out
+	case map[any]any:
+		out := make(map[string]any, len(m))
+		for k, val := range m {
+			out[k.(string)] = normalizeYAML(val)
+		}
+		return out
+	case []any:
+		for i := range m {
+			m[i] = normalizeYAML(m[i])
+		}
+		return m
+	default:
+		return v
+	}
+}
+
+// TestCLIUsageErrorsAreStructured guards that cobra's own usage errors —
+// unknown command/flag and bad args — are rendered as structured JSON rather
+// than failing silently with exit 1 and no output.
+func TestCLIUsageErrorsAreStructured(t *testing.T) {
+	bin := buildBinary(t)
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"unknown command", []string{"bogus-command"}},
+		{"unknown flag", []string{"--nonsense"}},
+		{"missing required arg", []string{"run"}},
+		{"too many args", []string{"run", "SELECT 1", "extra"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr := runCLI(t, bin, tc.args...)
+			if strings.TrimSpace(stderr) == "" {
+				t.Fatalf("usage error produced no stderr (silent failure); stdout=%q", stdout)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(stderr), &payload); err != nil {
+				t.Fatalf("stderr not structured JSON: %v\n%s", err, stderr)
+			}
+			if payload["error"] == nil || payload["error"] == "" {
+				t.Errorf("missing error message: %s", stderr)
+			}
+			if payload["fixable_by"] == nil {
+				t.Errorf("missing fixable_by: %s", stderr)
+			}
+		})
 	}
 }
 
