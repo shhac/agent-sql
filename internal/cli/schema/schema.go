@@ -69,7 +69,7 @@ WORKFLOW
 // SchemaGlobals holds the global flags relevant to schema commands.
 type SchemaGlobals struct {
 	Connection string
-	Timeout    int
+	TimeoutMS  int
 	Format     string
 	Compact    bool
 }
@@ -129,7 +129,7 @@ func registerTables(parent *cobra.Command, globals func() SchemaGlobals) {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				result, err := drv.GetTables(ctx, includeSystem)
 				if err != nil {
 					return err
@@ -152,7 +152,7 @@ func registerDescribe(parent *cobra.Command, globals func() SchemaGlobals) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				table := args[0]
 				columns, err := drv.DescribeTable(ctx, table)
 				if err != nil {
@@ -190,7 +190,7 @@ func registerIndexes(parent *cobra.Command, globals func() SchemaGlobals) {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				table := ""
 				if len(args) > 0 {
 					table = args[0]
@@ -224,16 +224,14 @@ func registerConstraints(parent *cobra.Command, globals func() SchemaGlobals) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if constraintType != "" {
 				if _, ok := typeMap[constraintType]; !ok {
-					err := fmt.Errorf(
+					return fmt.Errorf(
 						"invalid constraint type: %q; valid types: pk, fk, unique, check", constraintType,
 					)
-					output.WriteError(os.Stderr, err)
-					return err
 				}
 			}
 
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				table := ""
 				if len(args) > 0 {
 					table = args[0]
@@ -271,7 +269,7 @@ func registerSearch(parent *cobra.Command, globals func() SchemaGlobals) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				result, err := drv.SearchSchema(ctx, args[0])
 				if err != nil {
 					return err
@@ -294,7 +292,7 @@ func registerDump(parent *cobra.Command, globals func() SchemaGlobals) {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				// Handle --format sql via DDLDumper interface
 				if g.Format == "sql" {
 					return dumpSQL(ctx, drv, tables, includeSystem)

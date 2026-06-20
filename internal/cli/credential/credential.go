@@ -2,7 +2,6 @@ package credential
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 
 	"github.com/spf13/cobra"
@@ -101,7 +100,6 @@ func registerAdd(parent *cobra.Command) {
 			if form {
 				filledUser, filledPass, err := promptMissingViaDialog(cmd.Context(), name, username, password)
 				if err != nil {
-					output.WriteError(os.Stderr, err)
 					return err
 				}
 				username = filledUser
@@ -114,7 +112,6 @@ func registerAdd(parent *cobra.Command) {
 				WritePermission: write,
 			})
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
@@ -147,7 +144,6 @@ func registerRemove(parent *cobra.Command) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := credential.Remove(args[0]); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "removed": args[0]}, true)

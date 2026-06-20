@@ -11,6 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
+
+	"github.com/shhac/agent-sql/internal/output"
 )
 
 func seedSqlite(t *testing.T) string {
@@ -42,6 +44,16 @@ func testRoot(t *testing.T, dbPath string) *cobra.Command {
 		return SchemaGlobals{Connection: dbPath}
 	})
 	return root
+}
+
+// execute runs root and renders any bubbled error to stderr exactly as the
+// production main (libcli.Run) does, then returns it.
+func execute(root *cobra.Command) error {
+	if err := root.Execute(); err != nil {
+		output.WriteError(os.Stderr, err)
+		return err
+	}
+	return nil
 }
 
 func captureStdout(t *testing.T) (*bytes.Buffer, func()) {
@@ -120,7 +132,7 @@ func TestSchemaConstraintsInvalidTypeExitsNonZero(t *testing.T) {
 	root.SetArgs([]string{"schema", "constraints", "--type", "invalid"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	err := root.Execute()
+	err := execute(root)
 	restore()
 
 	if err == nil {

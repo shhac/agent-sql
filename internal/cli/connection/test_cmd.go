@@ -2,7 +2,6 @@ package connection
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,14 +37,12 @@ func registerTest(parent *cobra.Command, globals func() (string, int)) {
 
 			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: connAlias, Timeout: timeout})
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			defer func() { _ = drv.Close() }()
 
 			result, err := drv.Query(ctx, "SELECT 1", driver.QueryOpts{})
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 

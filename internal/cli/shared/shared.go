@@ -3,11 +3,9 @@ package shared
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/shhac/agent-sql/internal/driver"
-	"github.com/shhac/agent-sql/internal/output"
 	"github.com/shhac/agent-sql/internal/resolve"
 )
 
@@ -17,7 +15,7 @@ type GlobalFlags struct {
 	Format     string
 	Expand     string
 	Full       bool
-	Timeout    int
+	TimeoutMS  int
 	Compact    bool
 }
 
@@ -31,25 +29,19 @@ func MakeContext(timeoutMs int) (context.Context, context.CancelFunc) {
 	return ctx, func() {}
 }
 
-// WithConnection resolves a connection, runs fn, and handles cleanup and
-// error output. Errors from resolution or fn are written to stderr as
-// structured JSON AND propagated to the caller (cobra) so the process
-// exits non-zero. Cobra's SilenceErrors is set on the root, so the JSON
-// is the only thing emitted on stderr.
+// WithConnection resolves a connection, runs fn, and handles cleanup. Errors
+// from resolution or fn are propagated to the caller (cobra); libcli.Run renders
+// them as the family's structured JSON on stderr exactly once. This helper does
+// NOT pre-render — doing so under libcli.Run would double-print.
 func WithConnection(conn string, timeout int, fn func(ctx context.Context, drv driver.Connection) error) error {
 	ctx, cancel := MakeContext(timeout)
 	defer cancel()
 
 	drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: conn, Timeout: timeout})
 	if err != nil {
-		output.WriteError(os.Stderr, err)
 		return err
 	}
 	defer func() { _ = drv.Close() }()
 
-	if err := fn(ctx, drv); err != nil {
-		output.WriteError(os.Stderr, err)
-		return err
-	}
-	return nil
+	return fn(ctx, drv)
 }

@@ -1,8 +1,6 @@
 package connection
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-sql/internal/config"
@@ -45,7 +43,6 @@ func registerAdd(parent *cobra.Command) {
 
 			conn, warnings, err := buildConnectionFromAddArgs(in)
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			for _, w := range warnings {
@@ -53,12 +50,10 @@ func registerAdd(parent *cobra.Command) {
 			}
 
 			if err := validateCredentialRef(credName); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
 			if err := config.StoreConnection(alias, conn); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 

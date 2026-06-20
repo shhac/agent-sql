@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	configpkg "github.com/shhac/agent-sql/internal/config"
+	"github.com/shhac/agent-sql/internal/output"
 )
 
 func testRoot(t *testing.T) *cobra.Command {
@@ -21,6 +22,16 @@ func testRoot(t *testing.T) *cobra.Command {
 	}
 	Register(root)
 	return root
+}
+
+// execute runs root and renders any bubbled error to stderr exactly as the
+// production main (libcli.Run) does, then returns it.
+func execute(root *cobra.Command) error {
+	if err := root.Execute(); err != nil {
+		output.WriteError(os.Stderr, err)
+		return err
+	}
+	return nil
 }
 
 func captureStderr(t *testing.T) (*bytes.Buffer, func()) {
@@ -55,7 +66,7 @@ func TestConfigGetUnknownKeyExitsNonZero(t *testing.T) {
 	root.SetArgs([]string{"config", "get", "no.such.key"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	err := root.Execute()
+	err := execute(root)
 	restore()
 
 	if err == nil {

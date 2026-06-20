@@ -12,6 +12,7 @@ import (
 
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
+	"github.com/shhac/agent-sql/internal/output"
 )
 
 // testRoot returns a fresh cobra root with the credential commands
@@ -25,6 +26,16 @@ func testRoot(t *testing.T) *cobra.Command {
 	}
 	Register(root)
 	return root
+}
+
+// execute runs root and renders any bubbled error to stderr exactly as the
+// production main (libcli.Run) does, then returns it.
+func execute(root *cobra.Command) error {
+	if err := root.Execute(); err != nil {
+		output.WriteError(os.Stderr, err)
+		return err
+	}
+	return nil
 }
 
 func captureStderr(t *testing.T) (*bytes.Buffer, func()) {
@@ -60,7 +71,7 @@ func TestCredentialRemoveNonexistentExitsNonZero(t *testing.T) {
 	root.SetArgs([]string{"credential", "remove", "ghost"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	err := root.Execute()
+	err := execute(root)
 	restore()
 
 	if err == nil {

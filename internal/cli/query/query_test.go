@@ -13,6 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/shhac/agent-sql/internal/cli/shared"
+	"github.com/shhac/agent-sql/internal/output"
 )
 
 // seedSqlite creates a tempdir with a small sqlite database and returns
@@ -47,6 +48,18 @@ func testRoot(t *testing.T, g *shared.GlobalFlags) *cobra.Command {
 	}
 	Register(root, func() *shared.GlobalFlags { return g })
 	return root
+}
+
+// execute runs root and renders any bubbled error to stderr exactly as the
+// production main (libcli.Run) does, then returns it. Commands no longer
+// pre-render in RunE, so the structured-error-on-stderr contract is exercised
+// here rather than os.Exit-ing the test process.
+func execute(root *cobra.Command) error {
+	if err := root.Execute(); err != nil {
+		output.WriteError(os.Stderr, err)
+		return err
+	}
+	return nil
 }
 
 func captureStdout(t *testing.T) (*bytes.Buffer, func()) {
@@ -128,7 +141,7 @@ func TestQueryRunBadSQLExitsNonZero(t *testing.T) {
 	root.SetArgs([]string{"query", "run", "SELECT * FROM no_such_table"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	err := root.Execute()
+	err := execute(root)
 	restore()
 
 	if err == nil {
@@ -152,7 +165,7 @@ func TestQueryExplainAnalyzeRejectsWriteSQL(t *testing.T) {
 	root.SetArgs([]string{"query", "explain", "DELETE FROM users", "--analyze"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	err := root.Execute()
+	err := execute(root)
 	restore()
 
 	if err == nil {

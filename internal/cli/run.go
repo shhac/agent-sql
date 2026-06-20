@@ -1,17 +1,14 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-sql/internal/cli/query"
 	"github.com/shhac/agent-sql/internal/cli/shared"
-	"github.com/shhac/agent-sql/internal/output"
 	"github.com/shhac/agent-sql/internal/resolve"
 )
 
-func registerRunCommand(root *cobra.Command) {
+func registerRunCommand(root *cobra.Command, g *GlobalFlags) {
 	var (
 		limit int
 		write bool
@@ -24,25 +21,24 @@ func registerRunCommand(root *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sql := args[0]
 
-			ctx, cancel := shared.MakeContext(flagTimeout)
+			ctx, cancel := shared.MakeContext(g.TimeoutMS)
 			defer cancel()
 
 			drv, err := resolve.Resolve(ctx, resolve.Opts{
-				Connection: flagConnection,
+				Connection: g.Connection,
 				Write:      write,
-				Timeout:    flagTimeout,
+				Timeout:    g.TimeoutMS,
 			})
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			defer func() { _ = drv.Close() }()
 
 			return query.ExecuteRun(ctx, drv, sql, limit, write, query.RenderOpts{
-				Expand:     flagExpand,
-				Full:       flagFull,
-				Compact:    flagCompact,
-				FormatFlag: flagFormat,
+				Expand:     g.Expand,
+				Full:       g.Full,
+				Compact:    g.Compact,
+				FormatFlag: g.Format,
 			})
 		},
 	}

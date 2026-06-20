@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -96,7 +95,6 @@ func registerGet(parent *cobra.Command) {
 			def := findKey(key)
 			if def == nil {
 				err := fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames())
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
@@ -118,18 +116,15 @@ func registerSet(parent *cobra.Command) {
 			def := findKey(key)
 			if def == nil {
 				err := fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames())
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
 			value, err := parseConfigValue(def, rawValue)
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
 			if err := config.UpdateSetting(key, value); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
@@ -147,7 +142,6 @@ func registerReset(parent *cobra.Command) {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.ResetSettings(); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "message": "Settings reset to defaults"}, true)

@@ -1,8 +1,6 @@
 package connection
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-sql/internal/config"
@@ -16,7 +14,6 @@ func registerRemove(parent *cobra.Command) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.RemoveConnection(args[0]); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "removed": args[0]}, true)
@@ -33,7 +30,6 @@ func registerSetDefault(parent *cobra.Command) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.SetDefault(args[0]); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			output.PrintJSON(map[string]any{"ok": true, "default": args[0]}, true)

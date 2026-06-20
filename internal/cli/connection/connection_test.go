@@ -12,6 +12,7 @@ import (
 
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
+	"github.com/shhac/agent-sql/internal/output"
 )
 
 // testRoot returns a fresh cobra root with the connection commands
@@ -26,6 +27,16 @@ func testRoot(t *testing.T) *cobra.Command {
 	}
 	Register(root, func() (string, int) { return "", 0 })
 	return root
+}
+
+// execute runs root and renders any bubbled error to stderr exactly as the
+// production main (libcli.Run) does, then returns it.
+func execute(root *cobra.Command) error {
+	if err := root.Execute(); err != nil {
+		output.WriteError(os.Stderr, err)
+		return err
+	}
+	return nil
 }
 
 // captureStdout swaps os.Stdout for a pipe; output.PrintJSON writes
@@ -89,7 +100,7 @@ func TestConnectionAddRejectsEmbeddedCredentialsWithoutCredentialFlag(t *testing
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 
-	err := root.Execute()
+	err := execute(root)
 	restore() // flush pipe before reading the buffer
 	if err == nil {
 		t.Fatal("expected non-nil error from Execute (rejection)")

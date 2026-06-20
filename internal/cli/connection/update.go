@@ -2,7 +2,6 @@ package connection
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -38,13 +37,11 @@ func registerUpdate(parent *cobra.Command) {
 			existing := config.GetConnection(alias)
 			if existing == nil {
 				err := fmt.Errorf("connection %q not found", alias)
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 
 			if cmd.Flags().Changed("credential") {
 				if err := validateCredentialRef(credName); err != nil {
-					output.WriteError(os.Stderr, err)
 					return err
 				}
 			}
@@ -64,7 +61,6 @@ func registerUpdate(parent *cobra.Command) {
 
 			updated, warnings, err := buildConnectionUpdates(existing, in, changed)
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			for _, w := range warnings {
@@ -72,7 +68,6 @@ func registerUpdate(parent *cobra.Command) {
 			}
 
 			if err := config.StoreConnection(alias, *existing); err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 

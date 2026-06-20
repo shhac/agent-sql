@@ -115,11 +115,10 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			ctx, cancel := shared.MakeContext(g.Timeout)
+			ctx, cancel := shared.MakeContext(g.TimeoutMS)
 			defer cancel()
-			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Write: write, Timeout: g.Timeout})
+			drv, err := resolve.Resolve(ctx, resolve.Opts{Connection: g.Connection, Write: write, Timeout: g.TimeoutMS})
 			if err != nil {
-				output.WriteError(os.Stderr, err)
 				return err
 			}
 			defer func() { _ = drv.Close() }()
@@ -187,7 +186,6 @@ func paginationHint(limit int, fromUser bool) string {
 func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql string, opts driver.QueryOpts, limit int, limitFromUser bool, render RenderOpts) error {
 	sr, err := streamer.QueryStream(ctx, sql, opts)
 	if err != nil {
-		output.WriteError(os.Stderr, err)
 		return err
 	}
 	if sr.Iterator == nil {
@@ -217,14 +215,12 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 		}
 		row, err := sr.Iterator.Scan()
 		if err != nil {
-			output.WriteError(os.Stderr, err)
 			return err
 		}
 		_ = w.WriteRow(row)
 		count++
 	}
 	if err := sr.Iterator.Err(); err != nil {
-		output.WriteError(os.Stderr, err)
 		return err
 	}
 	_ = w.Flush()
@@ -234,7 +230,6 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opts driver.QueryOpts, write bool, limit int, limitFromUser bool, render RenderOpts) error {
 	result, err := drv.Query(ctx, sql, opts)
 	if err != nil {
-		output.WriteError(os.Stderr, err)
 		return err
 	}
 
@@ -267,7 +262,7 @@ func registerSample(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				effectiveLimit := limit
 				if effectiveLimit <= 0 {
 					effectiveLimit = 5
@@ -316,7 +311,6 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 						"EXPLAIN ANALYZE is not allowed for write queries (detected %s); EXPLAIN ANALYZE actually executes the query, which would modify data. Use EXPLAIN without --analyze for write queries",
 						strings.ToUpper(m[1]),
 					)
-					output.WriteError(os.Stderr, err)
 					return err
 				}
 			}
@@ -327,7 +321,7 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 			}
 			sql := prefix + " " + args[0]
 
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				result, err := drv.Query(ctx, sql, driver.QueryOpts{})
 				if err != nil {
 					return err
@@ -350,7 +344,7 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g := globals()
-			return shared.WithConnection(g.Connection, g.Timeout, func(ctx context.Context, drv driver.Connection) error {
+			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
 				quoted := drv.QuoteIdent(args[0])
 				whereClause := ""
 				if where != "" {
