@@ -58,6 +58,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 | `--format jsonl\|json\|yaml\|csv` | Output format (default: jsonl or config)       |
 | `--expand <field,...>`     | Expand specific truncated fields              |
 | `--full`                   | Expand all truncated fields                   |
+| `-C, --compact`            | Compact output: parallel arrays (column names + row arrays) for reduced token count |
 | `--timeout <ms>`           | Query timeout override                        |
 
 ## Config keys

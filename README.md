@@ -225,7 +225,7 @@ Write operations require both a credential with `writePermission` and the `--wri
 - JSONL applies to tabular results (`query run`, `query sample`). Each line is `{"col": val, ..., "@truncated": null}`. When more rows exist, the last line is `{"@pagination": {"hasMore": true, "rowCount": N}}`.
 - Non-tabular output (schema, config, explain, count, connection/credential admin) uses JSON envelope regardless of format setting
 - CSV applies to tabular results only; non-tabular commands fall back to JSON
-- Errors always go to stderr as JSON `{ "error": "...", "fixable_by": "agent"|"human" }` with non-zero exit code
+- Errors always go to stderr as JSON `{ "error": "...", "fixable_by": "agent"|"human"|"retry", "hint"?: "...", "retry_after_seconds"?: N }` with non-zero exit code
 - NULLs preserved in query results, empty fields pruned in admin output
 - Long strings truncated with per-row `@truncated` metadata showing original lengths
 - `--compact` mode uses parallel arrays (column names + row arrays) for reduced token count

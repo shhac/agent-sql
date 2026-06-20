@@ -51,7 +51,7 @@ COMMANDS:
   schema search <pattern>                              Search table/column names
   schema dump [--tables] [--include-system]            Full schema dump
 
-GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --timeout <ms>
+GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --compact (-C), --timeout <ms>
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
   -c accepts connection aliases, file paths (./data.db, ./analytics.duckdb), or URLs.
