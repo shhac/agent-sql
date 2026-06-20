@@ -10,6 +10,7 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 const usageText = `config — Manage CLI settings
@@ -74,6 +75,7 @@ func Register(root *cobra.Command) {
 		Use:   "config",
 		Short: "Manage CLI settings",
 	}
+	libcli.HandleUnknownCommand(cfg, "run 'agent-sql config usage' to see the available commands")
 
 	registerGet(cfg)
 	registerSet(cfg)

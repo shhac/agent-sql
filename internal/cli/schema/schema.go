@@ -12,6 +12,7 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/driver"
 	"github.com/shhac/agent-sql/internal/output"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 const usageText = `SCHEMA COMMANDS
@@ -107,6 +108,7 @@ func Register(root *cobra.Command, globals func() SchemaGlobals) {
 		Use:   "schema",
 		Short: "Explore database schema",
 	}
+	libcli.HandleUnknownCommand(schema, "run 'agent-sql schema usage' to see the available commands")
 
 	registerTables(schema, globals)
 	registerDescribe(schema, globals)

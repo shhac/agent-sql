@@ -9,6 +9,7 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/output"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 const usageText = `credential — Manage stored credentials for SQL database authentication
@@ -72,6 +73,7 @@ func Register(root *cobra.Command) {
 		Use:   "credential",
 		Short: "Manage stored credentials",
 	}
+	libcli.HandleUnknownCommand(cred, "run 'agent-sql credential usage' to see the available commands")
 
 	registerAdd(cred)
 	registerRemove(cred)

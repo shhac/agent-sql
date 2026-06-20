@@ -15,6 +15,7 @@ import (
 	"github.com/shhac/agent-sql/internal/output"
 	"github.com/shhac/agent-sql/internal/resolve"
 	"github.com/shhac/agent-sql/internal/truncation"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 const usageText = `QUERY COMMANDS
@@ -94,6 +95,7 @@ func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 		Use:   "query",
 		Short: "Run and inspect SQL queries",
 	}
+	libcli.HandleUnknownCommand(query, "run 'agent-sql query usage' to see the available commands")
 
 	registerRun(query, globals)
 	registerSample(query, globals)

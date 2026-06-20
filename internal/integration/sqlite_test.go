@@ -301,6 +301,11 @@ func TestCLIUsageErrorsAreStructured(t *testing.T) {
 		{"unknown flag", []string{"--nonsense"}},
 		{"missing required arg", []string{"run"}},
 		{"too many args", []string{"run", "SELECT 1", "extra"}},
+		{"unknown connection subcommand", []string{"connection", "bogus"}},
+		{"unknown schema subcommand", []string{"schema", "bogus"}},
+		{"unknown query subcommand", []string{"query", "bogus"}},
+		{"unknown credential subcommand", []string{"credential", "bogus"}},
+		{"unknown config subcommand", []string{"config", "bogus"}},
 	}
 
 	for _, tc := range cases {
@@ -318,6 +323,24 @@ func TestCLIUsageErrorsAreStructured(t *testing.T) {
 			}
 			if payload["fixable_by"] == nil {
 				t.Errorf("missing fixable_by: %s", stderr)
+			}
+		})
+	}
+}
+
+// TestCLIUnknownSubcommandExitsNonZero guards the per-group unknown-command
+// handler: an unknown subcommand under a domain group must exit non-zero (it
+// previously printed cobra usage text and exited 0).
+func TestCLIUnknownSubcommandExitsNonZero(t *testing.T) {
+	bin := buildBinary(t)
+
+	for _, group := range []string{"connection", "schema", "query", "credential", "config"} {
+		t.Run(group, func(t *testing.T) {
+			cmd := exec.Command(bin, group, "bogus")
+			cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+			err := cmd.Run()
+			if err == nil {
+				t.Fatalf("%s bogus: expected non-zero exit, got 0", group)
 			}
 		})
 	}

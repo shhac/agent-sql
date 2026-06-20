@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-sql/internal/cli/shared"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 const usageText = `connection — Manage SQL database connections
@@ -99,6 +100,7 @@ func Register(root *cobra.Command, globals func() (string, int)) {
 		Use:   "connection",
 		Short: "Manage SQL connections",
 	}
+	libcli.HandleUnknownCommand(connection, "run 'agent-sql connection usage' to see the available commands")
 
 	registerAdd(connection)
 	registerUpdate(connection)
