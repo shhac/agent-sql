@@ -115,8 +115,6 @@ internal/
     config.go                 # types, JSON I/O, settings get/set
     display.go                # DisplayURL, AsReceipt, EffectiveHost/Port; reads driver.Registry
   credential/                 # Credential storage (Keychain on macOS, file fallback)
-  dialog/                     # Native OS dialog wrapper (ncruces/zenity); Default Prompter overridable for tests
-    dialogtest/               # Recording fake Prompter for tests
   output/                     # ResultWriter interface; NDJSON/JSON/YAML/CSV formatters;
                               # PrintJSON, WriteError, Warn helpers
   truncation/                 # @truncated decorator (ResultWriter wrapper)

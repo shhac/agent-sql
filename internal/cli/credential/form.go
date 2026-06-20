@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/shhac/agent-sql/internal/dialog"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
+	"github.com/shhac/lib-agent-cli/dialog"
 )
 
 // promptMissingViaDialog asks the user (via a native OS dialog) for any

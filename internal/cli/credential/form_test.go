@@ -14,9 +14,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-sql/internal/config"
-	"github.com/shhac/agent-sql/internal/dialog"
-	"github.com/shhac/agent-sql/internal/dialog/dialogtest"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
+	"github.com/shhac/lib-agent-cli/dialog"
+	"github.com/shhac/lib-agent-cli/dialog/dialogtest"
 )
 
 func TestPromptMissingViaDialogReturnsEarlyWhenAllFlagsSupplied(t *testing.T) {
