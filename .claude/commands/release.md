@@ -108,7 +108,9 @@ ls ../homebrew-tap/Formula/agent-sql.rb
 1. Read `../homebrew-tap/Formula/agent-sql.rb`
 2. Update version, URLs (use `v${new_version}`), SHA256 values, assert_match version
 3. Note: Go binaries use `amd64` not `x64` — update the tarball names accordingly
-4. Commit and push:
+4. Ensure the `install` block installs shell completions — after `bin.install`, add
+   `generate_completions_from_executable(bin/"agent-sql", "completion")` (the binary supports `completion bash|zsh|fish`)
+5. Commit and push:
    ```bash
    cd ../homebrew-tap
    git add Formula/agent-sql.rb
