@@ -11,6 +11,7 @@ import (
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
 	libcli "github.com/shhac/lib-agent-cli/cli"
+	agentout "github.com/shhac/lib-agent-output"
 )
 
 const usageText = `config — Manage CLI settings
@@ -69,15 +70,16 @@ func validKeyNames() string {
 	return strings.Join(names, ", ")
 }
 
-// Register adds the config command group to root.
-func Register(root *cobra.Command) {
+// Register adds the config command group to root. globals provides access to
+// the root persistent flags (e.g. --format) so config get can honour them.
+func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	cfg := &cobra.Command{
 		Use:   "config",
 		Short: "Manage CLI settings",
 	}
 	libcli.HandleUnknownCommand(cfg, "run 'agent-sql config usage' to see the available commands")
 
-	registerGet(cfg)
+	registerGet(cfg, globals)
 	registerSet(cfg)
 	registerReset(cfg)
 	registerListKeys(cfg)
@@ -87,22 +89,22 @@ func Register(root *cobra.Command) {
 	root.AddCommand(cfg)
 }
 
-func registerGet(parent *cobra.Command) {
+func registerGet(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	get := &cobra.Command{
-		Use:   "get <key>",
-		Short: "Get a config value",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get <key>...",
+		Short: "Get one or more config values",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key := args[0]
-			def := findKey(key)
-			if def == nil {
-				err := fmt.Errorf("unknown key: %q. Valid keys: %s", key, validKeyNames())
-				return err
+			g := globals()
+			resolver := func(key string) (any, error) {
+				if findKey(key) == nil {
+					return nil, agentout.Newf(agentout.FixableByAgent,
+						"no setting %q; valid keys: %s", key, validKeyNames())
+				}
+				value := config.GetSetting(key)
+				return map[string]any{"key": key, "value": value}, nil
 			}
-
-			value := config.GetSetting(key)
-			output.PrintJSON(map[string]any{"key": key, "value": value}, true)
-			return nil
+			return libcli.EntityGet(cmd.OutOrStdout(), g.Format, args, resolver)
 		},
 	}
 	parent.AddCommand(get)

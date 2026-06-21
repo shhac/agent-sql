@@ -17,6 +17,7 @@ type GlobalFlags struct {
 	Full       bool
 	TimeoutMS  int
 	Compact    bool
+	Debug      bool
 }
 
 // MakeContext returns a context with an optional timeout.

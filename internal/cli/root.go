@@ -37,6 +37,7 @@ func (g *GlobalFlags) allGlobals() *shared.GlobalFlags {
 		Full:       g.Full,
 		TimeoutMS:  g.TimeoutMS,
 		Compact:    g.Compact,
+		Debug:      g.Debug,
 	}
 }
 
@@ -89,10 +90,9 @@ func newRootCmd(version string) *cobra.Command {
 	pf.StringVarP(&g.Expand, "expand", "e", "", "Expand specific truncated fields (comma-separated)")
 	pf.BoolVarP(&g.Full, "full", "F", false, "Expand all truncated fields")
 	pf.BoolVarP(&g.Compact, "compact", "C", false, "Compact output (typed NDJSON: columns once, then row arrays)")
-	// NOTE: --debug (g.Debug) is present for family consistency but inert in
-	// agent-sql. The bridge is DB-driven, not HTTP, so there is no request-log
-	// seam to wire it into (resolve/driver expose none). Wiring it to a query
-	// log on stderr is a behavior follow-up, not part of NewRoot adoption.
+	// --debug is wired via allGlobals → shared.GlobalFlags.Debug → ExecuteRun,
+	// which logs the resolved connection (redacted) and each SQL statement to
+	// stderr before execution. Stdout stays clean NDJSON regardless.
 
 	// Register command groups
 	registerRunCommand(root, g)
@@ -101,7 +101,7 @@ func newRootCmd(version string) *cobra.Command {
 	schema.Register(root, g.schemaGlobals)
 	connection.Register(root, g.connGlobals)
 	clicredential.Register(root)
-	cliconfig.Register(root)
+	cliconfig.Register(root, g.allGlobals)
 
 	return root
 }

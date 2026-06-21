@@ -39,6 +39,8 @@ func registerRunCommand(root *cobra.Command, g *GlobalFlags) {
 				Full:       g.Full,
 				Compact:    g.Compact,
 				FormatFlag: g.Format,
+				Connection: g.Connection,
+				Debug:      g.Debug,
 			})
 		},
 	}

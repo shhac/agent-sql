@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -83,6 +84,12 @@ type RenderOpts struct {
 	Full       bool
 	Compact    bool
 	FormatFlag string
+	// Connection is the raw connection string/alias from the flag; used only for
+	// debug logging (redacted before write). Empty means "resolved from env/config".
+	Connection string
+	// Debug, when true, logs the resolved connection and each SQL statement to
+	// stderr before execution. Stdout stays clean NDJSON.
+	Debug bool
 
 	// format is the resolved output format (flag > config > default), filled
 	// in by ExecuteRun before the opts travel down the writer pipeline.
@@ -130,6 +137,8 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 				Full:       g.Full,
 				Compact:    g.Compact,
 				FormatFlag: g.Format,
+				Connection: g.Connection,
+				Debug:      g.Debug,
 			})
 		},
 	}
@@ -149,6 +158,11 @@ func registerRun(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 // LIMIT/TOP in their own SQL — the hint on the @pagination payload nudges
 // them in that direction.
 func ExecuteRun(ctx context.Context, drv driver.Connection, sql string, limitFlag int, write bool, render RenderOpts) error {
+	if render.Debug {
+		debugLog("connection: %s", redactConn(render.Connection))
+		debugLog("query: %s", sql)
+	}
+
 	pageSize := resolveLimit(limitFlag)
 	maxRows := resolveMaxRows()
 	effectiveLimit := pageSize
@@ -380,6 +394,30 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	}
 	count.Flags().StringVar(&where, "where", "", "WHERE clause filter")
 	parent.AddCommand(count)
+}
+
+// debugLog writes a [debug] line to stderr. Only called when debug mode is on;
+// stdout stays clean NDJSON regardless.
+func debugLog(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "[debug] "+format+"\n", args...)
+}
+
+// redactConn returns the connection string with any embedded password replaced
+// by "***". Aliases and file paths pass through unchanged; URLs get their
+// userinfo password component cleared.
+func redactConn(conn string) string {
+	if conn == "" {
+		return "(from env/config)"
+	}
+	u, err := url.Parse(conn)
+	if err != nil || u.Scheme == "" {
+		// Not a URL — alias or file path; safe to show as-is.
+		return conn
+	}
+	if _, hasPwd := u.User.Password(); hasPwd {
+		u.User = url.UserPassword(u.User.Username(), "***")
+	}
+	return u.String()
 }
 
 // helpers

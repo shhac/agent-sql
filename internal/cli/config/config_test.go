@@ -3,77 +3,47 @@ package config
 import (
 	"bytes"
 	"io"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	configpkg "github.com/shhac/agent-sql/internal/config"
-	"github.com/shhac/agent-sql/internal/output"
 )
 
 func testRoot(t *testing.T) *cobra.Command {
 	t.Helper()
+	g := &shared.GlobalFlags{}
 	root := &cobra.Command{
 		Use:           "agent-sql",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
-	Register(root)
+	Register(root, func() *shared.GlobalFlags { return g })
 	return root
 }
 
-// execute runs root and renders any bubbled error to stderr exactly as the
-// production main (libcli.Run) does, then returns it.
-func execute(root *cobra.Command) error {
-	if err := root.Execute(); err != nil {
-		output.WriteError(os.Stderr, err)
-		return err
-	}
-	return nil
-}
-
-func captureStderr(t *testing.T) (*bytes.Buffer, func()) {
-	t.Helper()
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
-	}
-	prev := os.Stderr
-	os.Stderr = w
-	buf := &bytes.Buffer{}
-	done := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(buf, r)
-		close(done)
-	}()
-	return buf, func() {
-		_ = w.Close()
-		<-done
-		os.Stderr = prev
-		_ = r.Close()
-	}
-}
-
-// TestConfigGetUnknownKeyExitsNonZero confirms config get on an
-// unknown key hard-exits (A1 contract) with a JSON error.
-func TestConfigGetUnknownKeyExitsNonZero(t *testing.T) {
+// TestConfigGetUnknownKeyUnresolved confirms config get on an unknown key
+// exits 0 and emits an @unresolved NDJSON record on stdout (item-level miss,
+// not a command-level failure). Stderr stays silent.
+func TestConfigGetUnknownKeyUnresolved(t *testing.T) {
 	configpkg.SetConfigDir(t.TempDir())
-	stderr, restore := captureStderr(t)
 
 	root := testRoot(t)
 	root.SetArgs([]string{"config", "get", "no.such.key"})
-	root.SetOut(io.Discard)
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
 	root.SetErr(io.Discard)
-	err := execute(root)
-	restore()
-
-	if err == nil {
-		t.Fatal("expected error for unknown key")
+	if err := root.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "unknown key") {
-		t.Errorf("stderr should explain unknown key; got: %s", stderr.String())
+	out := stdout.String()
+	if !strings.Contains(out, "@unresolved") {
+		t.Errorf("stdout should contain @unresolved; got: %s", out)
+	}
+	if !strings.Contains(out, "no.such.key") {
+		t.Errorf("stdout should name the missing key; got: %s", out)
 	}
 }
 
