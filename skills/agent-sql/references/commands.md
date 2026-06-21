@@ -22,7 +22,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 
 ## Config
 
-- `agent-sql config get <key>` — get a config value
+- `agent-sql config get <key>...` — get one or more config values (1..N keys). Default output is NDJSON: one line per key — the `{key, value}` record, or `{"@unresolved":{"id","reason","fixable_by"}}` for an unknown key. Exit 0 even if some keys are unresolved.
 - `agent-sql config set <key> <value>` — set a config value (validated against type/min/max)
 - `agent-sql config reset` — reset all settings to defaults
 - `agent-sql config list-keys` — list all valid keys with defaults and ranges
@@ -60,6 +60,7 @@ Run `agent-sql <command> usage` for detailed per-command docs.
 | `--full`                   | Expand all truncated fields                   |
 | `-C, --compact`            | Compact output: parallel arrays (column names + row arrays) for reduced token count |
 | `--timeout <ms>`           | Query timeout override                        |
+| `-d, --debug`              | Log `[debug] connection: <redacted>` and `[debug] query: <sql>` to stderr before execution. Stdout stays clean NDJSON. |
 
 ## Config keys
 

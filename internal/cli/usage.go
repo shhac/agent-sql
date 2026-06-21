@@ -36,7 +36,8 @@ NAMED CONNECTIONS (human-only setup):
 COMMANDS:
   credential add|remove|list                           Manage stored credentials (set up first)
   connection add|remove|update|list|test|set-default   Manage SQL connections
-  config get|set|reset|list-keys                       Persistent settings
+  config get <key>... [multi: 1..N keys, NDJSON default, @unresolved for unknown keys]
+  config set|reset|list-keys                           Persistent settings
 
   run "<sql>" [--limit] [--write] [--compact]          Execute SQL (top-level alias)
   query run "<sql>" [--limit] [--write] [--compact]    Execute SQL
@@ -51,7 +52,7 @@ COMMANDS:
   schema search <pattern>                              Search table/column names
   schema dump [--tables] [--include-system]            Full schema dump
 
-GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --compact (-C), --timeout <ms>
+GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --compact (-C), --timeout <ms>, -d/--debug (log [debug] connection + query to stderr)
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
   -c accepts connection aliases, file paths (./data.db, ./analytics.duckdb), or URLs.
