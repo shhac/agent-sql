@@ -20,11 +20,18 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: test
       MYSQL_DATABASE: testdb
+    # `mysqladmin ping` reports healthy during MySQL's first-boot init, while the
+    # entrypoint still restarts the server afterwards — the seed then connects
+    # mid-restart and hits "Lost connection ... reading initial communication
+    # packet". An authenticated query against testdb (which only exists once init
+    # completes) only succeeds on the real, restarted server; start_period keeps
+    # the inevitable early failures from flapping the container unhealthy.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ptest"]
+      test: ["CMD-SHELL", "mysql -uroot -ptest -e 'SELECT 1' testdb"]
       interval: 2s
       timeout: 5s
       retries: 15
+      start_period: 20s
 
   mariadb:
     image: mariadb:11
@@ -33,11 +40,13 @@ services:
     environment:
       MARIADB_ROOT_PASSWORD: test
       MARIADB_DATABASE: testdb
+    # Same first-boot restart race as mysql above: ping goes healthy too early.
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-ptest"]
+      test: ["CMD-SHELL", "mariadb -uroot -ptest -e 'SELECT 1' testdb"]
       interval: 2s
       timeout: 5s
       retries: 15
+      start_period: 20s
 
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
