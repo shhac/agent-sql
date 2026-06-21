@@ -19,5 +19,5 @@ release
 .claude/*.local.json
 CLAUDE.local.md
 
-# design docs
-design-docs/
+# design docs are tracked (checked in); archive/ kept local only
+design-docs/archive/
