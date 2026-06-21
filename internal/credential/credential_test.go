@@ -1,10 +1,70 @@
 package credential
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/shhac/agent-sql/internal/config"
 )
+
+// TestStore_Headless_FileFallback exercises the real credential-WRITE path
+// non-interactively. Setting the per-CLI keychain opt-out (derived by
+// lib-agent-cli from the "app.paulie.agent-sql" service) makes the keychain
+// backend report unavailable, so Store deterministically takes the 0600 file
+// fallback on every platform — including darwin, where it would otherwise reach
+// the `security` CLI and its GUI prompt. This is the connection-credential write
+// path that previously could only be tested by chance on non-macOS runners.
+func TestStore_Headless_FileFallback(t *testing.T) {
+	t.Setenv("AGENT_SQL_NO_KEYCHAIN", "1")
+	dir := t.TempDir()
+	config.SetConfigDir(dir)
+	t.Cleanup(func() { config.SetConfigDir("") })
+
+	cred := Credential{Username: "alice", Password: "s3cr3t", WritePermission: true}
+	storage, err := Store("headless-write", cred)
+	if err != nil {
+		t.Fatalf("Store() error = %v", err)
+	}
+	if storage != "file" {
+		t.Fatalf("storage = %q, want \"file\" (keychain opt-out should force the file path)", storage)
+	}
+
+	info, err := os.Stat(credentialsPath())
+	if err != nil {
+		t.Fatalf("credentials file not written: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("credentials mode = %o, want 0600", mode)
+	}
+
+	// File fallback must store the secret in the file itself, not the keychain.
+	data, err := os.ReadFile(credentialsPath())
+	if err != nil {
+		t.Fatalf("ReadFile(credentialsPath) error = %v", err)
+	}
+	if strings.Contains(string(data), "__KEYCHAIN__") {
+		t.Fatalf("credentials index used keychain sentinels despite opt-out: %s", data)
+	}
+
+	got := Get("headless-write")
+	if got == nil {
+		t.Fatal("Get() returned nil after file-fallback Store")
+	}
+	if got.Username != "alice" || got.Password != "s3cr3t" {
+		t.Errorf("round-trip = %q/%q, want alice/s3cr3t", got.Username, got.Password)
+	}
+	if !got.WritePermission {
+		t.Error("WritePermission not round-tripped")
+	}
+
+	if err := Remove("headless-write"); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	if got := Get("headless-write"); got != nil {
+		t.Errorf("credential still present after Remove: %+v", got)
+	}
+}
 
 func TestStoreAndGetRoundTrip(t *testing.T) {
 	config.SetConfigDir(t.TempDir())
