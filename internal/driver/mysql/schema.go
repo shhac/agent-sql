@@ -150,13 +150,6 @@ func (c *mysqlConn) GetConstraints(ctx context.Context, table string) ([]driver.
 	}
 	defer func() { _ = rows.Close() }()
 
-	constraintTypeMap := map[string]driver.ConstraintType{
-		"PRIMARY KEY": driver.ConstraintPrimaryKey,
-		"FOREIGN KEY": driver.ConstraintForeignKey,
-		"UNIQUE":      driver.ConstraintUnique,
-		"CHECK":       driver.ConstraintCheck,
-	}
-
 	var constraints []driver.ConstraintInfo
 	for rows.Next() {
 		var name, tableName, cType, cols string
@@ -164,8 +157,8 @@ func (c *mysqlConn) GetConstraints(ctx context.Context, table string) ([]driver.
 		if err := rows.Scan(&name, &tableName, &cType, &cols, &refTable, &refCols); err != nil {
 			return nil, err
 		}
-		ct, ok := constraintTypeMap[cType]
-		if !ok {
+		ct := driver.MapConstraintType(cType)
+		if ct == "" {
 			ct = driver.ConstraintCheck
 		}
 		ci := driver.ConstraintInfo{
