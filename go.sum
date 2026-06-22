@@ -80,8 +80,8 @@ github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52Z
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/shhac/lib-agent-cli v0.12.0 h1:noumMzXhfmShfA7KNhUeZBF0NNG9QZ8j2ofVEBlvmbI=
 github.com/shhac/lib-agent-cli v0.12.0/go.mod h1:8yI+z/swlq+NI0YIbCd3uK9CDINdCKIfRuKeBRiGZqw=
-github.com/shhac/lib-agent-mcp v0.4.0 h1:+G+TiRp1W8Q9/IHdP/4GuUb4wrWUUpfL8hDdx87VTcA=
-github.com/shhac/lib-agent-mcp v0.4.0/go.mod h1:8qvwZQ+kq9n19GdjEBkXbDZ+iSXRMzKZykSSAJO+zoo=
+github.com/shhac/lib-agent-mcp v0.5.2 h1:HabPIHU7RgeBWkVGhinhg7C4iB1S+1SAvpbh+xmF8mI=
+github.com/shhac/lib-agent-mcp v0.5.2/go.mod h1:8qvwZQ+kq9n19GdjEBkXbDZ+iSXRMzKZykSSAJO+zoo=
 github.com/shhac/lib-agent-output v0.6.0 h1:/Cd/lpiYA0pmeAkzMP1zSWuXbxTzQPaf89/UVulrJh0=
 github.com/shhac/lib-agent-output v0.6.0/go.mod h1:YyO2KSKAZxRrCJGanfB6qAyV0DvG+GSsZNShQoLslT0=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
