@@ -8,7 +8,7 @@ require (
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/shhac/lib-agent-cli v0.16.0
 	github.com/shhac/lib-agent-mcp v0.7.0
-	github.com/shhac/lib-agent-output v0.8.0
+	github.com/shhac/lib-agent-output v0.9.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.48.0
