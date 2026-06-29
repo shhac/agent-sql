@@ -10,6 +10,7 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/query"
 	"github.com/shhac/agent-sql/internal/cli/schema"
 	"github.com/shhac/agent-sql/internal/cli/shared"
+	"github.com/shhac/agent-sql/internal/credential"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 	"github.com/shhac/agent-sql/internal/output"
 	libcli "github.com/shhac/lib-agent-cli/cli"
@@ -114,7 +115,9 @@ func newRootCmd(version string) *cobra.Command {
 	exposeGroups(root,
 		"query", "run", "schema")
 
-	root.AddCommand(agentmcp.Command(root, agentmcp.WithHiddenFlags("color", "expose")))
+	root.AddCommand(agentmcp.Command(root,
+		agentmcp.WithHiddenFlags("color", "expose"),
+		agentmcp.WithOAuthKeyringService(credential.MCPKeychainService())))
 
 	return root
 }
