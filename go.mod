@@ -7,7 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/shhac/lib-agent-cli v0.16.0
-	github.com/shhac/lib-agent-mcp v0.10.0
+	github.com/shhac/lib-agent-mcp v0.11.0
 	github.com/shhac/lib-agent-output v0.10.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1

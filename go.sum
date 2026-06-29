@@ -82,8 +82,8 @@ github.com/shhac/lib-agent-cli v0.16.0 h1:ICP7Ngj15Q9BdeNvKpnh6bH1siW0AaF8nG4P+r
 github.com/shhac/lib-agent-cli v0.16.0/go.mod h1:c6Ajjn/hD0WpERhniN96xCDsbkt49ztQm1ERlqAZMVw=
 github.com/shhac/lib-agent-keyring v0.1.1 h1:cAwFr0UzlQ0xsgO0zY607lmwhvSamPN6Tp1DCNJO7hg=
 github.com/shhac/lib-agent-keyring v0.1.1/go.mod h1:nTk+YfRDc2dc8Nghd1o9w4c40xU8Pqx/UgToN0yGvZ8=
-github.com/shhac/lib-agent-mcp v0.10.0 h1:KXFBDr+0rnucu3vpdXZWRt4ooE/9H6pjFvzxnwMsZcM=
-github.com/shhac/lib-agent-mcp v0.10.0/go.mod h1:Hx/X1hJagJP7HDt72hPd4yeoaEggLuH9eWQzmovVOAo=
+github.com/shhac/lib-agent-mcp v0.11.0 h1:snZhKs5Z3YPs3THdyWavoa/+fbpASYgPrDPLRuUU3Xk=
+github.com/shhac/lib-agent-mcp v0.11.0/go.mod h1:Hx/X1hJagJP7HDt72hPd4yeoaEggLuH9eWQzmovVOAo=
 github.com/shhac/lib-agent-output v0.10.0 h1:m/o7/uxf3FLS7M+qcb4x+socjc7hEsvQM+tJilh2+7Y=
 github.com/shhac/lib-agent-output v0.10.0/go.mod h1:YyO2KSKAZxRrCJGanfB6qAyV0DvG+GSsZNShQoLslT0=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
