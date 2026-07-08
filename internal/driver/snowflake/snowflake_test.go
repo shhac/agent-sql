@@ -334,6 +334,29 @@ func TestClassifyError(t *testing.T) {
 		}
 	})
 
+	t.Run("API error: expired PAT", func(t *testing.T) {
+		apiErr := &snowflakeAPIError{Code: "394401", Msg: "Programmatic access token is expired."}
+		got := ClassifyError(apiErr)
+		var qerr *errors.QueryError
+		if !errors.As(got, &qerr) || qerr.FixableBy != errors.FixableByHuman {
+			t.Errorf("expected human-fixable, got %v", got)
+		}
+	})
+
+	t.Run("API error: auth family is human-fixable", func(t *testing.T) {
+		for _, apiErr := range []*snowflakeAPIError{
+			{Code: "390100", Msg: "Incorrect username or password was specified."},
+			{Code: "390144", Msg: "JWT token is invalid.", SQLState: "08001"},
+			{Code: "394400", Msg: "Programmatic access token is invalid."},
+		} {
+			got := ClassifyError(apiErr)
+			var qerr *errors.QueryError
+			if !errors.As(got, &qerr) || qerr.FixableBy != errors.FixableByHuman {
+				t.Errorf("code %s: expected human-fixable, got %v", apiErr.Code, got)
+			}
+		}
+	})
+
 	t.Run("API error: timeout", func(t *testing.T) {
 		apiErr := &snowflakeAPIError{Code: "000900", Msg: "Query timeout exceeded"}
 		got := ClassifyError(apiErr)

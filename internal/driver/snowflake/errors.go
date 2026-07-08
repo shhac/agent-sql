@@ -84,9 +84,19 @@ func classifyAPIError(apiErr *snowflakeAPIError) error {
 		return errors.New(msg, errors.FixableByAgent).
 			WithHint(errors.HintColumnNotFound)
 
+	case apiErr.Code == "394401" || strings.Contains(apiErr.Msg, "Programmatic access token is expired"):
+		return errors.New(msg, errors.FixableByHuman).
+			WithHint("Programmatic access token (PAT) has expired. Generate a new PAT in Snowflake, then run: agent-sql credential add")
+
 	case apiErr.Code == "390318" || strings.Contains(apiErr.Msg, "Authentication token has expired"):
 		return errors.New(msg, errors.FixableByHuman).
-			WithHint("PAT token has expired. Generate a new token in Snowflake.")
+			WithHint("Authentication token has expired. Re-authenticate to Snowflake.")
+
+	// Authentication (390xxx) and programmatic-access-token (394xxx) errors are
+	// always a credential/config problem — no agent can mint a valid token.
+	case strings.HasPrefix(apiErr.Code, "390") || strings.HasPrefix(apiErr.Code, "394"):
+		return errors.New(msg, errors.FixableByHuman).
+			WithHint("Authentication failed. Check the account, user, and PAT in your connection, then run: agent-sql credential add")
 
 	case strings.Contains(apiErr.Msg, "timeout") || strings.Contains(apiErr.Msg, "Timeout"):
 		return errors.New(msg, errors.FixableByRetry).
