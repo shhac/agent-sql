@@ -11,7 +11,6 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/schema"
 	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/credential"
-	agenterrors "github.com/shhac/agent-sql/internal/errors"
 	"github.com/shhac/agent-sql/internal/output"
 	libcli "github.com/shhac/lib-agent-cli/cli"
 	agentmcp "github.com/shhac/lib-agent-mcp"
@@ -67,26 +66,22 @@ func newRootCmd(version string) *cobra.Command {
 		Version:       version,
 		Globals:       &g.Globals,
 		DefaultFormat: output.FormatNDJSON,
-		UnknownHint:   "run 'agent-sql usage' to see the available commands",
+		ConfigDefaults: func() {
+			// Record the raw --format value so admin/receipt output (which
+			// doesn't thread the flag through command signatures) resolves
+			// the same flag > config > NDJSON chain as query output.
+			output.ConfigureFormat(g.Format)
+		},
+		UnknownHint: "run 'agent-sql usage' to see the available commands",
 	})
 
-	// Domain persistent flags. --format/--timeout/--debug are bound by NewRoot;
-	// override --format's usage text since agent-sql also supports csv.
+	// Domain persistent flags. --format/--timeout/--debug/--color are bound by
+	// NewRoot; override --format's usage text since agent-sql also supports csv
+	// on tabular commands. NewRoot's PersistentPreRunE is kept intact — it
+	// resolves --color into the output package and validates --format (with
+	// csv opted in per command group via AllowFormats below).
 	pf := root.PersistentFlags()
-	pf.Lookup("format").Usage = "Output format: jsonl, json, yaml, csv"
-
-	// Replace NewRoot's --format validation: it uses the family parser, which
-	// rejects csv. agent-sql supports csv as a domain format, so validate up
-	// front with our own csv-aware parser instead (a bad format still surfaces
-	// as a structured fixable_by:agent error, exactly once, via libcli.Run).
-	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
-		if g.Format != "" {
-			if _, err := output.ParseFormat(g.Format); err != nil {
-				return agenterrors.Wrap(err, agenterrors.FixableByAgent)
-			}
-		}
-		return nil
-	}
+	pf.Lookup("format").Usage = "Output format: jsonl, json, yaml (csv on query commands)"
 
 	pf.StringVarP(&g.Connection, "connection", "c", "", "Connection alias, file path, or URL")
 	pf.StringVarP(&g.Expand, "expand", "e", "", "Expand specific truncated fields (comma-separated)")
@@ -104,6 +99,15 @@ func newRootCmd(version string) *cobra.Command {
 	connection.Register(root, g.connGlobals)
 	clicredential.Register(root)
 	cliconfig.Register(root, g.allGlobals)
+
+	// csv is an agent-sql-only tabular format: valid on the commands that
+	// render rows (query group + top-level run alias), rejected with a
+	// structured error everywhere else by NewRoot's --format validator.
+	for _, c := range root.Commands() {
+		if c.Name() == "query" || c.Name() == "run" {
+			libcli.AllowFormats(c, "csv")
+		}
+	}
 
 	// Expose the whole command tree as an MCP server (added last, so it reflects
 	// the complete tree). --color/--expose are output-shaping, irrelevant to a

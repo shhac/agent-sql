@@ -14,7 +14,7 @@ allowed-tools: Bash(agent-sql *) Read Grep Glob
 
 `agent-sql` is a read-only-by-default SQL CLI on `$PATH`. Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, DuckDB, Snowflake, and MSSQL.
 
-Query output goes to stdout as JSONL (one JSON object per line). Non-tabular output (schema, config, admin) uses a JSON envelope. Errors go to stderr as `{ "error": "...", "hint": "...", "fixable_by": "agent|human|retry" }` with non-zero exit.
+Output goes to stdout as NDJSON by default: query results and lists (schema tables/indexes/constraints, connection list, credential list, config list-keys) are one JSON object per line with no envelope; single resources and receipts (describe, count, test, write receipts) are one compact JSON line. `--format json` gives pretty JSON (lists wrapped in `{"data": [...]}`); `--format yaml` gives YAML. Errors go to stderr as `{ "error": "...", "fixable_by": "agent|human|retry", "hint": "..." }` with non-zero exit; advisories are `{ "notice": "...", "hint": "..." }` lines on stderr.
 
 ## Quick start
 
@@ -74,7 +74,7 @@ agent-sql query sample users --limit 10 --where "status = 'active'"
 agent-sql run "SELECT * FROM users WHERE age >= 21"                 # top-level shorthand
 agent-sql query run "SELECT * FROM users WHERE age >= 21"           # equivalent
 agent-sql query run "SELECT * FROM users" --limit 50                # override row limit
-agent-sql query run "SELECT * FROM users" --compact                 # array-of-arrays (saves tokens)
+agent-sql query run "SELECT * FROM users" --compact                 # typed lines: columns once, rows as arrays (saves tokens)
 agent-sql query explain "SELECT * FROM users WHERE email = 'a@b'"   # query plan
 agent-sql query explain "SELECT * FROM users" --analyze             # EXPLAIN ANALYZE
 agent-sql query count users                                         # total row count

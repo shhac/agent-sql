@@ -13,7 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/shhac/agent-sql/internal/cli/shared"
-	"github.com/shhac/agent-sql/internal/output"
+	agentout "github.com/shhac/lib-agent-output"
 )
 
 // seedSqlite creates a tempdir with a small sqlite database and returns
@@ -56,7 +56,7 @@ func testRoot(t *testing.T, g *shared.GlobalFlags) *cobra.Command {
 // here rather than os.Exit-ing the test process.
 func execute(root *cobra.Command) error {
 	if err := root.Execute(); err != nil {
-		output.WriteError(os.Stderr, err)
+		agentout.WriteError(os.Stderr, err)
 		return err
 	}
 	return nil
@@ -217,7 +217,7 @@ func TestQueryCountReturnsCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(stdout.String(), `"count": 2`) {
+	if !strings.Contains(stdout.String(), `"count":2`) {
 		t.Errorf("expected count: 2; got: %s", stdout.String())
 	}
 }

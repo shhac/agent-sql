@@ -3,45 +3,29 @@ package errors
 import (
 	"fmt"
 	"strings"
+
+	out "github.com/shhac/lib-agent-output"
 )
 
-// QueryError is a classified database error with context for LLMs.
-type QueryError struct {
-	Message   string    `json:"error"`
-	Hint      string    `json:"hint,omitempty"`
-	FixableBy FixableBy `json:"fixable_by"`
-	Cause     error     `json:"-"`
-}
-
-func (e *QueryError) Error() string { return e.Message }
-func (e *QueryError) Unwrap() error { return e.Cause }
+// QueryError is a classified database error with context for LLMs. It IS the
+// family's shared output.Error (a type alias, not a wrapper): commands return
+// it from RunE and libcli.Run recognizes it via output.As, so fixable_by and
+// hint survive to stderr instead of being re-wrapped as a generic agent error.
+type QueryError = out.Error
 
 // New creates a QueryError.
 func New(message string, fixableBy FixableBy) *QueryError {
-	return &QueryError{Message: message, FixableBy: fixableBy}
+	return out.New(message, fixableBy)
 }
 
 // Wrap creates a QueryError wrapping an underlying error.
 func Wrap(err error, fixableBy FixableBy) *QueryError {
-	return &QueryError{Message: err.Error(), FixableBy: fixableBy, Cause: err}
-}
-
-// WithHint adds a hint to a QueryError.
-func (e *QueryError) WithHint(hint string) *QueryError {
-	e.Hint = hint
-	return e
+	return out.Wrap(err, fixableBy)
 }
 
 // As is a convenience wrapper for errors.As with QueryError.
 func As(err error, target **QueryError) bool {
-	if err == nil {
-		return false
-	}
-	if qe, ok := err.(*QueryError); ok {
-		*target = qe
-		return true
-	}
-	return false
+	return out.As(err, target)
 }
 
 // ConnTip is the shared "ad-hoc connections" hint appended to connection

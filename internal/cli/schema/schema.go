@@ -2,10 +2,8 @@ package schema
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -54,7 +52,10 @@ OPTIONS
   --compact                   Typed NDJSON output for schema commands
 
 OUTPUT FORMAT
-  All commands return JSON to stdout.
+  Lists (tables, indexes, constraints) return NDJSON records by default —
+  one JSON object per line; --format json/yaml wraps them in {"data": [...]}.
+  Single resources (describe, search, dump) return one JSON line by default,
+  pretty JSON with --format json.
   --compact: {"type":"tables","values":{...}}
   --format sql: CREATE TABLE statements (schema dump only)
   Errors: { "error": "...", "fixable_by": "agent"|"human" } to stderr.
@@ -75,31 +76,36 @@ type SchemaGlobals struct {
 	Compact    bool
 }
 
-// printResult outputs data in the appropriate format based on the format flag.
-// When compact is true, the data is wrapped in a typed NDJSON message using the
-// provided schemaType (e.g. "tables", "describe", "indexes").
+// printResult outputs a single schema resource (describe, search, dump)
+// honoring the resolved --format. When compact is true, the data is wrapped in
+// a typed NDJSON message using the provided schemaType (e.g. "describe").
 func printResult(data any, g SchemaGlobals, prune bool, schemaType string) {
 	if g.Compact {
 		printCompact(data, schemaType)
 		return
 	}
-	format := output.ResolveFormat(g.Format)
-	switch format {
-	case output.FormatYAML:
-		_ = output.PrintYAMLViaJSON(os.Stdout, data, prune)
-	default:
-		output.PrintJSON(data, prune)
-	}
+	output.PrintResult(data, prune)
 }
 
-// printCompact writes a single typed NDJSON line for schema output.
+// printList outputs list-shaped schema data (tables, indexes, constraints) in
+// the family list contract: NDJSON records by default, a {"data": [...]}
+// envelope for json/yaml. Compact keeps its wrapped one-line shape.
+func printList[T any](items []T, g SchemaGlobals, schemaType string) {
+	if g.Compact {
+		printCompact(map[string]any{schemaType: items}, schemaType)
+		return
+	}
+	widened := make([]any, len(items))
+	for i, it := range items {
+		widened[i] = it
+	}
+	output.PrintList(widened, nil, true)
+}
+
+// printCompact writes a single typed NDJSON line for schema output, through
+// the shared funnel so it colorizes on a terminal.
 func printCompact(data any, schemaType string) {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(struct {
-		Type   string `json:"type"`
-		Values any    `json:"values"`
-	}{Type: schemaType, Values: data})
+	_ = output.WriteTypedLine(os.Stdout, schemaType, data)
 }
 
 // Register adds the schema command group to root.
@@ -136,7 +142,7 @@ func registerTables(parent *cobra.Command, globals func() SchemaGlobals) {
 				if err != nil {
 					return err
 				}
-				printResult(map[string]any{"tables": result}, g, true, "tables")
+				printList(result, g, "tables")
 				return nil
 			})
 		},
@@ -201,7 +207,7 @@ func registerIndexes(parent *cobra.Command, globals func() SchemaGlobals) {
 				if err != nil {
 					return err
 				}
-				printResult(map[string]any{"indexes": result}, g, true, "indexes")
+				printList(result, g, "indexes")
 				return nil
 			})
 		},
@@ -255,7 +261,7 @@ func registerConstraints(parent *cobra.Command, globals func() SchemaGlobals) {
 					result = filtered
 				}
 
-				printResult(map[string]any{"constraints": result}, g, true, "constraints")
+				printList(result, g, "constraints")
 				return nil
 			})
 		},
@@ -282,140 +288,4 @@ func registerSearch(parent *cobra.Command, globals func() SchemaGlobals) {
 		},
 	}
 	parent.AddCommand(search)
-}
-
-func registerDump(parent *cobra.Command, globals func() SchemaGlobals) {
-	var tables string
-	var includeSystem bool
-
-	dump := &cobra.Command{
-		Use:   "dump",
-		Short: "Dump full schema (tables, columns, indexes, constraints)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			g := globals()
-			return shared.WithConnection(g.Connection, g.TimeoutMS, func(ctx context.Context, drv driver.Connection) error {
-				// Handle --format sql via DDLDumper interface
-				if g.Format == "sql" {
-					return dumpSQL(ctx, drv, tables, includeSystem)
-				}
-
-				allTables, err := drv.GetTables(ctx, includeSystem)
-				if err != nil {
-					return err
-				}
-
-				filtered := allTables
-				if tables != "" {
-					filterSet := parseTableFilter(tables)
-					filtered = make([]driver.TableInfo, 0)
-					for _, t := range allTables {
-						if matchesFilter(t, filterSet) {
-							filtered = append(filtered, t)
-						}
-					}
-				}
-
-				type tableDump struct {
-					Name        string                  `json:"name"`
-					Schema      string                  `json:"schema,omitempty"`
-					Columns     []driver.ColumnInfo     `json:"columns"`
-					Indexes     []driver.IndexInfo      `json:"indexes"`
-					Constraints []driver.ConstraintInfo `json:"constraints"`
-				}
-
-				result := make([]tableDump, 0, len(filtered))
-				for _, t := range filtered {
-					name := qualifiedName(t)
-					columns, cErr := drv.DescribeTable(ctx, name)
-					if cErr != nil {
-						return cErr
-					}
-					indexes, iErr := drv.GetIndexes(ctx, name)
-					if iErr != nil {
-						return iErr
-					}
-					constraints, kErr := drv.GetConstraints(ctx, name)
-					if kErr != nil {
-						return kErr
-					}
-					result = append(result, tableDump{
-						Name:        t.Name,
-						Schema:      t.Schema,
-						Columns:     columns,
-						Indexes:     indexes,
-						Constraints: constraints,
-					})
-				}
-
-				printResult(map[string]any{"tables": result}, g, true, "dump")
-				return nil
-			})
-		},
-	}
-	dump.Flags().StringVar(&tables, "tables", "", "Comma-separated table filter")
-	dump.Flags().BoolVar(&includeSystem, "include-system", false, "Include system tables")
-	parent.AddCommand(dump)
-}
-
-// dumpSQL outputs CREATE TABLE statements using the DDLDumper interface.
-func dumpSQL(ctx context.Context, drv driver.Connection, tableFilter string, includeSystem bool) error {
-	dumper, ok := drv.(driver.DDLDumper)
-	if !ok {
-		return fmt.Errorf("--format sql is not supported by this driver")
-	}
-
-	allTables, err := drv.GetTables(ctx, includeSystem)
-	if err != nil {
-		return err
-	}
-
-	filtered := allTables
-	if tableFilter != "" {
-		filterSet := parseTableFilter(tableFilter)
-		filtered = make([]driver.TableInfo, 0)
-		for _, t := range allTables {
-			if matchesFilter(t, filterSet) {
-				filtered = append(filtered, t)
-			}
-		}
-	}
-
-	for i, t := range filtered {
-		name := qualifiedName(t)
-		ddl, err := dumper.GetDDL(ctx, name)
-		if err != nil {
-			return err
-		}
-		if i > 0 {
-			_, _ = fmt.Fprintln(os.Stdout)
-		}
-		_, _ = fmt.Fprintln(os.Stdout, ddl)
-	}
-	return nil
-}
-
-// helpers
-
-func parseTableFilter(raw string) map[string]bool {
-	set := make(map[string]bool)
-	for _, t := range strings.Split(raw, ",") {
-		t = strings.TrimSpace(t)
-		if t != "" {
-			set[t] = true
-		}
-	}
-	return set
-}
-
-func matchesFilter(t driver.TableInfo, filter map[string]bool) bool {
-	qualified := qualifiedName(t)
-	return filter[qualified] || filter[t.Name]
-}
-
-func qualifiedName(t driver.TableInfo) string {
-	if t.Schema != "" {
-		return t.Schema + "." + t.Name
-	}
-	return t.Name
 }

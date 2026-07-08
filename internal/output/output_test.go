@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
+	out "github.com/shhac/lib-agent-output"
 )
 
 func TestParseFormatValid(t *testing.T) {
@@ -44,10 +45,13 @@ func TestParseFormatInvalid(t *testing.T) {
 	}
 }
 
+// TestWriteErrorWithQueryError pins that a QueryError (alias of out.Error)
+// rendered by the family writer — the path libcli.Run uses — keeps its
+// classification and hint.
 func TestWriteErrorWithQueryError(t *testing.T) {
 	var buf bytes.Buffer
 	qe := agenterrors.New("bad query", agenterrors.FixableByAgent).WithHint("check syntax")
-	WriteError(&buf, qe)
+	out.WriteError(&buf, qe)
 
 	var payload map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
@@ -66,7 +70,7 @@ func TestWriteErrorWithQueryError(t *testing.T) {
 
 func TestWriteErrorWithPlainError(t *testing.T) {
 	var buf bytes.Buffer
-	WriteError(&buf, &plainErr{"connection refused"})
+	out.WriteError(&buf, &plainErr{"connection refused"})
 
 	var payload map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
@@ -161,11 +165,11 @@ func TestJSONWriterWithPagination(t *testing.T) {
 	if !ok {
 		t.Fatal("expected pagination object")
 	}
-	if pag["hasMore"] != true {
-		t.Errorf("hasMore = %v, want true", pag["hasMore"])
+	if pag["has_more"] != true {
+		t.Errorf("has_more = %v, want true", pag["has_more"])
 	}
-	if pag["rowCount"] != float64(1) {
-		t.Errorf("rowCount = %v, want 1", pag["rowCount"])
+	if pag["row_count"] != float64(1) {
+		t.Errorf("row_count = %v, want 1", pag["row_count"])
 	}
 }
 
@@ -225,8 +229,8 @@ func TestYAMLWriterWithPagination(t *testing.T) {
 	if !strings.Contains(out, "pagination:") {
 		t.Errorf("YAML should contain pagination:\n%s", out)
 	}
-	if !strings.Contains(out, "hasMore: true") {
-		t.Errorf("YAML should contain 'hasMore: true':\n%s", out)
+	if !strings.Contains(out, "has_more: true") {
+		t.Errorf("YAML should contain 'has_more: true':\n%s", out)
 	}
 }
 
@@ -320,13 +324,13 @@ func TestNewWriterFactory(t *testing.T) {
 	}
 
 	jsonW := NewWriter(&buf, FormatJSON, nil)
-	if _, ok := jsonW.(*JSONWriter); !ok {
-		t.Errorf("FormatJSON should return *JSONWriter, got %T", jsonW)
+	if ew, ok := jsonW.(*envelopeWriter); !ok || ew.format != FormatJSON {
+		t.Errorf("FormatJSON should return a JSON envelopeWriter, got %T", jsonW)
 	}
 
 	yamlW := NewWriter(&buf, FormatYAML, nil)
-	if _, ok := yamlW.(*YAMLWriter); !ok {
-		t.Errorf("FormatYAML should return *YAMLWriter, got %T", yamlW)
+	if ew, ok := yamlW.(*envelopeWriter); !ok || ew.format != FormatYAML {
+		t.Errorf("FormatYAML should return a YAML envelopeWriter, got %T", yamlW)
 	}
 
 	csvW := NewWriter(&buf, FormatCSV, []string{"a"})
@@ -350,10 +354,10 @@ func TestNDJSONWriterWritePagination(t *testing.T) {
 	if !ok {
 		t.Fatal("expected @pagination key")
 	}
-	if pag["hasMore"] != true {
-		t.Errorf("hasMore = %v, want true", pag["hasMore"])
+	if pag["has_more"] != true {
+		t.Errorf("has_more = %v, want true", pag["has_more"])
 	}
-	if pag["rowCount"] != float64(50) {
-		t.Errorf("rowCount = %v, want 50", pag["rowCount"])
+	if pag["row_count"] != float64(50) {
+		t.Errorf("row_count = %v, want 50", pag["row_count"])
 	}
 }

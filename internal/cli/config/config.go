@@ -132,7 +132,7 @@ func registerSet(parent *cobra.Command) {
 				return err
 			}
 
-			output.PrintJSON(map[string]any{"ok": true, "key": key, "value": value}, true)
+			output.PrintResult(map[string]any{"ok": true, "key": key, "value": value}, true)
 			return nil
 		},
 	}
@@ -148,7 +148,7 @@ func registerReset(parent *cobra.Command) {
 			if err := config.ResetSettings(); err != nil {
 				return err
 			}
-			output.PrintJSON(map[string]any{"ok": true, "message": "Settings reset to defaults"}, true)
+			output.PrintResult(map[string]any{"ok": true, "message": "Settings reset to defaults"}, true)
 			return nil
 		},
 	}
@@ -161,7 +161,7 @@ func registerListKeys(parent *cobra.Command) {
 		Short: "List all valid config keys with defaults",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keys := make([]map[string]any, 0, len(validKeys))
+			keys := make([]any, 0, len(validKeys))
 			for _, k := range validKeys {
 				entry := map[string]any{
 					"key":         k.key,
@@ -173,11 +173,11 @@ func registerListKeys(parent *cobra.Command) {
 					entry["min"] = k.min
 					entry["max"] = k.max
 				} else {
-					entry["allowedValues"] = k.allowed
+					entry["allowed_values"] = k.allowed
 				}
 				keys = append(keys, entry)
 			}
-			output.PrintJSON(map[string]any{"keys": keys}, true)
+			output.PrintList(keys, nil, true)
 			return nil
 		},
 	}

@@ -7,7 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/shhac/lib-agent-cli v0.19.0
-	github.com/shhac/lib-agent-mcp v0.11.0
+	github.com/shhac/lib-agent-mcp v0.23.1
 	github.com/shhac/lib-agent-output v0.10.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -37,6 +37,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/shhac/lib-agent-keyring v0.1.1 // indirect
+	github.com/shhac/lib-agent-oauth v0.7.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/zalando/go-keyring v0.2.8 // indirect

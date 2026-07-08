@@ -127,7 +127,7 @@ func TestCompactWriter(t *testing.T) {
 			t.Errorf("type = %s, want pagination", msg.Type)
 		}
 		if !msg.Values.HasMore {
-			t.Error("hasMore should be true")
+			t.Error("has_more should be true")
 		}
 	})
 

@@ -165,7 +165,7 @@ agent-sql query explain "SELECT * FROM orders JOIN users ON orders.user_id = use
 ## Command map
 
 ```text
-agent-sql [-c <alias>] [--format jsonl|json|yaml|csv] [--full] [--expand <fields>] [--timeout <ms>] [-d/--debug]
+agent-sql [-c <alias>] [--format jsonl|json|yaml] [--color auto|always|never] [--full] [--expand <fields>] [--timeout <ms>] [-d/--debug]
 ├── credential                                         # set up credentials first
 │   ├── add <alias> --username <u> --password <p> [--write]
 │   ├── remove <alias> [--force]
@@ -221,15 +221,18 @@ Write operations require both a credential with `writePermission` and the `--wri
 
 ## Output
 
-- Default output is JSONL to stdout -- one JSON object per line, no envelope. Use `--format json`, `--format yaml`, or `--format csv` for alternate formats.
-- JSONL applies to tabular results (`query run`, `query sample`). Each line is `{"col": val, ..., "@truncated": null}`. When more rows exist, the last line is `{"@pagination": {"hasMore": true, "rowCount": N}}`.
-- Non-tabular output (schema, config, explain, count, connection/credential admin) uses JSON envelope regardless of format setting
-- CSV applies to tabular results only; non-tabular commands fall back to JSON
+- Default output is JSONL to stdout -- one JSON object per line, no envelope. Use `--format json` or `--format yaml` for structured formats; `--format csv` on query commands only.
+- Query results (`query run`, `query sample`): each line is `{"col": val, ..., "@truncated": null}`. When more rows exist, the last line is `{"@pagination": {"has_more": true, "row_count": N, "hint": "..."}}`.
+- List output (`schema tables|indexes|constraints`, `connection list`, `credential list`, `config list-keys`): one JSON record per line, no wrapper key. `--format json`/`yaml` wraps the records in a `{"data": [...]}` envelope.
+- Single resources and receipts (`schema describe|search|dump`, `query count|explain`, write receipts, connection/credential/config receipts): one compact JSON line by default; pretty JSON with `--format json`, YAML with `--format yaml`. Write receipts look like `{"result": "ok", "rows_affected": 5, "command": "UPDATE"}`.
+- CSV applies to query commands only; elsewhere `--format csv` is rejected with `unknown format "csv", expected: json, yaml, jsonl` (a csv *config default* falls back to jsonl for non-tabular output)
 - Errors always go to stderr as JSON `{ "error": "...", "fixable_by": "agent"|"human"|"retry", "hint"?: "...", "retry_after_seconds"?: N }` with non-zero exit code
+- Non-error advisories go to stderr as structured `{"notice": "...", "hint": "..."}` JSON lines
+- `--color auto|always|never` (default auto) colorizes JSON/YAML/NDJSON when the stream is a terminal; piped output stays plain
 - `--debug` (`-d`) logs `[debug] connection: <redacted>` and `[debug] query: <sql>` to stderr before execution — stdout stays clean NDJSON
 - NULLs preserved in query results, empty fields pruned in admin output
 - Long strings truncated with per-row `@truncated` metadata showing original lengths
-- `--compact` mode uses parallel arrays (column names + row arrays) for reduced token count
+- `--compact` mode emits typed NDJSON lines (column names once, rows as arrays) for reduced token count
 
 ```bash
 agent-sql run "SELECT * FROM users"                        # JSONL output (default)
@@ -237,7 +240,7 @@ agent-sql --format json run "SELECT * FROM users"          # JSON envelope outpu
 agent-sql --full run "SELECT * FROM users"                 # expand all fields
 agent-sql --expand name,bio run "SELECT * FROM users"      # expand specific fields
 agent-sql --format yaml run "SELECT * FROM users"          # YAML output
-agent-sql --format csv run "SELECT * FROM users"           # CSV output
+agent-sql --format csv run "SELECT * FROM users"           # CSV output (query commands only)
 agent-sql config set defaults.format json                  # persistent format default
 ```
 

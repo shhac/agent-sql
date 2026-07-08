@@ -50,7 +50,7 @@ func registerTest(parent *cobra.Command, globals func() (string, int)) {
 			if displayAlias == "" {
 				displayAlias = "default"
 			}
-			output.PrintJSON(map[string]any{
+			output.PrintResult(map[string]any{
 				"ok":         true,
 				"connection": displayAlias,
 				"rows":       result.Rows,

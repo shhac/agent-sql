@@ -136,14 +136,9 @@ func TestDockerSchemaTables(t *testing.T) {
 			}
 
 			stdout, _ := runCLI(t, bin, "schema", "tables", "-c", drv.connURL)
-			var result map[string]any
-			json.Unmarshal([]byte(stdout), &result)
-			tables, ok := result["tables"].([]any)
-			if !ok {
-				t.Fatalf("expected tables array, got: %s", stdout)
-			}
+			tables := parseNDJSONRecords(t, stdout)
 			if len(tables) < 2 {
-				t.Errorf("expected at least 2 tables, got %d", len(tables))
+				t.Errorf("expected at least 2 table records, got %d: %s", len(tables), stdout)
 			}
 		})
 	}

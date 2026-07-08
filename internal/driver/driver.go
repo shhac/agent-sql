@@ -51,8 +51,8 @@ type ColumnInfo struct {
 	Name         string `json:"name"`
 	Type         string `json:"type"`
 	Nullable     bool   `json:"nullable"`
-	DefaultValue string `json:"defaultValue,omitempty"`
-	PrimaryKey   bool   `json:"primaryKey,omitempty"`
+	DefaultValue string `json:"default_value,omitempty"`
+	PrimaryKey   bool   `json:"primary_key,omitempty"`
 }
 
 // IndexInfo describes a database index.
@@ -81,8 +81,8 @@ type ConstraintInfo struct {
 	Schema            string         `json:"schema,omitempty"`
 	Type              ConstraintType `json:"type"`
 	Columns           []string       `json:"columns"`
-	ReferencedTable   string         `json:"referencedTable,omitempty"`
-	ReferencedColumns []string       `json:"referencedColumns,omitempty"`
+	ReferencedTable   string         `json:"referenced_table,omitempty"`
+	ReferencedColumns []string       `json:"referenced_columns,omitempty"`
 	Definition        string         `json:"definition,omitempty"`
 }
 

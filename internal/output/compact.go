@@ -1,50 +1,54 @@
 package output
 
 import (
-	"encoding/json"
 	"io"
+
+	out "github.com/shhac/lib-agent-output"
 )
+
+// typedMsg is the compact typed-NDJSON wire shape {"type": ..., "values": ...}
+// shared by query --compact (columns/row/pagination lines) and schema
+// --compact (one line per schema command). It is the single definition of
+// that contract; write it via WriteTypedLine or an NDJSONWriter.
+type typedMsg struct {
+	Type   string `json:"type"`
+	Values any    `json:"values"`
+}
+
+// WriteTypedLine writes one {"type": typ, "values": values} NDJSON line to w
+// through the shared funnel (colorized on a terminal).
+func WriteTypedLine(w io.Writer, typ string, values any) error {
+	return out.NewNDJSONWriter(w).WriteItem(typedMsg{Type: typ, Values: values})
+}
 
 // CompactWriter writes query results as typed NDJSON messages:
 //
 //	{"type":"columns","values":["id","name"]}
 //	{"type":"row","values":[1,"Alice"]}
 //	{"type":"row","values":[2,"Bob"]}
-//	{"type":"pagination","values":{"hasMore":true,"rowCount":2}}
+//	{"type":"pagination","values":{"has_more":true,"row_count":2}}
 //
 // Each line is self-describing and independently parseable.
 // Saves tokens by not repeating column names in every row.
 type CompactWriter struct {
-	enc     *json.Encoder
+	nw      *out.NDJSONWriter
 	columns []string
 	wrote   bool
 }
 
 // NewCompactWriter creates a compact result writer.
 func NewCompactWriter(w io.Writer, columns []string) *CompactWriter {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return &CompactWriter{enc: enc, columns: columns}
+	return &CompactWriter{nw: out.NewNDJSONWriter(w), columns: columns}
 }
 
 func (c *CompactWriter) WriteRow(row map[string]any) error {
 	if !c.wrote {
 		if len(c.columns) == 0 {
-			for k := range row {
-				if k != "@truncated" {
-					c.columns = append(c.columns, k)
-				}
-			}
+			c.columns = extractColumns(row)
+		} else {
+			c.columns = withoutTruncated(c.columns)
 		}
-		// Filter @truncated from columns header
-		dataCols := make([]string, 0, len(c.columns))
-		for _, col := range c.columns {
-			if col != "@truncated" {
-				dataCols = append(dataCols, col)
-			}
-		}
-		c.columns = dataCols
-		if err := c.enc.Encode(msg{"columns", c.columns}); err != nil {
+		if err := c.nw.WriteItem(typedMsg{Type: "columns", Values: c.columns}); err != nil {
 			return err
 		}
 		c.wrote = true
@@ -54,18 +58,26 @@ func (c *CompactWriter) WriteRow(row map[string]any) error {
 	for i, col := range c.columns {
 		arr[i] = row[col]
 	}
-	return c.enc.Encode(msg{"row", arr})
+	return c.nw.WriteItem(typedMsg{Type: "row", Values: arr})
 }
 
 func (c *CompactWriter) WritePagination(p *Pagination) error {
-	return c.enc.Encode(msg{"pagination", p})
+	return c.nw.WriteItem(typedMsg{Type: "pagination", Values: p})
 }
 
 func (c *CompactWriter) Flush() error {
 	return nil
 }
 
-type msg struct {
-	Type   string `json:"type"`
-	Values any    `json:"values"`
+// withoutTruncated strips the @truncated meta key from a caller-provided
+// column list; extractColumns applies the same rule when deriving columns
+// from a row.
+func withoutTruncated(cols []string) []string {
+	dataCols := make([]string, 0, len(cols))
+	for _, col := range cols {
+		if col != "@truncated" {
+			dataCols = append(dataCols, col)
+		}
+	}
+	return dataCols
 }

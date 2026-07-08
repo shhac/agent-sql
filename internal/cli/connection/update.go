@@ -64,14 +64,14 @@ func registerUpdate(parent *cobra.Command) {
 				return err
 			}
 			for _, w := range warnings {
-				output.Warn("%s", w)
+				output.Notice(w, "")
 			}
 
 			if err := config.StoreConnection(alias, *existing); err != nil {
 				return err
 			}
 
-			output.PrintJSON(map[string]any{"ok": true, "alias": alias, "updated": updated}, true)
+			output.PrintResult(map[string]any{"ok": true, "alias": alias, "updated": updated}, true)
 			return nil
 		},
 	}

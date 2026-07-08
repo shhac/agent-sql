@@ -12,7 +12,7 @@ import (
 
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
-	"github.com/shhac/agent-sql/internal/output"
+	agentout "github.com/shhac/lib-agent-output"
 )
 
 // testRoot returns a fresh cobra root with the connection commands
@@ -33,13 +33,13 @@ func testRoot(t *testing.T) *cobra.Command {
 // production main (libcli.Run) does, then returns it.
 func execute(root *cobra.Command) error {
 	if err := root.Execute(); err != nil {
-		output.WriteError(os.Stderr, err)
+		agentout.WriteError(os.Stderr, err)
 		return err
 	}
 	return nil
 }
 
-// captureStdout swaps os.Stdout for a pipe; output.PrintJSON writes
+// captureStdout swaps os.Stdout for a pipe; output.PrintResult writes
 // directly to os.Stdout so we can't use cmd.SetOut.
 func captureStdout(t *testing.T) (*bytes.Buffer, func()) {
 	t.Helper()
@@ -63,7 +63,7 @@ func captureStdout(t *testing.T) (*bytes.Buffer, func()) {
 	}
 }
 
-// captureStderr is identical for stderr; output.WriteError writes there.
+// captureStderr is identical for stderr; agentout.WriteError writes there.
 func captureStderr(t *testing.T) (*bytes.Buffer, func()) {
 	t.Helper()
 	r, w, err := os.Pipe()

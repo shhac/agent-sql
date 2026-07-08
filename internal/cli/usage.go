@@ -52,7 +52,7 @@ COMMANDS:
   schema search <pattern>                              Search table/column names
   schema dump [--tables] [--include-system]            Full schema dump
 
-GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml|csv, --expand <fields>, --full, --compact (-C), --timeout <ms>, -d/--debug (log [debug] connection + query to stderr)
+GLOBAL FLAGS: -c <connection> (alias, file path, or URL), --format jsonl|json|yaml (csv on query commands), --expand <fields>, --full, --compact (-C), --timeout <ms>, --color auto|always|never, -d/--debug (log [debug] connection + query to stderr)
 
 CONNECTION: -c flag > AGENT_SQL_CONNECTION env > config default.
   -c accepts connection aliases, file paths (./data.db, ./analytics.duckdb), or URLs.
@@ -66,8 +66,13 @@ LLM SECRET SAFETY: Never put a user-pasted password into --password. Instruct th
   OS dialog pops up on their screen and the secret never enters the LLM context.
 
 OUTPUT: NDJSON to stdout (default) — one JSON object per line, no envelope.
-  Each row: {"col": val, ..., "@truncated": null}. Last line when more rows: {"@pagination": {...}}.
-  Errors always JSON to stderr: { "error": "...", "fixable_by": "agent"|"human"|"retry" } AND exit 1.
+  Each row: {"col": val, ..., "@truncated": null}. Last line when more rows:
+  {"@pagination": {"has_more": true, "row_count": N, "hint": "..."}}.
+  Lists (schema tables/indexes/constraints, connection/credential list, config
+  list-keys) are also NDJSON records by default; --format json/yaml wraps them
+  in a {"data": [...]} envelope. Receipts are one JSON line (pretty with --format json).
+  Errors always JSON to stderr: { "error": "...", "fixable_by": "agent"|"human"|"retry", "hint": "..." } AND exit 1.
+  Non-fatal advisories are structured {"notice": "...", "hint": "..."} lines on stderr.
   Success exits 0. Shell "agent-sql ... && echo ok" reflects actual outcome.
 
 DETAIL: Run "<command> usage" for per-command docs.

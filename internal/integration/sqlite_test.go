@@ -99,8 +99,16 @@ func TestCLIQueryRun(t *testing.T) {
 		}
 		var pag map[string]any
 		json.Unmarshal([]byte(lines[1]), &pag)
-		if pag["@pagination"] == nil {
-			t.Error("expected @pagination on last line")
+		inner, ok := pag["@pagination"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected @pagination object on last line, got: %s", lines[1])
+		}
+		// Pin the family snake_case wire keys.
+		if inner["has_more"] != true {
+			t.Errorf("has_more = %v, want true", inner["has_more"])
+		}
+		if inner["row_count"] != float64(1) {
+			t.Errorf("row_count = %v, want 1", inner["row_count"])
 		}
 	})
 
@@ -135,15 +143,36 @@ func TestCLISchemaTables(t *testing.T) {
 	dbPath := setupTestDB(t)
 
 	stdout, _ := runCLI(t, bin, "schema", "tables", "-c", dbPath)
-	var result map[string]any
-	json.Unmarshal([]byte(stdout), &result)
-	tables, ok := result["tables"].([]any)
-	if !ok {
-		t.Fatalf("expected tables array, got: %s", stdout)
-	}
+	tables := parseNDJSONRecords(t, stdout)
 	if len(tables) < 2 {
-		t.Errorf("expected at least 2 tables, got %d", len(tables))
+		t.Errorf("expected at least 2 table records, got %d: %s", len(tables), stdout)
 	}
+}
+
+// parseNDJSONRecords parses one JSON object per line (the family list shape),
+// skipping @-prefixed metadata lines.
+func parseNDJSONRecords(t *testing.T, stdout string) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		if line == "" {
+			continue
+		}
+		var rec map[string]any
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			t.Fatalf("line is not valid JSON: %v\n%s", err, line)
+		}
+		meta := false
+		for k := range rec {
+			if strings.HasPrefix(k, "@") {
+				meta = true
+			}
+		}
+		if !meta {
+			records = append(records, rec)
+		}
+	}
+	return records
 }
 
 func TestCLISchemaDescribe(t *testing.T) {
@@ -343,6 +372,84 @@ func TestCLIUnknownSubcommandExitsNonZero(t *testing.T) {
 				t.Fatalf("%s bogus: expected non-zero exit, got 0", group)
 			}
 		})
+	}
+}
+
+// TestCLIFormatScoping pins the per-command --format allow-listing that
+// replaced the old global csv-aware validator: csv is valid only on query
+// commands, sql only on schema dump, and everything else gets a structured
+// fixable_by:agent rejection.
+func TestCLIFormatScoping(t *testing.T) {
+	bin := buildBinary(t)
+	dbPath := setupTestDB(t)
+
+	t.Run("csv accepted on query run", func(t *testing.T) {
+		stdout, stderr := runCLI(t, bin, "run", "-c", dbPath, "--format", "csv", "SELECT id, name FROM users ORDER BY id LIMIT 1")
+		lines := nonEmptyLines(stdout)
+		if len(lines) != 2 || lines[0] != "id,name" {
+			t.Fatalf("expected CSV header + row, got stdout: %q stderr: %q", stdout, stderr)
+		}
+	})
+
+	t.Run("csv rejected on schema tables", func(t *testing.T) {
+		stdout, stderr := runCLI(t, bin, "schema", "tables", "-c", dbPath, "--format", "csv")
+		if strings.TrimSpace(stdout) != "" {
+			t.Errorf("expected no stdout, got: %s", stdout)
+		}
+		assertStructuredFormatError(t, stderr, "csv")
+	})
+
+	t.Run("sql accepted on schema dump", func(t *testing.T) {
+		stdout, _ := runCLI(t, bin, "schema", "dump", "-c", dbPath, "--format", "sql")
+		if !strings.Contains(stdout, "CREATE TABLE") {
+			t.Errorf("expected CREATE TABLE statements, got: %s", stdout)
+		}
+	})
+
+	t.Run("sql rejected on query run", func(t *testing.T) {
+		_, stderr := runCLI(t, bin, "run", "-c", dbPath, "--format", "sql", "SELECT 1")
+		assertStructuredFormatError(t, stderr, "sql")
+	})
+}
+
+func assertStructuredFormatError(t *testing.T, stderr, format string) {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stderr)), &payload); err != nil {
+		t.Fatalf("stderr is not one JSON error line: %v\n%s", err, stderr)
+	}
+	msg, _ := payload["error"].(string)
+	if !strings.Contains(msg, "unknown format") || !strings.Contains(msg, format) {
+		t.Errorf("error should reject format %q, got: %s", format, msg)
+	}
+	if payload["fixable_by"] != "agent" {
+		t.Errorf("fixable_by = %v, want agent", payload["fixable_by"])
+	}
+}
+
+// TestCLIWriteReceipt pins the write-path wire contract: a --write mutation
+// returns one JSON line {"result":"ok","rows_affected":N,"command":...} with
+// the family snake_case key (not the old rowsAffected).
+func TestCLIWriteReceipt(t *testing.T) {
+	bin := buildBinary(t)
+	dbPath := setupTestDB(t)
+
+	stdout, stderr := runCLI(t, bin, "run", "-c", dbPath, "--write", "UPDATE users SET age = age + 1 WHERE age IS NOT NULL")
+	var receipt map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &receipt); err != nil {
+		t.Fatalf("write receipt is not one JSON line: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if receipt["result"] != "ok" {
+		t.Errorf("result = %v, want ok", receipt["result"])
+	}
+	if receipt["rows_affected"] != float64(3) {
+		t.Errorf("rows_affected = %v, want 3", receipt["rows_affected"])
+	}
+	if _, ok := receipt["rowsAffected"]; ok {
+		t.Error("receipt must not contain the old camelCase rowsAffected key")
+	}
+	if receipt["command"] == nil {
+		t.Error("receipt should include the command")
 	}
 }
 

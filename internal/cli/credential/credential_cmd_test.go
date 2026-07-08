@@ -12,7 +12,7 @@ import (
 
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
-	"github.com/shhac/agent-sql/internal/output"
+	agentout "github.com/shhac/lib-agent-output"
 )
 
 // testRoot returns a fresh cobra root with the credential commands
@@ -32,7 +32,7 @@ func testRoot(t *testing.T) *cobra.Command {
 // production main (libcli.Run) does, then returns it.
 func execute(root *cobra.Command) error {
 	if err := root.Execute(); err != nil {
-		output.WriteError(os.Stderr, err)
+		agentout.WriteError(os.Stderr, err)
 		return err
 	}
 	return nil

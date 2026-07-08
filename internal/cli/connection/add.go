@@ -46,7 +46,7 @@ func registerAdd(parent *cobra.Command) {
 				return err
 			}
 			for _, w := range warnings {
-				output.Warn("%s", w)
+				output.Notice(w, "")
 			}
 
 			if err := validateCredentialRef(credName); err != nil {
@@ -64,7 +64,7 @@ func registerAdd(parent *cobra.Command) {
 			receipt := conn.AsReceipt(alias, setDefault)
 			receipt["ok"] = true
 			receipt["hint"] = "Test with: agent-sql connection test"
-			output.PrintJSON(receipt, true)
+			output.PrintResult(receipt, true)
 			return nil
 		},
 	}

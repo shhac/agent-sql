@@ -4,76 +4,19 @@ import (
 	"encoding/json"
 	"io"
 
+	// Registers the family YAML encoder with lib-agent-output so out.Print
+	// handles FormatYAML (2-space indent, whole floats rendered as ints, and
+	// per-stream colorization through the shared funnel).
+	_ "github.com/shhac/lib-agent-cli/yaml"
 	out "github.com/shhac/lib-agent-output"
-	"gopkg.in/yaml.v3"
 )
 
-// YAMLWriter buffers all rows and writes YAML on Flush.
-type YAMLWriter struct {
-	w          io.Writer
-	columns    []string
-	rows       []map[string]any
-	pagination *Pagination
-}
-
-// NewYAMLWriter creates a new YAML writer.
-// If columns is non-nil, it defines the column order; otherwise columns are
-// extracted from the first row.
-func NewYAMLWriter(w io.Writer, columns []string) *YAMLWriter {
-	return &YAMLWriter{w: w, columns: columns}
-}
-
-func (y *YAMLWriter) WriteRow(row map[string]any) error {
-	if y.columns == nil {
-		y.columns = extractColumns(row)
-	}
-	y.rows = append(y.rows, row)
-	return nil
-}
-
-func (y *YAMLWriter) WritePagination(p *Pagination) error {
-	y.pagination = p
-	return nil
-}
-
-func (y *YAMLWriter) Flush() error {
-	envelope := map[string]any{
-		"columns": y.columns,
-		"rows":    y.rows,
-	}
-	if y.pagination != nil {
-		envelope["pagination"] = map[string]any{
-			"hasMore":  y.pagination.HasMore,
-			"rowCount": y.pagination.RowCount,
-		}
-	}
-	if y.rows == nil {
-		envelope["rows"] = []map[string]any{}
-	}
-	if y.columns == nil {
-		envelope["columns"] = []string{}
-	}
-
-	enc := yaml.NewEncoder(y.w)
-	enc.SetIndent(2)
-	defer func() { _ = enc.Close() }()
-	return enc.Encode(envelope)
-}
-
-// PrintYAML writes arbitrary data as YAML to the given writer.
-func PrintYAML(w io.Writer, data any) error {
-	enc := yaml.NewEncoder(w)
-	enc.SetIndent(2)
-	defer func() { _ = enc.Close() }()
-	return enc.Encode(data)
-}
-
 // PrintYAMLViaJSON writes data as YAML after a JSON round-trip, so the keys,
-// omitempty behavior, and nil-pruning match the JSON output exactly. Schema
+// omitempty behavior, and nil handling match the JSON output exactly. Schema
 // structs carry json tags that yaml.v3 ignores (it lowercases Go field names),
 // so encoding them directly diverges from --format json; routing through JSON
 // first keeps the two formats shape-identical.
-func PrintYAMLViaJSON(w io.Writer, data any, prune bool) error {
+func PrintYAMLViaJSON(w io.Writer, data any) error {
 	raw, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -82,8 +25,5 @@ func PrintYAMLViaJSON(w io.Writer, data any, prune bool) error {
 	if err := json.Unmarshal(raw, &normalized); err != nil {
 		return err
 	}
-	if prune {
-		normalized = out.PruneNils(normalized)
-	}
-	return PrintYAML(w, normalized)
+	return out.Print(w, normalized, out.FormatYAML, nil)
 }

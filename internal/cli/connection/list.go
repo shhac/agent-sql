@@ -16,12 +16,12 @@ func registerList(parent *cobra.Command) {
 			conns := config.GetConnections()
 			defaultAlias := config.GetDefaultAlias()
 
-			items := make([]map[string]any, 0, len(conns))
+			items := make([]any, 0, len(conns))
 			for alias, conn := range conns {
 				items = append(items, conn.AsReceipt(alias, alias == defaultAlias))
 			}
 
-			output.PrintJSON(map[string]any{"connections": items}, true)
+			output.PrintList(items, nil, true)
 			return nil
 		},
 	}

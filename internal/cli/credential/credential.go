@@ -118,10 +118,10 @@ func registerAdd(parent *cobra.Command) {
 			}
 
 			if storage == "file" && runtime.GOOS != "darwin" {
-				output.Warn("credentials stored in plaintext (macOS Keychain not available)")
+				output.Notice("credentials stored in plaintext (macOS Keychain not available)", "")
 			}
 
-			output.PrintJSON(map[string]any{
+			output.PrintResult(map[string]any{
 				"ok":              true,
 				"credential":      name,
 				"username":        username,
@@ -148,7 +148,7 @@ func registerRemove(parent *cobra.Command) {
 			if err := credential.Remove(args[0]); err != nil {
 				return err
 			}
-			output.PrintJSON(map[string]any{"ok": true, "removed": args[0]}, true)
+			output.PrintResult(map[string]any{"ok": true, "removed": args[0]}, true)
 			return nil
 		},
 	}
@@ -163,7 +163,7 @@ func registerList(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			names := credential.List()
 
-			items := make([]map[string]any, 0, len(names))
+			items := make([]any, 0, len(names))
 			for _, name := range names {
 				cred := credential.Get(name)
 				if cred == nil {
@@ -181,7 +181,7 @@ func registerList(parent *cobra.Command) {
 				})
 			}
 
-			output.PrintJSON(map[string]any{"credentials": items}, true)
+			output.PrintList(items, nil, true)
 			return nil
 		},
 	}

@@ -16,7 +16,7 @@ func registerRemove(parent *cobra.Command) {
 			if err := config.RemoveConnection(args[0]); err != nil {
 				return err
 			}
-			output.PrintJSON(map[string]any{"ok": true, "removed": args[0]}, true)
+			output.PrintResult(map[string]any{"ok": true, "removed": args[0]}, true)
 			return nil
 		},
 	}
@@ -32,7 +32,7 @@ func registerSetDefault(parent *cobra.Command) {
 			if err := config.SetDefault(args[0]); err != nil {
 				return err
 			}
-			output.PrintJSON(map[string]any{"ok": true, "default": args[0]}, true)
+			output.PrintResult(map[string]any{"ok": true, "default": args[0]}, true)
 			return nil
 		},
 	}

@@ -14,6 +14,7 @@ Design docs live in `design-docs/` (gitignored, local-only). If present:
 ## Runtime
 
 - **Go** — single compiled binary, no runtime dependencies
+- **lib-agent-cli / lib-agent-output / lib-agent-mcp** — the family's shared CLI runtime (root scaffolding, --format/--color/--timeout/--debug globals, keychain/dialog), wire contract (NDJSON, `{error, fixable_by, hint}`, `@pagination`, colour funnel), and MCP server. Keep these pinned to the latest tags; family alignment lives in these libs.
 - **pgx** — native PostgreSQL driver (also used by CockroachDB)
 - **go-sql-driver/mysql** — native MySQL driver (also used by MariaDB)
 - **modernc.org/sqlite** — pure Go SQLite driver (no CGo)
@@ -115,10 +116,13 @@ internal/
     config.go                 # types, JSON I/O, settings get/set
     display.go                # DisplayURL, AsReceipt, EffectiveHost/Port; reads driver.Registry
   credential/                 # Credential storage (Keychain on macOS, file fallback)
-  output/                     # ResultWriter interface; NDJSON/JSON/YAML/CSV formatters;
-                              # PrintJSON, WriteError, Warn helpers
+  output/                     # ResultWriter interface; NDJSON/JSON/YAML/CSV formatters
+                              # (routed through lib-agent-output's funnel: colour,
+                              # HTML-escaping off); PrintResult/PrintList (family
+                              # receipt/list contract), WriteError, Notice helpers
   truncation/                 # @truncated decorator (ResultWriter wrapper)
-  errors/                     # QueryError type, per-driver error classification
+  errors/                     # QueryError (alias of lib-agent-output Error),
+                              # per-driver error classification
 ```
 
 ## Key patterns
@@ -127,7 +131,8 @@ internal/
 - **Driver registry**: `internal/driver/registry.go` is the single source of truth for per-driver metadata (scheme, default port/db, credential kind, display label). `config/display.go` and `resolve/` both read from it. Adding a driver is a single Registry entry plus the driver-package implementation.
 - **context.Context**: All driver methods take `context.Context` for timeout/cancellation (except `QuoteIdent` and `Close`).
 - **ResultWriter**: Streaming output interface. NDJSON writes rows as they arrive. JSON/YAML buffer internally. Truncation is a decorator wrapping the inner writer.
-- **Error classification**: `errors.QueryError` with `FixableBy` field (`agent`/`human`/`retry`). Every driver's `classifyError` includes an "already classified, pass through" guard so re-wrapping doesn't lose the original FixableBy.
+- **Error classification**: `errors.QueryError` is a type alias of `lib-agent-output`'s `Error` (`{error, fixable_by, hint}` with `agent`/`human`/`retry`), so errors bubbled from RunE keep their classification and hint when `libcli.Run` writes them to stderr. Every driver's `classifyError` includes an "already classified, pass through" guard so re-wrapping doesn't lose the original FixableBy.
+- **Family output contract**: pagination is snake_case (`{"@pagination": {"has_more", "row_count", "hint"}}`); lists (schema tables/indexes/constraints, connection/credential list, config list-keys) emit NDJSON records by default and a `{"data": [...]}` envelope for json/yaml (`output.PrintList` → `WriteList`); receipts/single resources are one JSON line by default (`output.PrintResult`); stderr advisories are structured `{"notice", "hint"}` lines (`output.Notice`). `--color auto|always|never` colorizes via lib-agent-output; csv (query commands) and sql (schema dump) are domain formats opted in per command via `libcli.AllowFormats`.
 - **Hard-exit on errors**: every CLI command's RunE returns non-nil on failure (with cobra's `SilenceErrors: true` on root, this propagates as a non-zero exit code without double-printing). Shell `&&` chains reflect actual outcomes.
 - **Connection resolution**: `-c` accepts aliases, file paths (`.db`, `.duckdb`), or URLs (postgres://, cockroachdb://, mysql://, mariadb://, duckdb://, snowflake://, mssql://, sqlserver://). Chain: `-c` flag > `AGENT_SQL_CONNECTION` env > config default.
 - **Connection options**: per-driver knobs (sslmode, parseTime, encrypt, _journal_mode, query_tag, …) flow from URL query strings or repeated `--option k=v` flags into `Connection.Options`, then through to the driver lib via its native option-handling (pgx URL, gomysql.ParseDSN, sqlite URI, go-mssqldb URL, snowflake session params, duckdb SET prelude). Pass-through: the underlying driver lib is the source of truth for valid keys.

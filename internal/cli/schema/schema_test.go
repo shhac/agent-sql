@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 
-	"github.com/shhac/agent-sql/internal/output"
+	agentout "github.com/shhac/lib-agent-output"
 )
 
 func seedSqlite(t *testing.T) string {
@@ -50,7 +50,7 @@ func testRoot(t *testing.T, dbPath string) *cobra.Command {
 // production main (libcli.Run) does, then returns it.
 func execute(root *cobra.Command) error {
 	if err := root.Execute(); err != nil {
-		output.WriteError(os.Stderr, err)
+		agentout.WriteError(os.Stderr, err)
 		return err
 	}
 	return nil
