@@ -41,7 +41,7 @@ Count rows:
 
 OPTIONS
   -c, --connection <alias>    Connection alias, file path, or URL (default: configured default)
-  --format json|yaml|csv      Output format (default: jsonl, or config defaults.format)
+  --format json|yaml|csv      Output format (default: jsonl, or config query.format > defaults.format)
   --limit <n>                 Max rows (run: from config, sample: 5)
   --write                     Enable write mode (requires write-enabled credential)
   --where <condition>         WHERE clause for sample/count
@@ -195,7 +195,7 @@ func registerExplain(parent *cobra.Command, globals func() *shared.GlobalFlags) 
 				if err != nil {
 					return err
 				}
-				output.PrintResult(map[string]any{"plan": result.Rows}, true)
+				output.PrintResult(g.Format, map[string]any{"plan": result.Rows}, true)
 				return nil
 			})
 		},
@@ -231,7 +231,7 @@ func registerCount(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 					countVal = coerceCount(result.Rows[0]["count"])
 				}
 
-				output.PrintResult(map[string]any{"table": args[0], "count": countVal}, true)
+				output.PrintResult(g.Format, map[string]any{"table": args[0], "count": countVal}, true)
 				return nil
 			})
 		},

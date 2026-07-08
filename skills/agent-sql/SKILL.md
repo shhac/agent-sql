@@ -120,7 +120,7 @@ agent-sql config get query.timeout
 agent-sql config reset                               # restore defaults
 ```
 
-Key settings: `defaults.format` (jsonl), `defaults.limit` (20), `query.timeout` (30000ms), `query.maxRows` (10000), `truncation.maxLength` (200).
+Key settings: `defaults.format` (jsonl; all commands), `query.format` (jsonl; query commands, may be csv), `defaults.limit` (20), `query.timeout` (30000ms), `query.maxRows` (10000), `truncation.maxLength` (200).
 
 ## Connection management
 

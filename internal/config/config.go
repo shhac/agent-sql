@@ -45,6 +45,9 @@ type DefaultsSettings struct {
 type QuerySettings struct {
 	Timeout *int `json:"timeout,omitempty"`
 	MaxRows *int `json:"maxRows,omitempty"`
+	// Format is the default output format for query commands (the csv-capable
+	// class); it falls back to DefaultsSettings.Format when unset.
+	Format string `json:"format,omitempty"`
 }
 
 // TruncationSettings holds string truncation settings.

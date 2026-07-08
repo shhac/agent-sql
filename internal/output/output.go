@@ -40,27 +40,28 @@ func NewWriter(w io.Writer, format Format, columns []string) ResultWriter {
 }
 
 // PrintResult writes a single resource or receipt to stdout honoring the
-// resolved --format: one JSON line (jsonl default), pretty JSON, or YAML —
-// all through the shared funnel so output colorizes on a terminal.
-// Known array fields are coerced to [] before nil-pruning so an empty result
-// renders as an empty array rather than disappearing.
-func PrintResult(data any, prune bool) {
+// --format flag value (post-boundary, so config defaults are already folded
+// in): one JSON line (jsonl default), pretty JSON, or YAML — all through the
+// shared funnel so output colorizes on a terminal. Known array fields are
+// coerced to [] before nil-pruning so an empty result renders as an empty
+// array rather than disappearing.
+func PrintResult(flagFormat string, data any, prune bool) {
 	pruner := out.Pruner(fixNilArrays)
 	if prune {
 		pruner = out.Chain(fixNilArrays, out.PruneNils)
 	}
-	_ = out.Print(os.Stdout, data, displayFormat(CurrentFormat()), pruner)
+	_ = out.Print(os.Stdout, data, displayFormat(ResolveFormat(flagFormat)), pruner)
 }
 
-// PrintList writes list-shaped output honoring the resolved --format: NDJSON
-// records (default, one per line) with optional @-meta trailer lines, or a
-// {"data": [...]} envelope for json/yaml — the family list contract.
-func PrintList(items []any, meta map[string]any, prune bool) {
+// PrintList writes list-shaped output honoring the --format flag value:
+// NDJSON records (default, one per line) with optional @-meta trailer lines,
+// or a {"data": [...]} envelope for json/yaml — the family list contract.
+func PrintList(flagFormat string, items []any, meta map[string]any, prune bool) {
 	var pruner out.Pruner
 	if prune {
 		pruner = out.PruneNils
 	}
-	_ = out.WriteList(os.Stdout, displayFormat(CurrentFormat()), items, meta, pruner)
+	_ = out.WriteList(os.Stdout, displayFormat(ResolveFormat(flagFormat)), items, meta, pruner)
 }
 
 // arrayFields are the output-map keys whose values are always arrays. After a

@@ -427,6 +427,60 @@ func assertStructuredFormatError(t *testing.T, stderr, format string) {
 	}
 }
 
+// TestCLIConfigFormatDefaults pins the boundary-owned persisted format
+// defaults: query.format applies only to the csv-capable query class,
+// defaults.format to everything else, the flag beats both, and csv is no
+// longer a legal value for defaults.format.
+func TestCLIConfigFormatDefaults(t *testing.T) {
+	bin := buildBinary(t)
+	dbPath := setupTestDB(t)
+	cfgDir := t.TempDir()
+
+	// runCfg shares one XDG_CONFIG_HOME so config set persists across calls.
+	runCfg := func(args ...string) (string, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		var outBuf, errBuf bytes.Buffer
+		cmd.Stdout = &outBuf
+		cmd.Stderr = &errBuf
+		cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+cfgDir)
+		cmd.Run()
+		return outBuf.String(), errBuf.String()
+	}
+
+	runCfg("config", "set", "query.format", "csv")
+	runCfg("config", "set", "defaults.format", "yaml")
+
+	t.Run("query.format csv applies to query commands", func(t *testing.T) {
+		stdout, stderr := runCfg("run", "-c", dbPath, "SELECT id, name FROM users ORDER BY id LIMIT 1")
+		if lines := nonEmptyLines(stdout); len(lines) != 2 || lines[0] != "id,name" {
+			t.Errorf("expected CSV via query.format default, got stdout: %q stderr: %q", stdout, stderr)
+		}
+	})
+
+	t.Run("defaults.format yaml applies elsewhere", func(t *testing.T) {
+		stdout, _ := runCfg("schema", "tables", "-c", dbPath)
+		if !strings.Contains(stdout, "data:") {
+			t.Errorf("expected YAML data envelope via defaults.format, got: %s", stdout)
+		}
+	})
+
+	t.Run("flag beats both defaults", func(t *testing.T) {
+		stdout, _ := runCfg("run", "-c", dbPath, "--format", "jsonl", "SELECT id FROM users LIMIT 1")
+		var row map[string]any
+		if err := json.Unmarshal([]byte(nonEmptyLines(stdout)[0]), &row); err != nil {
+			t.Errorf("expected NDJSON row with explicit --format jsonl, got: %s", stdout)
+		}
+	})
+
+	t.Run("csv rejected as defaults.format value", func(t *testing.T) {
+		_, stderr := runCfg("config", "set", "defaults.format", "csv")
+		if !strings.Contains(stderr, "must be one of") {
+			t.Errorf("expected structured rejection of csv for defaults.format, got: %s", stderr)
+		}
+	})
+}
+
 // TestCLIWriteReceipt pins the write-path wire contract: a --write mutation
 // returns one JSON line {"result":"ok","rows_affected":N,"command":...} with
 // the family snake_case key (not the old rowsAffected).

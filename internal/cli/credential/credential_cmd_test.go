@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
 	agentout "github.com/shhac/lib-agent-output"
@@ -24,7 +25,7 @@ func testRoot(t *testing.T) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
-	Register(root)
+	Register(root, func() *shared.GlobalFlags { return &shared.GlobalFlags{} })
 	return root
 }
 

@@ -7,12 +7,12 @@ Everything on stdout honors `--format` (`jsonl` default, `json`, `yaml`; `csv` o
 - **Query results** (`query run`, `query sample`): JSONL by default — one JSON object per row, no envelope. `--format json`/`yaml` gives a `{columns, rows, pagination}` envelope. `--format csv` gives CSV.
 - **List-shaped output** (`schema tables`, `schema indexes`, `schema constraints`, `connection list`, `credential list`, `config list-keys`): NDJSON records by default — one JSON object per line, no wrapper key. `--format json`/`yaml` wraps them in a `{"data": [...]}` envelope.
 - **Single resources and receipts** (`schema describe/search/dump`, `query count/explain`, write receipts, connection/credential/config receipts): one compact JSON line by default. `--format json` pretty-prints; `--format yaml` gives YAML.
-- **CSV** is accepted only on query commands. Elsewhere `--format csv` is rejected with a structured error: `unknown format "csv", expected: json, yaml, jsonl`. (A *config default* of csv falls back to jsonl for non-tabular output instead of erroring.)
+- **CSV** is accepted only on query commands. Elsewhere `--format csv` is rejected with a structured error: `unknown format "csv", expected: json, yaml, jsonl`. Only `query.format` (not `defaults.format`) may persist csv; within query commands, non-tabular output (count, explain, write receipts) falls back to jsonl when csv is in effect.
 - **Errors**: always JSON to stderr regardless of `--format`.
 - **Notices**: non-error advisories go to stderr as structured `{"notice": "...", "hint": "..."}` JSON lines.
 - **`--color auto|always|never`** (default auto): colorizes JSON/YAML/NDJSON when the stream is a terminal; piped output stays plain.
 
-Set a persistent default with `agent-sql config set defaults.format json`. The `--format` flag overrides the config.
+Set a persistent default with `agent-sql config set defaults.format json` (all commands, universal formats only). Query commands additionally honor `query.format` (which may be `csv`) over `defaults.format`. The `--format` flag overrides both.
 
 NULL values are preserved in query results (`"bio": null` is meaningful). Empty/null fields are pruned in admin/config output only.
 
@@ -236,6 +236,7 @@ One JSON line by default (pretty with `--format json`). `rows` echoes the `SELEC
 NDJSON records by default; `{"data": [...]}` envelope with `--format json`/`yaml`:
 
 ```jsonl
-{"key":"defaults.format","type":"string","default":"jsonl","allowed_values":["jsonl","json","yaml","csv"],"description":"Default output format"}
+{"key":"defaults.format","type":"string","default":"jsonl","allowed_values":["jsonl","json","yaml"],"description":"Default output format (all commands)"}
+{"key":"query.format","type":"string","default":"jsonl","allowed_values":["jsonl","json","yaml","csv"],"description":"Default output format for query commands (overrides defaults.format there)"}
 {"key":"query.timeout","type":"number","default":30000,"min":1000,"max":300000,"description":"Query timeout in milliseconds"}
 ```

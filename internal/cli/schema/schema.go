@@ -84,7 +84,7 @@ func printResult(data any, g SchemaGlobals, prune bool, schemaType string) {
 		printCompact(data, schemaType)
 		return
 	}
-	output.PrintResult(data, prune)
+	output.PrintResult(g.Format, data, prune)
 }
 
 // printList outputs list-shaped schema data (tables, indexes, constraints) in
@@ -99,7 +99,7 @@ func printList[T any](items []T, g SchemaGlobals, schemaType string) {
 	for i, it := range items {
 		widened[i] = it
 	}
-	output.PrintList(widened, nil, true)
+	output.PrintList(g.Format, widened, nil, true)
 }
 
 // printCompact writes a single typed NDJSON line for schema output, through

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shhac/agent-sql/internal/config"
 	out "github.com/shhac/lib-agent-output"
 )
 
@@ -20,19 +19,9 @@ const (
 	FormatCSV    Format = "csv"
 )
 
-// configuredFormat holds the raw --format flag value, set once per invocation
-// from the root command's ConfigDefaults hook. Commands that don't thread the
-// flag through their signatures (admin/receipt output) resolve it from here.
-var configuredFormat string
-
-// ConfigureFormat records the raw --format flag value for CurrentFormat.
-func ConfigureFormat(flag string) { configuredFormat = flag }
-
-// CurrentFormat resolves the effective output format (flag > config > NDJSON).
-func CurrentFormat() Format { return ResolveFormat(configuredFormat) }
-
 // displayFormat maps the resolved format to one Print/WriteList can render:
-// csv is tabular-only, so non-tabular output falls back to the NDJSON default.
+// csv is tabular-only, so non-tabular output on a csv-capable command (e.g.
+// `query count --format csv`) falls back to the NDJSON default.
 func displayFormat(format Format) Format {
 	if format == FormatCSV {
 		return FormatNDJSON
@@ -40,24 +29,16 @@ func displayFormat(format Format) Format {
 	return format
 }
 
-// ResolveFormat resolves the output format from flag > config > default.
+// ResolveFormat parses the --format flag value, defaulting to NDJSON. The
+// persisted config defaults (query.format / defaults.format) are folded into
+// the flag at the root's ConfigDefaults boundary before validation, so this
+// is a pure parse — the output layer never reads the config store.
 func ResolveFormat(flagFormat string) Format {
-	if flagFormat != "" {
-		f, err := ParseFormat(flagFormat)
-		if err != nil {
-			return FormatNDJSON
-		}
-		return f
+	f, err := ParseFormat(flagFormat)
+	if err != nil {
+		return FormatNDJSON
 	}
-	cfg := config.Read()
-	if cfg.Settings.Defaults != nil && cfg.Settings.Defaults.Format != "" {
-		f, err := ParseFormat(cfg.Settings.Defaults.Format)
-		if err != nil {
-			return FormatNDJSON
-		}
-		return f
-	}
-	return FormatNDJSON
+	return f
 }
 
 // ParseFormat parses a format string. CSV is agent-sql-only and handled here;

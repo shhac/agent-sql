@@ -3,11 +3,12 @@ package connection
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
 )
 
-func registerAdd(parent *cobra.Command) {
+func registerAdd(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var (
 		driverFlag  string
 		host        string
@@ -64,7 +65,7 @@ func registerAdd(parent *cobra.Command) {
 			receipt := conn.AsReceipt(alias, setDefault)
 			receipt["ok"] = true
 			receipt["hint"] = "Test with: agent-sql connection test"
-			output.PrintResult(receipt, true)
+			output.PrintResult(globals().Format, receipt, true)
 			return nil
 		},
 	}

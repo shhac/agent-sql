@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/driver"
 	"github.com/shhac/agent-sql/internal/output"
 	"github.com/shhac/agent-sql/internal/resolve"
@@ -16,13 +17,14 @@ import (
 // avoid any possibility of the file being mistaken for a test file).
 // The other commands (add/update/list/remove/set-default) operate on
 // stored config only.
-func registerTest(parent *cobra.Command, globals func() (string, int)) {
+func registerTest(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	test := &cobra.Command{
 		Use:   "test [alias]",
 		Short: "Test connectivity for a connection",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			connFlag, timeout := globals()
+			g := globals()
+			connFlag, timeout := g.Connection, g.TimeoutMS
 			connAlias := connFlag
 			if len(args) > 0 {
 				connAlias = args[0]
@@ -50,7 +52,7 @@ func registerTest(parent *cobra.Command, globals func() (string, int)) {
 			if displayAlias == "" {
 				displayAlias = "default"
 			}
-			output.PrintResult(map[string]any{
+			output.PrintResult(globals().Format, map[string]any{
 				"ok":         true,
 				"connection": displayAlias,
 				"rows":       result.Rows,

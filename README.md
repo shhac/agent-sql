@@ -225,7 +225,7 @@ Write operations require both a credential with `writePermission` and the `--wri
 - Query results (`query run`, `query sample`): each line is `{"col": val, ..., "@truncated": null}`. When more rows exist, the last line is `{"@pagination": {"has_more": true, "row_count": N, "hint": "..."}}`.
 - List output (`schema tables|indexes|constraints`, `connection list`, `credential list`, `config list-keys`): one JSON record per line, no wrapper key. `--format json`/`yaml` wraps the records in a `{"data": [...]}` envelope.
 - Single resources and receipts (`schema describe|search|dump`, `query count|explain`, write receipts, connection/credential/config receipts): one compact JSON line by default; pretty JSON with `--format json`, YAML with `--format yaml`. Write receipts look like `{"result": "ok", "rows_affected": 5, "command": "UPDATE"}`.
-- CSV applies to query commands only; elsewhere `--format csv` is rejected with `unknown format "csv", expected: json, yaml, jsonl` (a csv *config default* falls back to jsonl for non-tabular output)
+- CSV applies to query commands only; elsewhere `--format csv` is rejected with `unknown format "csv", expected: json, yaml, jsonl`. Only `query.format` may persist csv; within query commands, non-tabular output (count, explain, write receipts) falls back to jsonl when csv is in effect
 - Errors always go to stderr as JSON `{ "error": "...", "fixable_by": "agent"|"human"|"retry", "hint"?: "...", "retry_after_seconds"?: N }` with non-zero exit code
 - Non-error advisories go to stderr as structured `{"notice": "...", "hint": "..."}` JSON lines
 - `--color auto|always|never` (default auto) colorizes JSON/YAML/NDJSON when the stream is a terminal; piped output stays plain
@@ -250,7 +250,8 @@ Persistent settings stored in `~/.config/agent-sql/config.json`:
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `defaults.format` | jsonl | Default output format (jsonl/json/yaml/csv) |
+| `defaults.format` | jsonl | Default output format, all commands (jsonl/json/yaml) |
+| `query.format` | jsonl | Default format for query commands (jsonl/json/yaml/csv); overrides `defaults.format` there |
 | `defaults.limit` | 20 | Default row limit for queries |
 | `query.timeout` | 30000 | Query timeout in milliseconds |
 | `query.maxRows` | 10000 | Maximum rows per query |

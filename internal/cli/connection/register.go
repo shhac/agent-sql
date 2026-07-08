@@ -95,19 +95,19 @@ CONFIG: ~/.config/agent-sql/config.json (respects XDG_CONFIG_HOME)
 `
 
 // Register adds the connection command group to root.
-func Register(root *cobra.Command, globals func() (string, int)) {
+func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	connection := &cobra.Command{
 		Use:   "connection",
 		Short: "Manage SQL connections",
 	}
 	libcli.HandleUnknownCommand(connection, "run 'agent-sql connection usage' to see the available commands")
 
-	registerAdd(connection)
-	registerUpdate(connection)
-	registerRemove(connection)
-	registerList(connection)
+	registerAdd(connection, globals)
+	registerUpdate(connection, globals)
+	registerRemove(connection, globals)
+	registerList(connection, globals)
 	registerTest(connection, globals)
-	registerSetDefault(connection)
+	registerSetDefault(connection, globals)
 
 	shared.RegisterUsage(connection, "connection", usageText)
 

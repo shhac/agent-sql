@@ -3,11 +3,12 @@ package connection
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
 )
 
-func registerList(parent *cobra.Command) {
+func registerList(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List saved connections",
@@ -21,7 +22,7 @@ func registerList(parent *cobra.Command) {
 				items = append(items, conn.AsReceipt(alias, alias == defaultAlias))
 			}
 
-			output.PrintList(items, nil, true)
+			output.PrintList(globals().Format, items, nil, true)
 			return nil
 		},
 	}

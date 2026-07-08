@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/output"
 )
@@ -15,7 +16,7 @@ import (
 // buildConnectionUpdates.
 var updateFlagNames = []string{"driver", "host", "port", "database", "url", "path", "credential"}
 
-func registerUpdate(parent *cobra.Command) {
+func registerUpdate(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var (
 		driverFlag   string
 		host         string
@@ -71,7 +72,7 @@ func registerUpdate(parent *cobra.Command) {
 				return err
 			}
 
-			output.PrintResult(map[string]any{"ok": true, "alias": alias, "updated": updated}, true)
+			output.PrintResult(globals().Format, map[string]any{"ok": true, "alias": alias, "updated": updated}, true)
 			return nil
 		},
 	}

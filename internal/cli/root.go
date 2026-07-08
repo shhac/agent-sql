@@ -10,6 +10,7 @@ import (
 	"github.com/shhac/agent-sql/internal/cli/query"
 	"github.com/shhac/agent-sql/internal/cli/schema"
 	"github.com/shhac/agent-sql/internal/cli/shared"
+	"github.com/shhac/agent-sql/internal/config"
 	"github.com/shhac/agent-sql/internal/credential"
 	"github.com/shhac/agent-sql/internal/output"
 	libcli "github.com/shhac/lib-agent-cli/cli"
@@ -42,11 +43,6 @@ func (g *GlobalFlags) allGlobals() *shared.GlobalFlags {
 	}
 }
 
-// connGlobals returns the connection and timeout global flags for connection commands.
-func (g *GlobalFlags) connGlobals() (string, int) {
-	return g.Connection, g.TimeoutMS
-}
-
 // schemaGlobals returns global flags for schema commands.
 func (g *GlobalFlags) schemaGlobals() schema.SchemaGlobals {
 	return schema.SchemaGlobals{
@@ -66,11 +62,25 @@ func newRootCmd(version string) *cobra.Command {
 		Version:       version,
 		Globals:       &g.Globals,
 		DefaultFormat: output.FormatNDJSON,
-		ConfigDefaults: func() {
-			// Record the raw --format value so admin/receipt output (which
-			// doesn't thread the flag through command signatures) resolves
-			// the same flag > config > NDJSON chain as query output.
-			output.ConfigureFormat(g.Format)
+		ConfigDefaults: func(cmd *cobra.Command) {
+			// Persisted format defaults are flag resolution, so they're
+			// folded into the flag here at the boundary — before NewRoot
+			// validates --format, so a bad stored value errors like a bad
+			// flag. query.format applies only to the csv-capable command
+			// class (the same AllowFormats annotation the validator
+			// consults); defaults.format covers everything else. Downstream
+			// code sees one authoritative g.Format.
+			if g.Format != "" {
+				return
+			}
+			s := config.Read().Settings
+			if libcli.FormatAllowed(cmd, "csv") && s.Query != nil && s.Query.Format != "" {
+				g.Format = s.Query.Format
+				return
+			}
+			if s.Defaults != nil {
+				g.Format = s.Defaults.Format
+			}
 		},
 		UnknownHint: "run 'agent-sql usage' to see the available commands",
 	})
@@ -96,8 +106,8 @@ func newRootCmd(version string) *cobra.Command {
 	registerUsageCommand(root)
 	query.Register(root, g.allGlobals)
 	schema.Register(root, g.schemaGlobals)
-	connection.Register(root, g.connGlobals)
-	clicredential.Register(root)
+	connection.Register(root, g.allGlobals)
+	clicredential.Register(root, g.allGlobals)
 	cliconfig.Register(root, g.allGlobals)
 
 	// csv is an agent-sql-only tabular format: valid on the commands that

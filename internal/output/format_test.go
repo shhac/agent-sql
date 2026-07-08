@@ -25,25 +25,23 @@ func TestDisplayFormat(t *testing.T) {
 	}
 }
 
-// TestCurrentFormatPrecedence pins the flag > config > NDJSON chain used by
-// admin/receipt output that doesn't thread --format through its signatures.
-func TestCurrentFormatPrecedence(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from the user's config
-	defer ConfigureFormat("")
-
-	ConfigureFormat("")
-	if got := CurrentFormat(); got != FormatNDJSON {
-		t.Errorf("no flag, no config: CurrentFormat() = %q, want %q", got, FormatNDJSON)
+// TestResolveFormatIsPure pins that the output layer's format resolution is a
+// pure parse of the post-boundary flag value: empty → NDJSON, valid values
+// parse, and an invalid value (unreachable in production — the root validates
+// the flag) falls back to NDJSON rather than erroring. Persisted config
+// defaults are folded into the flag at the root's ConfigDefaults hook, so no
+// config store is consulted here.
+func TestResolveFormatIsPure(t *testing.T) {
+	cases := map[string]Format{
+		"":      FormatNDJSON,
+		"yaml":  FormatYAML,
+		"csv":   FormatCSV,
+		"bogus": FormatNDJSON,
 	}
-
-	ConfigureFormat("yaml")
-	if got := CurrentFormat(); got != FormatYAML {
-		t.Errorf("flag=yaml: CurrentFormat() = %q, want %q", got, FormatYAML)
-	}
-
-	ConfigureFormat("bogus")
-	if got := CurrentFormat(); got != FormatNDJSON {
-		t.Errorf("invalid flag falls back: CurrentFormat() = %q, want %q", got, FormatNDJSON)
+	for in, want := range cases {
+		if got := ResolveFormat(in); got != want {
+			t.Errorf("ResolveFormat(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

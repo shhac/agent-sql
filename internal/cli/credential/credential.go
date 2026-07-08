@@ -68,23 +68,23 @@ CONFIG: ~/.config/agent-sql/credentials.json (respects XDG_CONFIG_HOME)
 `
 
 // Register adds the credential command group to root.
-func Register(root *cobra.Command) {
+func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	cred := &cobra.Command{
 		Use:   "credential",
 		Short: "Manage stored credentials",
 	}
 	libcli.HandleUnknownCommand(cred, "run 'agent-sql credential usage' to see the available commands")
 
-	registerAdd(cred)
-	registerRemove(cred)
-	registerList(cred)
+	registerAdd(cred, globals)
+	registerRemove(cred, globals)
+	registerList(cred, globals)
 
 	shared.RegisterUsage(cred, "credential", usageText)
 
 	root.AddCommand(cred)
 }
 
-func registerAdd(parent *cobra.Command) {
+func registerAdd(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	var (
 		username string
 		password string
@@ -121,7 +121,7 @@ func registerAdd(parent *cobra.Command) {
 				output.Notice("credentials stored in plaintext (macOS Keychain not available)", "")
 			}
 
-			output.PrintResult(map[string]any{
+			output.PrintResult(globals().Format, map[string]any{
 				"ok":              true,
 				"credential":      name,
 				"username":        username,
@@ -139,7 +139,7 @@ func registerAdd(parent *cobra.Command) {
 	parent.AddCommand(add)
 }
 
-func registerRemove(parent *cobra.Command) {
+func registerRemove(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	remove := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove a stored credential",
@@ -148,14 +148,14 @@ func registerRemove(parent *cobra.Command) {
 			if err := credential.Remove(args[0]); err != nil {
 				return err
 			}
-			output.PrintResult(map[string]any{"ok": true, "removed": args[0]}, true)
+			output.PrintResult(globals().Format, map[string]any{"ok": true, "removed": args[0]}, true)
 			return nil
 		},
 	}
 	parent.AddCommand(remove)
 }
 
-func registerList(parent *cobra.Command) {
+func registerList(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List stored credentials",
@@ -181,7 +181,7 @@ func registerList(parent *cobra.Command) {
 				})
 			}
 
-			output.PrintList(items, nil, true)
+			output.PrintList(globals().Format, items, nil, true)
 			return nil
 		},
 	}

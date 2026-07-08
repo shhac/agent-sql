@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-sql/internal/cli/shared"
 	"github.com/shhac/agent-sql/internal/config"
 	agenterrors "github.com/shhac/agent-sql/internal/errors"
 	"github.com/shhac/lib-agent-cli/dialog"
@@ -184,7 +185,7 @@ func TestCredentialAddFormDoesNotLeakSecretToStdout(t *testing.T) {
 	stdout, restore := captureStdout(t)
 
 	root := &cobra.Command{Use: "agent-sql"}
-	Register(root)
+	Register(root, func() *shared.GlobalFlags { return &shared.GlobalFlags{} })
 	root.SetArgs([]string{"credential", "add", "leak-test", "--username", "deploy", "--form"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)

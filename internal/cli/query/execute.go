@@ -16,8 +16,9 @@ import (
 // RenderOpts bundles the row-rendering knobs that travel together from the
 // command flags down through the writer pipeline: which fields to show
 // untruncated (Expand/Full), whether to use the compact typed-NDJSON writer
-// (Compact), and the output Format. FormatFlag is the raw flag string;
-// the format is resolved (flag > config > default) inside ExecuteRun.
+// (Compact), and the output Format. FormatFlag is the post-boundary flag
+// string (persisted config defaults already folded in by the root's
+// ConfigDefaults hook); ExecuteRun parses it into format.
 type RenderOpts struct {
 	Expand     string
 	Full       bool
@@ -94,7 +95,7 @@ func executeStreaming(ctx context.Context, streamer driver.StreamingQuerier, sql
 	}
 	if sr.Iterator == nil {
 		// Write result
-		output.PrintResult(map[string]any{
+		output.PrintResult(render.FormatFlag, map[string]any{
 			"result": "ok", "rows_affected": sr.RowsAffected, "command": sr.Command,
 		}, true)
 		return nil
@@ -138,7 +139,7 @@ func executeBuffered(ctx context.Context, drv driver.Connection, sql string, opt
 	}
 
 	if write && isWriteResult(result) {
-		output.PrintResult(map[string]any{
+		output.PrintResult(render.FormatFlag, map[string]any{
 			"result": "ok", "rows_affected": result.RowsAffected, "command": result.Command,
 		}, true)
 		return nil

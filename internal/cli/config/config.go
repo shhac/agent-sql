@@ -23,8 +23,10 @@ COMMANDS:
   config list-keys              List all valid keys with defaults and ranges
 
 KEYS:
-  defaults.format        (jsonl)   Default output format [jsonl, json, yaml, csv]
+  defaults.format        (jsonl)   Default output format, all commands [jsonl, json, yaml]
   defaults.limit         (20)      Default row limit for queries [1-1000]
+  query.format           (jsonl)   Default format for query commands [jsonl, json, yaml, csv];
+                                   overrides defaults.format there
   query.timeout          (30000)   Query timeout in ms [1000-300000]
   query.maxRows          (10000)   Maximum rows per query [1-10000]
   truncation.maxLength   (200)     String truncation threshold [50-100000]
@@ -46,8 +48,9 @@ type keyDef struct {
 }
 
 var validKeys = []keyDef{
-	{key: "defaults.format", description: "Default output format", keyType: "string", defaultValue: "jsonl", allowed: []string{"jsonl", "json", "yaml", "csv"}},
+	{key: "defaults.format", description: "Default output format (all commands)", keyType: "string", defaultValue: "jsonl", allowed: []string{"jsonl", "json", "yaml"}},
 	{key: "defaults.limit", description: "Default row limit for queries", keyType: "number", defaultValue: 20, min: 1, max: 1000},
+	{key: "query.format", description: "Default output format for query commands (overrides defaults.format there)", keyType: "string", defaultValue: "jsonl", allowed: []string{"jsonl", "json", "yaml", "csv"}},
 	{key: "query.timeout", description: "Query timeout in milliseconds", keyType: "number", defaultValue: 30000, min: 1000, max: 300000},
 	{key: "query.maxRows", description: "Maximum rows per query", keyType: "number", defaultValue: 10000, min: 1, max: 10000},
 	{key: "truncation.maxLength", description: "String truncation threshold", keyType: "number", defaultValue: 200, min: 50, max: 100000},
@@ -80,9 +83,9 @@ func Register(root *cobra.Command, globals func() *shared.GlobalFlags) {
 	libcli.HandleUnknownCommand(cfg, "run 'agent-sql config usage' to see the available commands")
 
 	registerGet(cfg, globals)
-	registerSet(cfg)
-	registerReset(cfg)
-	registerListKeys(cfg)
+	registerSet(cfg, globals)
+	registerReset(cfg, globals)
+	registerListKeys(cfg, globals)
 
 	shared.RegisterUsage(cfg, "config", usageText)
 
@@ -110,7 +113,7 @@ func registerGet(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	parent.AddCommand(get)
 }
 
-func registerSet(parent *cobra.Command) {
+func registerSet(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	set := &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: "Set a config value",
@@ -132,14 +135,14 @@ func registerSet(parent *cobra.Command) {
 				return err
 			}
 
-			output.PrintResult(map[string]any{"ok": true, "key": key, "value": value}, true)
+			output.PrintResult(globals().Format, map[string]any{"ok": true, "key": key, "value": value}, true)
 			return nil
 		},
 	}
 	parent.AddCommand(set)
 }
 
-func registerReset(parent *cobra.Command) {
+func registerReset(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	reset := &cobra.Command{
 		Use:   "reset",
 		Short: "Reset all settings to defaults",
@@ -148,14 +151,14 @@ func registerReset(parent *cobra.Command) {
 			if err := config.ResetSettings(); err != nil {
 				return err
 			}
-			output.PrintResult(map[string]any{"ok": true, "message": "Settings reset to defaults"}, true)
+			output.PrintResult(globals().Format, map[string]any{"ok": true, "message": "Settings reset to defaults"}, true)
 			return nil
 		},
 	}
 	parent.AddCommand(reset)
 }
 
-func registerListKeys(parent *cobra.Command) {
+func registerListKeys(parent *cobra.Command, globals func() *shared.GlobalFlags) {
 	listKeys := &cobra.Command{
 		Use:   "list-keys",
 		Short: "List all valid config keys with defaults",
@@ -177,7 +180,7 @@ func registerListKeys(parent *cobra.Command) {
 				}
 				keys = append(keys, entry)
 			}
-			output.PrintList(keys, nil, true)
+			output.PrintList(globals().Format, keys, nil, true)
 			return nil
 		},
 	}
