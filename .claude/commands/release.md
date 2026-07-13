@@ -9,7 +9,9 @@ Releasing `agent-sql` is automated. Pushing a `v*` tag triggers
 `.github/workflows/release.yml`, which calls the shared `go-release` workflow in
 `shhac/homebrew-tap` to cross-build every platform, publish the GitHub Release,
 and regenerate + push `Formula/agent-sql.rb` (with shell completions) to the tap.
-**No manual build, and no manual formula bump.**
+The tag also triggers `.github/workflows/publish-skill.yml`, which publishes
+`skills/agent-sql` to `shhac/agent-skills`. **No manual build, and no manual
+formula bump.**
 
 ## Steps
 
@@ -29,7 +31,7 @@ and regenerate + push `Formula/agent-sql.rb` (with shell completions) to the tap
    ```
 5. Verify CI and the outputs:
    ```bash
-   gh run watch --repo shhac/agent-sql          # both jobs green: build+release, homebrew tap
+   gh run watch --repo shhac/agent-sql          # release + Publish skill runs green
    gh release view "v${new_version}" --repo shhac/agent-sql   # 6 assets
    ```
    Install / upgrade: `brew install shhac/tap/agent-sql` · `brew upgrade shhac/tap/agent-sql`
@@ -40,3 +42,21 @@ Re-run a failed release with `gh run rerun <id> --repo shhac/agent-sql`. To bypa
 the workflow entirely, build the `GOOS/GOARCH` binaries with
 `-ldflags "-s -w -X main.version=<v>"`, `gh release create` the tarballs, and edit
 `Formula/agent-sql.rb` by hand (see this file's git history for the old full flow).
+
+## Secrets
+
+The formula push authenticates via the `TAP_DEPLOY_KEY` secret in this repo's
+`homebrew-tap` GitHub environment, paired with a read-write deploy key on
+`shhac/homebrew-tap` (the shared "go cli family release automation" key, or a
+repo-specific "agent-sql release automation (env-scoped)" one). The skill
+publish uses the repo-level `SKILLS_DEPLOY_KEY`. If the workflow logs
+"TAP_DEPLOY_KEY not set — skipping tap update", rotate with a repo-specific
+pair — pipe the private key, never echo it:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "agent-sql release automation" -f tap_key
+gh repo deploy-key add tap_key.pub -R shhac/homebrew-tap --allow-write \
+  --title "agent-sql release automation (env-scoped)"
+gh secret set TAP_DEPLOY_KEY --repo shhac/agent-sql --env homebrew-tap < tap_key
+rm tap_key tap_key.pub
+```
